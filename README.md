@@ -1,9 +1,17 @@
-# Ansible Collection for Amazon AI/ML Resources
-You can build a new repository for an Ansible Collection using this template by following [Creating a repository from a template](https://help.github.com/en/github/creating-cloning-and-archiving-repositories/creating-a-repository-from-a-template). This README.md contains recommended headings for your collection README.md, with comments describing what each section should contain. Once you have created your collection repository, delete this paragraph and the title above it from your README.md.
+# Ansible Collection for Amazon AI and ML Resources
+The `amazon.ai` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection supports only Amazon DevOps Guru — a service that uses machine learning to detect and remediate operational issues. Modules in this collection allow you to configure DevOps Guru monitoring, manage insights, and integrate with notification channels.
 
-# Foo Collection for Ansible
+The collection is designed with extensibility in mind and will grow to support additional Amazon AI/ML services such as:
+- Amazon SageMaker
+- Amazon Rekognition
+- Amazon Comprehend
+- Amazon Translate
+- Amazon Textract
+- Amazon Bedrock (foundation models)
+
+# amazon.ai Collection for Ansible
 <!-- Add CI and code coverage badges here. Samples included below. -->
-[![CI](https://github.com/ansible-collections/REPONAMEHERE/workflows/CI/badge.svg?event=push)](https://github.com/ansible-collections/REPONAMEHERE/actions) [![Codecov](https://img.shields.io/codecov/c/github/ansible-collections/REPONAMEHERE)](https://codecov.io/gh/ansible-collections/REPONAMEHERE)
+[![CI](https://github.com/ansible-collections/amazon.ai/workflows/CI/badge.svg?event=push)](https://github.com/ansible-collections/amazon.ai/actions) [![Codecov](https://img.shields.io/codecov/c/github/ansible-collections/amazon.ai)](https://codecov.io/gh/ansible-collections/amazon.ai)
 
 <!-- Describe the collection and why a user would want to use it. What does the collection do? -->
 
@@ -11,12 +19,10 @@ You can build a new repository for an Ansible Collection using this template by 
 
 <!-- Put your collection's mission statement in here. Example follows. -->
 
-At the `your collection name`, our mission is to produce and maintain simple, flexible,
-and powerful open-source software tailored to `your collection purpose`.
+At the `amazon.ai` collection, our mission is to empower users to deploy and manage AWS AI/ML services using simple, declarative automation workflows with Ansible.
 
-We welcome members from all skill levels to participate actively in our open, inclusive, and vibrant community.
-Whether you are an expert or just beginning your journey with Ansible and `your collection name`,
-you are encouraged to contribute, share insights, and collaborate with fellow enthusiasts!
+We aim to lower the barrier to entry for machine learning operations (MLOps) on AWS, enabling developers, data scientists, and DevOps engineers to build intelligent applications faster and more reliably.
+
 
 ## Code of Conduct
 
@@ -31,8 +37,8 @@ If your collection is not present on the Ansible forum yet, please check out the
 -->
 
 * Join the Ansible forum:
-  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please add appropriate tags if you start new discussions, for example the `YOUR TAG` tag.
-  * [Posts tagged with 'your tag'](https://forum.ansible.com/tag/YOUR_TAG): subscribe to participate in collection/technology-related conversations.
+  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please add appropriate tags if you start new discussions, for example the `aws` tag.
+  * [Posts tagged with 'your tag'](https://forum.ansible.com/tag/aws): subscribe to participate in collection/technology-related conversations.
   * [Refer to your forum group here if exists](https://forum.ansible.com/g/): by joining the team you will automatically get subscribed to the posts tagged with [your group forum tag here](https://forum.ansible.com/tags).
   * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
   * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events. The [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn), which is used to announce releases and important changes, can also be found here.
@@ -57,41 +63,29 @@ We also use the following guidelines:
 * [Ansible development guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
 * [Ansible collection development guide](https://docs.ansible.com/ansible/devel/dev_guide/developing_collections.html#contributing-to-collections)
 
-## Collection maintenance
-
-The current maintainers are listed in the [MAINTAINERS](MAINTAINERS) file. If you have questions or need help, feel free to mention them in the proposals.
-
-To learn how to maintain/become a maintainer of this collection, refer to the [Maintainer guidelines](https://docs.ansible.com/ansible/devel/community/maintainers.html).
-
-It is necessary for maintainers of this collection to be subscribed to:
-
-* The collection itself (the `Watch` button -> `All Activity` in the upper right corner of the repository's homepage).
-* The [news-for-maintainers repository](https://github.com/ansible-collections/news-for-maintainers).
-
-They also should be subscribed to Ansible's [The Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn).
-
-## Governance
-
-<!--Describe how the collection is governed. Here can be the following text:-->
-
-The process of decision making in this collection is based on discussing and finding consensus among participants.
-
-Every voice is important. If you have something on your mind, create an issue or dedicated discussion and let's discuss it!
 
 ## Tested with Ansible
 
 <!-- List the versions of Ansible the collection has been tested with. Must match what is in galaxy.yml. -->
+This collection has been tested against following Ansible versions: >=2.17.0.
 
-## External requirements
+## Python version compatibility
 
 <!-- List any external resources the collection depends on, for example minimum versions of an OS, libraries, or utilities. Do not list other Ansible collections here. -->
+This collection depends on the AWS SDK for Python (Boto3 and Botocore).  Due to the
+[AWS SDK Python Support Policy](https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/)
+this collection requires Python 3.9 or greater.
 
-### Supported connections
-<!-- Optional. If your collection supports only specific connection types (such as HTTPAPI, netconf, or others), list them here. -->
+## AWS SDK version compatibility
+
+Version 1.0.0 of this collection supports `boto3 >= 1.34.0` and `botocore >= 1.34.0`
+
 
 ## Included content
+<!--start collection content-->
+See the complete list of collection content in the [Plugin Index](https://ansible-collections.github.io/community.aws/branch/main/collections/community/aws/index.html#plugin-index).
 
-<!-- Galaxy now usually displays full module and plugin docs within the UI. If you don't use Galaxy for your collection, you may need to either describe your plugins etc here, or point to an external docsite to cover that information. -->
+<!--end collection content-->
 
 ## Using this collection
 
@@ -101,36 +95,33 @@ Every voice is important. If you have something on your mind, create an issue or
 
 Before using this collection, you need to install it with the Ansible Galaxy command-line tool:
 ```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME
+ansible-galaxy collection install amazon.ai
 ```
 
 You can also include it in a `requirements.yml` file and install it with `ansible-galaxy collection install -r requirements.yml`, using the format:
 ```yaml
 ---
 collections:
-  - name: NAMESPACE.COLLECTION_NAME
+  - name: amazon.ai
 ```
 
 Note that if you install the collection from Ansible Galaxy, it will not be upgraded automatically when you upgrade the `ansible` package. To upgrade the collection to the latest available version, run the following command:
 ```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME --upgrade
+ansible-galaxy collection install amazon.ai --upgrade
 ```
 
 You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `0.1.0`:
 
 ```bash
-ansible-galaxy collection install NAMESPACE.COLLECTION_NAME:==0.1.0
+ansible-galaxy collection install amazon.ai:==0.1.0
 ```
 
 See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
 
 ## Release notes
 
-See the [changelog](https://github.com/ansible-collections/REPONAMEHERE/tree/main/CHANGELOG.rst).
+See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
 
-## Roadmap
-
-<!-- Optional. Include the roadmap for this collection, and the proposed release/versioning strategy so users can anticipate the upgrade/update cycle. -->
 
 ## More information
 

@@ -119,7 +119,7 @@ author:
 
 EXAMPLES = r"""
 - name: Gather information about DevOpsGuru Resource Insights
-  amazon.aws.devopsguru_insight_info:
+  amazon.ai.devopsguru_insight_info:
     status_filter:
         Any:
             Type: 'REACTIVE'
@@ -128,7 +128,7 @@ EXAMPLES = r"""
                 ToTime: "2025-02-12"
 
 - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
-    amazon.aws.devopsguru_insight_info:
+    amazon.ai.devopsguru_insight_info:
         status_filter:
             Closed:
                 Type: 'REACTIVE'
@@ -144,7 +144,7 @@ EXAMPLES = r"""
                 - RDS
 
 - name: Gather information about a specific DevOpsGuru Insight
-  amazon.aws.devopsguru_insight_info:
+  amazon.ai.devopsguru_insight_info:
     insight_id: "{{ insight_id }}"
     include_recommendations:
         locale: EN_US

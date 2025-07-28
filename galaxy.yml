@@ -7,7 +7,7 @@ version: 1.0.0
 readme: README.md
 authors:
   - Alina Buzachis (github.com/alinabuzachis)
-description: Ansible Collection for Amazon AI/ML Resources
+description: Ansible Collection for Amazon AI and ML Resources
 license_file: LICENSE
 tags:
 # tags so people can search for collections https://galaxy.ansible.com/search
@@ -16,7 +16,7 @@ tags:
   - amazon
 dependencies:
   amazon.aws: '>=11.0.0-dev0'
-#   community.aws: '>=11.0.0-dev0'
+  community.aws: '>=11.0.0-dev0'
 repository: https://github.com/ansible-collections/amazon.ai
 #documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
 homepage: https://github.com/ansible-collections/amazon.ai
@@ -25,3 +25,5 @@ build_ignore:
 # https://docs.ansible.com/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
   - .gitignore
   - changelogs/.plugin-cache.yaml
+  - '*cloud-config-aws.ini'
+  - '*cloud-config-aws.yml'
