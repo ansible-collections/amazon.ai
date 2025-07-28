@@ -1,0 +1,4 @@
+---
+s3_bucket_name: "devops-guru-bucket"
+kms_key_name: "DevOpsGuruKey"
+iam_role_name: "devops-guru-aws-ssm-iam-role"

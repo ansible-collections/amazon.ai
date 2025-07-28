@@ -1,0 +1,34 @@
+{
+ "collection_info": {
+  "namespace": "amazon",
+  "name": "a1",
+  "version": "1.0.0",
+  "authors": [
+   "Alina Buzachis (github.com/alinabuzachis)"
+  ],
+  "readme": "README.md",
+  "tags": [
+   "ai",
+   "amazon"
+  ],
+  "description": "Ansible Collection for Amazon AI and ML Resources",
+  "license": [],
+  "license_file": "LICENSE",
+  "dependencies": {
+   "amazon.aws": ">=11.0.0-dev0",
+   "community.aws": ">=11.0.0-dev0"
+  },
+  "repository": "https://github.com/ansible-collections/amazon.ai",
+  "documentation": null,
+  "homepage": "https://github.com/ansible-collections/amazon.ai",
+  "issues": "https://github.com/ansible-collections/amazon.ai/issues"
+ },
+ "file_manifest_file": {
+  "name": "FILES.json",
+  "ftype": "file",
+  "chksum_type": "sha256",
+  "chksum_sha256": "1163e2b5031a1c518acd19c9d3680ff79d731ad3be6bdb37a0c8ffa35a600c49",
+  "format": 1
+ },
+ "format": 1
+}

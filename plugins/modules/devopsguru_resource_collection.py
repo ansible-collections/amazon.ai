@@ -160,8 +160,8 @@ RETURN = r"""
 """
 
 
-from typing import Dict, Any, List, Union
 from datetime import datetime
+from typing import Any, Dict, List, Union
 
 try:
     import botocore
@@ -170,7 +170,9 @@ except ImportError:
 
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import (
+    AnsibleAWSError,
+)
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
@@ -191,7 +193,12 @@ def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[st
 
 
 def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
-    possible_keys = ["ProactiveInsight", "ReactiveInsight", "ProactiveInsights", "ReactiveInsights"]
+    possible_keys = [
+        "ProactiveInsight",
+        "ReactiveInsight",
+        "ProactiveInsights",
+        "ReactiveInsights",
+    ]
     try:
         key = next(key for key in possible_keys if key in data)
         return key
@@ -199,7 +206,9 @@ def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
         return None
 
 
-def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
+def merge_data(
+    target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]
+) -> None:
     """Merges data into a dictionary or list of dictionaries."""
     if isinstance(target, dict):
         target.update(source)
@@ -210,6 +219,7 @@ def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict
 
 def convert_time_ranges(status_filter):
     """Convert FromTime and ToTime to datetime objects for time ranges."""
+
     def convert_time(date_str, set_midnight=False):
         """Helper function to convert date string to datetime, optionally set to midnight."""
         dt = datetime.strptime(date_str, "%Y-%m-%d")
@@ -224,10 +234,13 @@ def convert_time_ranges(status_filter):
                     for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
                         if time_key in status_filter[key][time_range_key]:
                             # Determine if "ToTime"/"to_time" should have midnight set
-                            set_midnight = (time_key.lower() == "to_time" or time_key.lower() == "to_time")
+                            set_midnight = (
+                                time_key.lower() == "to_time"
+                                or time_key.lower() == "to_time"
+                            )
                             status_filter[key][time_range_key][time_key] = convert_time(
                                 status_filter[key][time_range_key][time_key],
-                                set_midnight
+                                set_midnight,
                             )
 
 
@@ -247,7 +260,9 @@ def main() -> None:
     )
 
     try:
-        client = module.client("devops-guru", retry_decorator=AWSRetry.jittered_backoff())
+        client = module.client(
+            "devops-guru", retry_decorator=AWSRetry.jittered_backoff()
+        )
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
@@ -261,15 +276,31 @@ def main() -> None:
         convert_time_ranges(status_filter)
 
     try:
-        insight_info = describe_insight(client, insight_id, account_id) if insight_id else _fetch_data(client, "list_insights", StatusFilter=status_filter)
+        insight_info = (
+            describe_insight(client, insight_id, account_id)
+            if insight_id
+            else _fetch_data(client, "list_insights", StatusFilter=status_filter)
+        )
         insight_type = get_insight_type(insight_info)
         if insight_type:
             data_to_fetch = {
-                "anomalies": (include_anomalies, "_fetch_data", "list_anomalies_for_insight"),
-                "recommendations": (include_recommendations, "_fetch_data", "list_recommendations"),
+                "anomalies": (
+                    include_anomalies,
+                    "_fetch_data",
+                    "list_anomalies_for_insight",
+                ),
+                "recommendations": (
+                    include_recommendations,
+                    "_fetch_data",
+                    "list_recommendations",
+                ),
             }
 
-            for data_type, (include_flag, fetch_func, api_call) in data_to_fetch.items():
+            for data_type, (
+                include_flag,
+                fetch_func,
+                api_call,
+            ) in data_to_fetch.items():
                 if include_flag:
                     params = {}
                     if account_id:
@@ -277,7 +308,13 @@ def main() -> None:
 
                     if data_type == "anomalies":
                         if include_flag.get("filters"):
-                            params["Filters"] = {"ServiceCollection": {"ServiceNames": include_flag["filters"]["service_collection"]["service_names"]}}
+                            params["Filters"] = {
+                                "ServiceCollection": {
+                                    "ServiceNames": include_flag["filters"][
+                                        "service_collection"
+                                    ]["service_names"]
+                                }
+                            }
                         if include_flag.get("start_time_range"):
                             params["StartTimeRange"] = include_flag["start_time_range"]
 
@@ -291,7 +328,9 @@ def main() -> None:
                     elif isinstance(insight_info[insight_type], list):
                         for insight in insight_info[insight_type]:
                             params["InsightId"] = insight["Id"]
-                            fetched_data = globals()[fetch_func](client, api_call, **params)
+                            fetched_data = globals()[fetch_func](
+                                client, api_call, **params
+                            )
                             merge_data(insight, fetched_data)
 
         module.exit_json(**camel_dict_to_snake_dict(insight_info))

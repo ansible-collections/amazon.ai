@@ -1,0 +1,34 @@
+---
+- name: Create SNS Topic
+  community.aws.sns_topic:
+    name: DevOpsGuruNotifications
+    display_name: My DevOpsGuruNotifications name
+    state: present
+  register: sns_topic
+
+- name: Create SQS queue to receive DevOps Guru notifications
+  community.aws.sqs_queue:
+    name: 'DevOpsGuruNotifications-queue'
+  register: sqs_result
+
+- name: Subscribe SQS queue to SNS topic
+  community.aws.sns_topic:
+    name: DevOpsGuruNotifications
+    state: present
+    subscriptions:
+      - endpoint: "{{ sqs_result.queue_arn }}"
+        protocol: sqs
+
+- name: Create DevOps Guru Notification Channel
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "DevOps-Guru-Stack"
+    state: present
+    notification_channel_config:
+      Sns:
+        TopicArn: "{{ sns_topic.sns_arn }}"
+      Filters:
+        Severities:
+          - HIGH
+          - MEDIUM
+          - 
