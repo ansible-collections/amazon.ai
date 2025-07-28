@@ -2,7 +2,7 @@
 # See https://docs.ansible.com/ansible/latest/dev_guide/collections_galaxy_meta.html
 
 namespace: amazon
-name: a1
+name: ai
 version: 1.0.0
 readme: README.md
 authors:
@@ -15,8 +15,8 @@ tags:
   - ai
   - amazon
 dependencies:
-  amazon.aws: '>=11.0.0-dev0'
-  community.aws: '>=11.0.0-dev0'
+  amazon.aws: '>=10.0.0'
+  community.aws: '>=10.0.0'
 repository: https://github.com/ansible-collections/amazon.ai
 #documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
 homepage: https://github.com/ansible-collections/amazon.ai
