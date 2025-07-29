@@ -5,11 +5,11 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
-module: devopsguru_insight_info
-short_description: Fetches information about DevOps Guru insights
+module: devopsguru_resource_collection
+short_description: Manages Amazon DevOps Guru insights
 version_added: 1.0.0
 description:
-    - Fetches information about DevOps Guru insights.
+    - Manages Amazon DevOps Guru insights.
 options:
     status_filter:
         description:
@@ -128,17 +128,17 @@ EXAMPLES = r"""
                 ToTime: "2025-02-12"
 
 - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
-    amazon.ai.devopsguru_insight_info:
-        status_filter:
-            Closed:
-                Type: 'REACTIVE'
-                EndTimeRange:
-                    FromTime: "2025-03-04"
-                    ToTime: "2025-03-06"
-        include_recommendations:
-            locale: EN_US
-        include_anomalies:
-            filters:
+  amazon.ai.devopsguru_insight_info:
+    status_filter:
+        Closed:
+            Type: 'REACTIVE'
+            EndTimeRange:
+                FromTime: "2025-03-04"
+                ToTime: "2025-03-06"
+    include_recommendations:
+        locale: EN_US
+    include_anomalies:
+        filters:
             service_collection:
                 service_names:
                 - RDS
@@ -150,9 +150,9 @@ EXAMPLES = r"""
         locale: EN_US
     include_anomalies:
         filters:
-        service_collection:
-            service_names:
-                - RDS
+            service_collection:
+                service_names:
+                    - RDS
 """
 
 RETURN = r"""
@@ -246,7 +246,7 @@ def convert_time_ranges(status_filter):
 
 def main() -> None:
     argument_spec = dict(
-        status_filter=dict(type="dict"),
+        status_filter=dict(type="dict", aliases=["filter"]),
         account_id=dict(type="str"),
         insight_id=dict(type="str"),
         include_anomalies=dict(type="dict"),

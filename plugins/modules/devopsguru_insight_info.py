@@ -6,15 +6,15 @@
 
 DOCUMENTATION = r"""
 module: devopsguru_insight_info
-short_description: Fetches information about DevOps Guru insights
+short_description: Fetches information about Amazon DevOps Guru insights
 version_added: 1.0.0
 description:
-    - Fetches information about DevOps Guru insights.
+    - Fetches information about Amazon DevOps Guru insights.
 options:
     status_filter:
         description:
             - A dict of filters to apply.
-            - You can specify which insights are returned by their start time and status ( ONGOING, CLOSED, or ANY).
+            - You can specify which insights are returned by their start time and status (ONGOING, CLOSED, or ANY).
             - See U(https://docs.aws.amazon.com/devops-guru/latest/APIReference/API_ListInsightsStatusFilter.html).
         type: dict
         aliases: ["filter"]
@@ -128,20 +128,20 @@ EXAMPLES = r"""
                 ToTime: "2025-02-12"
 
 - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
-    amazon.ai.devopsguru_insight_info:
-        status_filter:
-            Closed:
-                Type: 'REACTIVE'
-                EndTimeRange:
-                    FromTime: "2025-03-04"
-                    ToTime: "2025-03-06"
-        include_recommendations:
-            locale: EN_US
-        include_anomalies:
-            filters:
-            service_collection:
-                service_names:
-                - RDS
+  amazon.ai.devopsguru_insight_info:
+    status_filter:
+        Closed:
+            Type: 'REACTIVE'
+            EndTimeRange:
+                FromTime: "2025-03-04"
+                ToTime: "2025-03-06"
+    include_recommendations:
+        locale: EN_US
+    include_anomalies:
+        filters:
+        service_collection:
+            service_names:
+            - RDS
 
 - name: Gather information about a specific DevOpsGuru Insight
   amazon.ai.devopsguru_insight_info:
@@ -246,7 +246,7 @@ def convert_time_ranges(status_filter):
 
 def main() -> None:
     argument_spec = dict(
-        status_filter=dict(type="dict"),
+        status_filter=dict(type="dict", aliases=["filter"]),
         account_id=dict(type="str"),
         insight_id=dict(type="str"),
         include_anomalies=dict(type="dict"),
