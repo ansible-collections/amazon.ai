@@ -1,0 +1,133 @@
+---
+- name: Get ARN of calling user
+  amazon.aws.aws_caller_info:
+  register: aws_caller_info
+
+- name: Create S3 bucket
+  amazon.aws.s3_bucket:
+    name: "{{ s3_bucket_name }}"
+  register: s3_output
+
+- name: Get latest Amazon Linux 2 AMI
+  amazon.aws.ec2_ami_info:
+    owners: ["amazon"]
+    filters:
+      name: "amzn2-ami-hvm-*-x86_64-gp2"
+      state: "available"
+  register: ami_info
+
+- name: Extract the latest AMI ID
+  set_fact:
+    ami_id: "{{ ami_info.images | sort(attribute='creation_date') | last  }}"
+
+- name: Deploy RDS CloudFormation stack
+  amazon.aws.cloudformation:
+    stack_name: "DevOps-Guru-Stack"
+    state: present
+    template_body: "{{ lookup('template', 'cloudformation.yml.j2') }}"
+    template_parameters:
+      AmiId: "{{ ami_id.image_id }}"
+      InstanceType: "t2.medium"
+    capabilities:
+      - CAPABILITY_NAMED_IAM
+
+- name: Wait for CloudFormation stack to complete
+  amazon.aws.cloudformation_info:
+    stack_name: "DevOps-Guru-Stack"
+  register: stack_info
+  until: stack_info.output == "Stack CREATE complete"
+  retries: 10
+  delay: 30
+
+- name: Output RDS Endpoint
+  debug:
+    msg: "RDS Endpoint: {{ stack_info.stack_outputs | selectattr('OutputKey', 'equalto', 'DBInstanceEndpoint') | map(attribute='OutputValue') | first }}"
+
+- name: Enable DevOpsGuru on Stack
+  amazon.ai.devopsguru_resource_collection:
+    state: present
+    cloudformation_stack_names:
+        - "DevOps-Guru-Stack"
+
+- name: Gather information about DevOpsGuru Resource Collections - "AWS_CLOUD_FORMATION"
+  amazon.aws.devopsguru_resource_collection_info:
+    resource_collection_type: "AWS_CLOUD_FORMATION"
+
+- name: Get ARN of the IAM Role
+  amazon.aws.iam_role_info:
+    name: "SSMManagedInstanceRole"
+  register: role_info
+
+- name: Create a KMS key
+  amazon.aws.kms_key:
+    alias: '{{ kms_key_name }}'
+    grants:
+    - name: SSM-Agent-Access
+      grantee_principal: '{{ role_info.iam_roles[0].arn }}'
+      retiring_principal: '{{ aws_caller_info.arn }}'
+      operations:
+        - Decrypt
+        - Encrypt
+        - GenerateDataKey
+        - GenerateDataKeyWithoutPlaintext
+        - DescribeKey
+        - Verify
+        - Sign
+        - RetireGrant
+    - name: Ansible-Test-Access
+      grantee_principal: '{{ aws_caller_info.arn }}'
+      retiring_principal: '{{ aws_caller_info.arn }}'
+      operations:
+        - Decrypt
+        - Encrypt
+        - GenerateDataKey
+        - GenerateDataKeyWithoutPlaintext
+        - DescribeKey
+        - Verify
+        - Sign
+        - RetireGrant
+  register: cmk_setup
+
+- name: Ensure bucket is configured for encryption
+  amazon.aws.s3_bucket:
+    name: "{{ s3_bucket_name }}"
+    encryption: "aws:kms"
+    encryption_key_id: "{{ cmk_setup.key_arn }}"
+    bucket_key_enabled: True
+
+- name: Gather information about DevOpsGuru Resource Collections - "AWS_SERVICE"
+  amazon.ai.devopsguru_resource_collection_info:
+    resource_collection_type: "AWS_SERVICE"
+
+- name: Gather information about DevOpsGuru Resource Collections -  "AWS_TAGS"
+  amazon.ai.devopsguru_resource_collection_info:
+    resource_collection_type: "AWS_TAGS"
+
+- name: Gather information about DevOpsGuru Resource Insights
+  amazon.ai.devopsguru_insight_info:
+    status_filter:
+      Any:
+        Type: 'REACTIVE'
+        StartTimeRange:
+          FromTime: "2025-02-10"
+          ToTime: "2025-02-12"
+
+- name: Gather information about DevOpsGuru Resource Insights with recommendations and anomalies
+  amazon.ai.devopsguru_insight_info:
+    status_filter:
+      Any:
+        Type: 'REACTIVE'
+        StartTimeRange:
+          FromTime: "2025-02-10"
+          ToTime: "2025-02-12"
+    include_recommendations:
+      locale: 'EN_US'
+    include_anomalies:
+      start_time_range:
+        from_time: "2025-02-10"
+        to_time: "2025-02-12"
+
+- name: Remove Stack from DevOpsGuru
+  amazon.aws.devopsguru_resource_collection:
+    state: absent
+    cloudformation_stack_names: []

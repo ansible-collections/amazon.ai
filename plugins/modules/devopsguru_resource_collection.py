@@ -5,109 +5,88 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
+---
 module: devopsguru_resource_collection
-short_description: Manages Amazon DevOps Guru insights
+short_description: Manages DevOps Guru resource collections
 version_added: 1.0.0
 description:
-    - Manages Amazon DevOps Guru insights.
+    - Manages DevOps Guru resource collections.
 options:
-    status_filter:
+    state:
         description:
-            - A dict of filters to apply.
-            - You can specify which insights are returned by their start time and status ( ONGOING, CLOSED, or ANY).
-            - See U(https://docs.aws.amazon.com/devops-guru/latest/APIReference/API_ListInsightsStatusFilter.html).
-        type: dict
-        aliases: ["filter"]
-    account_id:
-        description:
-            - The ID of the Amazon Web Services account.
+            - Specifies if the resource collection in the request is added or deleted to the resource collection.
+        default: present
+        choices: [ "present", "absent" ]
         type: str
-    insight_id:
+    cloudformation_stack_names:
         description:
-            - The ID of the insight.
-        type: str
-    include_anomalies:
+            - An array of the names of the Amazon Web Services CloudFormation stacks to update.
+              You can specify up to 500 Amazon Web Services CloudFormation stacks.
+            - Required when O(state=present).
+        type: list
+        elements: str
+        aliases: ["stack_names"]
+    tags:
         description:
-            - Dictionary for getting insight's anomalies.
-        type: dict
+            - Tags help you identify and organize your Amazon Web Services resources.
+              Many Amazon Web Services services support tagging, so you can assign the same tag to
+              resources from different services to indicate that the resources are related. For example,
+              you can assign the same tag to an Amazon DynamoDB table resource that you assign to an Lambda function.
+            - Required when O(state=present).
+        type: list
+        elements: dict
         suboptions:
-            start_time_range:
+            app_boundary_key:
                 description:
-                    - A time range used to specify when the requested anomalies started.
-                    - All returned anomalies started during this time range.
-                type: dict
-                suboptions:
-                    from_time:
-                        description:
-                            - The start time of the time range.
-                        type: str
-                    to_time:
-                        description:
-                            - The end time of the time range.
-                        type: str
-            filters:
-                description:
-                    - Specifies one or more service names that are used to list anomalies.
-                type: dict
-                suboptions:
-                    service_collection:
-                        description:
-                            - A collection of the names of Amazon Web Services services.
-                        type: dict
-                        suboptions:
-                            service_names:
-                                description:
-                                    - An array of strings that each specifies the name of an Amazon Web Services service.
-                                type: list
-                                elements: str
-                                choices:
-                                    - "API_GATEWAY"
-                                    - "APPLICATION_ELB"
-                                    - "AUTO_SCALING_GROUP"
-                                    - "CLOUD_FRONT"
-                                    - "DYNAMO_DB"
-                                    - "EC2"
-                                    - "ECS"
-                                    - "EKS"
-                                    - "ELASTIC_BEANSTALK"
-                                    - "ELASTI_CACHE"
-                                    - "ELB"
-                                    - "ES"
-                                    - "KINESIS"
-                                    - "LAMBDA"
-                                    - "NAT_GATEWAY"
-                                    - "NETWORK_ELB"
-                                    - "RDS"
-                                    - "REDSHIFT"
-                                    - "ROUTE_53"
-                                    - "S3"
-                                    - "SAGE_MAKER"
-                                    - "SNS"
-                                    - "SQS"
-                                    - "STEP_FUNCTIONS"
-                                    - "SWF"
-    include_recommendations:
-        description:
-            - Dictionary for getting insight's recommendations.
-        type: dict
-        suboptions:
-            locale:
-                description:
-                    - A locale that specifies the language to use for recommendations.
+                    - An Amazon Web Services tag key that is used to identify the Amazon Web Services resources that DevOps
+                      Guru analyzes.
+                    - All Amazon Web Services resources in your account and Region tagged with this key make up your DevOps
+                      Guru application and analysis boundary.
                 type: str
-                choices:
-                    - 'DE_DE'
-                    - 'EN_US'
-                    - 'EN_GB'
-                    - 'ES_ES'
-                    - 'FR_FR'
-                    - 'IT_IT'
-                    - 'JA_JP'
-                    - 'KO_KR'
-                    - 'PT_BR'
-                    - 'ZH_CN'
-                    - 'ZH_TW'
-
+                required: true
+            tag_values:
+                description:
+                    - The values in an Amazon Web Services tag collection.
+                type: str
+    notification_channel_config:
+        description:
+            - A NotificationChannelConfig that specifies what type of notification channel to add.
+            - The one supported notification channel is Amazon Simple Notification Service (Amazon SNS).
+        type: dict
+        suboptions:
+            Sns:
+                description:
+                    - Information about a notification channel configured in DevOps Guru to send notifications when insights are created.
+                type: dict
+                suboptions:
+                    TopicArn:
+                        description:
+                            - The Amazon Resource Name (ARN) of an Amazon Simple Notification Service topic.
+                        type: str
+            Filters:
+                description:
+                    - The filter configurations for the Amazon SNS notification topic you use with DevOps Guru.
+                suboptions:
+                    Severities:
+                        description:
+                            - The severity levels that you want to receive notifications for.
+                        type: list
+                        elements: str
+                        choices:
+                            - 'LOW'
+                            - 'MEDIUM
+                            - 'HIGH'
+                    MessageTypes:
+                        description:
+                            - The events that you want to receive notifications for.
+                        type: list
+                        elements: str
+                        choices:
+                            - 'NEW_INSIGHT'
+                            - 'CLOSED_INSIGHT'
+                            - 'NEW_ASSOCIATION'
+                            - 'SEVERITY_UPGRADED'
+                            - 'NEW_RECOMMENDATION'
 extends_documentation_fragment:
     - amazon.aws.common.modules
     - amazon.aws.region.modules
@@ -116,52 +95,67 @@ author:
     - Alina Buzachis (@alinabuzachis)
 """
 
-
 EXAMPLES = r"""
-- name: Gather information about DevOpsGuru Resource Insights
-  amazon.ai.devopsguru_insight_info:
-    status_filter:
-        Any:
-            Type: 'REACTIVE'
-            StartTimeRange:
-                FromTime: "2025-02-10"
-                ToTime: "2025-02-12"
+---
+- name: Add Cloudformation stacks to resource collection
+  amazon.ai.devopsguru_resource_collection:
+    state: present
+    cloudformation_stack_names:
+        - StackA
+        - StackB
 
-- name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
-  amazon.ai.devopsguru_insight_info:
-    status_filter:
-        Closed:
-            Type: 'REACTIVE'
-            EndTimeRange:
-                FromTime: "2025-03-04"
-                ToTime: "2025-03-06"
-    include_recommendations:
-        locale: EN_US
-    include_anomalies:
-        filters:
-            service_collection:
-                service_names:
-                - RDS
+- name: Remove Cloudformation stacks to resource collection
+  amazon.ai.devopsguru_resource_collection:
+    state: absent
+    cloudformation_stack_names:
+        - StackA
+        - StackB
 
-- name: Gather information about a specific DevOpsGuru Insight
-  amazon.ai.devopsguru_insight_info:
-    insight_id: "{{ insight_id }}"
-    include_recommendations:
-        locale: EN_US
-    include_anomalies:
-        filters:
-            service_collection:
-                service_names:
-                    - RDS
+- name: Add resource to resource collection using tags
+  amazon.ai.devopsguru_resource_collection:
+    state: absent
+    tags:
+        - app_boundary_key: devops-guru-workshop
+          tag_values:
+            - devops-guru-serverless
+            - devops-guru-aurora
 """
 
 RETURN = r"""
-
+---
+resource_collection:
+    description: Details about the current DevOps Guru resource collection after the module operation.
+    returned: always
+    type: dict
+    contains:
+        cloud_formation:
+            description: Information about the AWS CloudFormation stacks in the resource collection.
+            type: dict
+            contains:
+                stack_names:
+                    description: List of CloudFormation stack names included in the resource collection.
+                    type: list
+                    elements: str
+        tags:
+            description: List of tags used as the resource collection filters.
+            type: list
+            elements: dict
+            contains:
+                app_boundary_key:
+                    description: The AWS tag key used to identify resources DevOps Guru analyzes.
+                    type: str
+                tag_values:
+                    description: List of tag values for the given tag key.
+                    type: list
+                    elements: str
+changed:
+    description: Whether any changes were made by the module.
+    returned: always
+    type: bool
 """
 
 
-from datetime import datetime
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Tuple
 
 try:
     import botocore
@@ -171,6 +165,8 @@ except ImportError:
 
 from ansible.module_utils.common.dict_transformations import \
     camel_dict_to_snake_dict
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import \
+    is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import \
     AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import \
@@ -179,86 +175,113 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import \
     AWSRetry
 
 
+def update_tags(
+    current_tags: List[Dict[str, Any]],
+    new_tags: List[Dict[str, Any]],
+    state: str = "present",
+) -> Tuple[bool, List[Dict[str, Any]]]:
+    """
+    Updates the tags list by adding, updating, or removing tags and TagValues based on the state.
+
+    :param current_tags: The existing list of tags to update.
+    :param new_tags: The list of new tags to process.
+    :param state: Determines whether to add ("present") or remove ("absent") tags.
+    :return: A dictionary with 'update' (bool) and 'tags' (new updated list of tags).
+    """
+    updated_tags = current_tags[:]
+    update = False
+
+    for new_tag in new_tags:
+        app_boundary_key = new_tag.get("app_boundary_key")
+        new_tag_values = new_tag.get("tag_values", [])
+
+        # Find the tag with the same AppBoundaryKey
+        matching_tag = next(
+            (
+                tag
+                for tag in updated_tags
+                if tag.get("AppBoundaryKey") == app_boundary_key
+            ),
+            None,
+        )
+
+        if state == "present":
+            if matching_tag:
+                # Add missing TagValues
+                if matching_tag["TagValues"] != new_tag_values:
+                    matching_tag["TagValues"] = new_tag_values
+                    update = True
+            else:
+                # If no matching AppBoundaryKey, add the new tag
+                updated_tags.append(
+                    {"AppBoundaryKey": app_boundary_key, "TagValues": new_tag_values}
+                )
+                update = True
+
+        elif state == "absent" and matching_tag:
+            # If TagValues match and we want to remove them, remove the tag
+            if matching_tag["TagValues"] == new_tag_values:
+                updated_tags = [
+                    tag
+                    for tag in updated_tags
+                    if tag.get("AppBoundaryKey") != app_boundary_key
+                ]
+                update = True
+            else:
+                # If TagValues don't match, just update the tag with remaining values
+                matching_tag["TagValues"] = [
+                    value
+                    for value in matching_tag["TagValues"]
+                    if value not in new_tag_values
+                ]
+                if not matching_tag["TagValues"]:
+                    updated_tags = [
+                        tag
+                        for tag in updated_tags
+                        if tag.get("AppBoundaryKey") != app_boundary_key
+                    ]
+                update = True
+
+    return update, updated_tags
+
+
 @AWSRetry.jittered_backoff(retries=10)
-def _fetch_data(client, api_call: str, **params: Dict[str, Any]) -> Dict[str, Any]:
-    """Generic function to fetch data using paginators."""
-    paginator = client.get_paginator(api_call)
-    return paginator.paginate(**params).build_full_result()
+def _get_resource_collection(client, module) -> Dict[str, Any]:
+    stack_names = module.params.get("cloudformation_stack_names")
+    tags = module.params.get("tags")
+    params = {}
+    if stack_names is not None:
+        params["ResourceCollectionType"] = "AWS_CLOUD_FORMATION"
+    elif tags is not None:
+        params["ResourceCollectionType"] = "AWS_TAGS"
 
-
-def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[str, Any]:
-    params: Dict[str, Any] = {"Id": insight_id}
-    if account_id:
-        params["AccountId"] = account_id
-
-    return client.describe_insight(**params)
-
-
-def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
-    possible_keys = [
-        "ProactiveInsight",
-        "ReactiveInsight",
-        "ProactiveInsights",
-        "ReactiveInsights",
-    ]
     try:
-        key = next(key for key in possible_keys if key in data)
-        return key
-    except StopIteration:
-        return None
+        paginator = client.get_paginator("get_resource_collection")
+        return paginator.paginate(**params).build_full_result()["ResourceCollection"]
+    except is_boto3_error_code("ResourceNotFoundException"):
+        return {}
 
 
-def merge_data(
-    target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]
-) -> None:
-    """Merges data into a dictionary or list of dictionaries."""
-    if isinstance(target, dict):
-        target.update(source)
-    elif isinstance(target, list):
-        for item in target:
-            item.update(source)
+def update_resource_collection(client, **params) -> Dict[str, Any]:
+    return client.update_resource_collection(**params)
 
 
-def convert_time_ranges(status_filter):
-    """Convert FromTime and ToTime to datetime objects for time ranges."""
-
-    def convert_time(date_str, set_midnight=False):
-        """Helper function to convert date string to datetime, optionally set to midnight."""
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        if set_midnight:
-            dt = dt.replace(hour=0, minute=0, second=0)
-        return dt
-
-    for key in status_filter:
-        if isinstance(status_filter[key], dict):
-            for time_range_key in ["EndTimeRange", "start_time_range"]:
-                if time_range_key in status_filter[key]:
-                    for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
-                        if time_key in status_filter[key][time_range_key]:
-                            # Determine if "ToTime"/"to_time" should have midnight set
-                            set_midnight = (
-                                time_key.lower() == "to_time"
-                                or time_key.lower() == "to_time"
-                            )
-                            status_filter[key][time_range_key][time_key] = convert_time(
-                                status_filter[key][time_range_key][time_key],
-                                set_midnight,
-                            )
+def add_notification_channel(client, config: Dict[str, Any]):
+    client.add_notification_channel(**{"Config": config})
 
 
 def main() -> None:
     argument_spec = dict(
-        status_filter=dict(type="dict", aliases=["filter"]),
-        account_id=dict(type="str"),
-        insight_id=dict(type="str"),
-        include_anomalies=dict(type="dict"),
-        include_recommendations=dict(type="dict"),
+        state=dict(required=True, choices=["present", "absent"]),
+        cloudformation_stack_names=dict(type="list", elements="str", aliases=[""]),
+        tags=dict(type="list", elements="dict"),
+        notification_channel_config=dict(type="dict"),
     )
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_one_of=[("status_filter", "insight_id")],
+        required_one_of=[("cloudformation_stack_names", "tags")],
     )
 
     try:
@@ -268,77 +291,82 @@ def main() -> None:
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    status_filter = module.params.get("status_filter")
-    account_id = module.params.get("account_id")
-    insight_id = module.params.get("insight_id")
-    include_anomalies = module.params.get("include_anomalies")
-    include_recommendations = module.params.get("include_recommendations")
-
-    if status_filter:
-        convert_time_ranges(status_filter)
+    changed = False
+    state = module.params.get("state")
+    stack_names = module.params.get("cloudformation_stack_names")
+    tags = module.params.get("tags")
+    notification_channel_config = module.params.get("notification_channel_config")
+    params = {"ResourceCollection": {}}
 
     try:
-        insight_info = (
-            describe_insight(client, insight_id, account_id)
-            if insight_id
-            else _fetch_data(client, "list_insights", StatusFilter=status_filter)
-        )
-        insight_type = get_insight_type(insight_info)
-        if insight_type:
-            data_to_fetch = {
-                "anomalies": (
-                    include_anomalies,
-                    "_fetch_data",
-                    "list_anomalies_for_insight",
-                ),
-                "recommendations": (
-                    include_recommendations,
-                    "_fetch_data",
-                    "list_recommendations",
-                ),
-            }
+        resource_collection = _get_resource_collection(client, module)
+        if resource_collection and (
+            resource_collection.get("CloudFormation", {}).get("StackNames", [])
+            or resource_collection.get("Tags", [])
+        ):
+            if stack_names is not None and resource_collection.get(
+                "CloudFormation", {}
+            ).get("StackNames", []):
+                if set(stack_names).issubset(
+                    set(resource_collection["CloudFormation"]["StackNames"])
+                ):
+                    if state == "absent":
+                        changed = True
+                        params["Action"] = "REMOVE"
+                        params["ResourceCollection"]["CloudFormation"] = {
+                            "StackNames": stack_names
+                        }
+                        update_resource_collection(client, **params)
+                    if stack_names == [] and state == "absent":
+                        changed = True
+                        params["Action"] = "REMOVE"
+                        params["ResourceCollection"]["CloudFormation"] = {
+                            "StackNames": resource_collection["CloudFormation"][
+                                "StackNames"
+                            ]
+                        }
+                        update_resource_collection(client, **params)
+                else:
+                    if state == "present":
+                        changed = True
+                        params["Action"] = "ADD"
+                        params["ResourceCollection"]["CloudFormation"] = {
+                            "StackNames": stack_names
+                        }
+                        update_resource_collection(client, **params)
+            elif tags is not None and resource_collection.get("Tags", []):
+                update, updated_tags = update_tags(
+                    resource_collection["Tags"], tags, state="present"
+                )
+                if update:
+                    changed = True
+                    if state == "present":
+                        params["Action"] = "ADD"
+                    else:
+                        params["Action"] = "REMOVE"
+                    params["ResourceCollection"]["Tags"] = updated_tags
+                    update_resource_collection(client, **params)
+        else:
+            params["Action"] = "ADD"
+            if stack_names:
+                params["ResourceCollection"]["CloudFormation"] = {
+                    "StackNames": stack_names
+                }
+            elif tags:
+                params["ResourceCollection"]["Tags"] = tags
+            changed = True
+            update_resource_collection(client, **params)
 
-            for data_type, (
-                include_flag,
-                fetch_func,
-                api_call,
-            ) in data_to_fetch.items():
-                if include_flag:
-                    params = {}
-                    if account_id:
-                        params["AccountId"] = account_id
-
-                    if data_type == "anomalies":
-                        if include_flag.get("filters"):
-                            params["Filters"] = {
-                                "ServiceCollection": {
-                                    "ServiceNames": include_flag["filters"][
-                                        "service_collection"
-                                    ]["service_names"]
-                                }
-                            }
-                        if include_flag.get("start_time_range"):
-                            params["StartTimeRange"] = include_flag["start_time_range"]
-
-                    if data_type == "recommendations":
-                        params["Locale"] = include_flag["locale"]
-
-                    if isinstance(insight_info[insight_type], dict):
-                        params["InsightId"] = insight_info[insight_type]["Id"]
-                        fetched_data = globals()[fetch_func](client, api_call, **params)
-                        merge_data(insight_info[insight_type], fetched_data)
-                    elif isinstance(insight_info[insight_type], list):
-                        for insight in insight_info[insight_type]:
-                            params["InsightId"] = insight["Id"]
-                            fetched_data = globals()[fetch_func](
-                                client, api_call, **params
-                            )
-                            merge_data(insight, fetched_data)
-
-        module.exit_json(**camel_dict_to_snake_dict(insight_info))
+        if notification_channel_config:
+            add_notification_channel(client, notification_channel_config)
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
+
+    module.exit_json(
+        changed=changed,
+        **camel_dict_to_snake_dict(_get_resource_collection(client, module))
+    )
 
 
 if __name__ == "__main__":

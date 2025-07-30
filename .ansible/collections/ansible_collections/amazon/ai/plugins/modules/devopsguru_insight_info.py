@@ -5,7 +5,6 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
----
 module: devopsguru_insight_info
 short_description: Fetches information about Amazon DevOps Guru insights
 version_added: 1.0.0
@@ -119,7 +118,6 @@ author:
 
 
 EXAMPLES = r"""
----
 - name: Gather information about DevOpsGuru Resource Insights
   amazon.ai.devopsguru_insight_info:
     status_filter:
@@ -158,180 +156,7 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
----
-proactive_insight:
-    description: Details about a proactive insight (predictive alerts) returned by Amazon DevOps Guru.
-    returned: when the specified or filtered insight is proactive
-    type: dict
-    contains:
-        id:
-            description: The unique identifier of the proactive insight.
-            type: str
-            sample: "abcdef12-3456-7890-abcd-ef1234567890"
-        name:
-            description: The name assigned to the insight by DevOps Guru.
-            type: str
-            sample: "high_rds_latency_predicted"
-        severity:
-            description: The severity level of the insight.
-            type: str
-            sample: "high"
-        status:
-            description: The current status of the insight.
-            type: str
-            sample: "ongoing"
-        insight_time_range:
-            description: The time period during which the insight is active.
-            type: dict
-            contains:
-                start_time:
-                    description: When the insight started.
-                    type: str
-                    sample: "2025-02-10T12:34:56Z"
-                end_time:
-                    description: When the insight ended, or null if ongoing.
-                    type: str
-                    sample: null
-        prediction_time_range:
-            description: The predicted start and end times for the potential issue.
-            type: dict
-            contains:
-                start_time:
-                    description: Start of the prediction range.
-                    type: str
-                    sample: "2025-02-10T12:00:00Z"
-                end_time:
-                    description: End of the prediction range.
-                    type: str
-                    sample: "2025-02-11T12:00:00Z"
-        resource_collection:
-            description: The collection of AWS resources analyzed for this insight.
-            type: dict
-            contains:
-                service:
-                    description: Services involved in the insight.
-                    type: dict
-                    contains:
-                        service_names:
-                            description: List of service names.
-                            type: list
-                            elements: str
-                            sample: ["rds", "ec2"]
-        ssm_ops_items:
-            description: Related AWS Systems Manager OpsItem IDs created for this insight.
-            type: list
-            elements: str
-            sample: ["ops-item-1234abcd"]
-        anomalies:
-            description: A list of anomalies related to this insight (returned when include_anomalies is specified).
-            type: list
-            elements: dict
-            contains:
-                id:
-                    description: Unique identifier for the anomaly.
-                    type: str
-                    sample: "anomaly-1234"
-                start_time:
-                    description: When the anomaly began.
-                    type: str
-                    sample: "2025-02-10T12:30:00Z"
-                end_time:
-                    description: When the anomaly ended, if applicable.
-                    type: str
-                    sample: "2025-02-10T13:00:00Z"
-                source_details:
-                    description: Information about the service and metrics causing the anomaly.
-                    type: dict
-                    sample:
-                        service_name: "rds"
-                        metric_name: "cpu_utilization"
-        recommendations:
-            description: A list of recommendations to address the predicted issue (returned when include_recommendations is specified).
-            type: list
-            elements: dict
-            contains:
-                name:
-                    description: The name/title of the recommendation.
-                    type: str
-                    sample: "optimize_database_connections"
-                description:
-                    description: Details about the recommended action.
-                    type: str
-                    sample: "review connection pooling and query optimization to avoid saturation."
-                link:
-                    description: URL to AWS documentation or relevant troubleshooting guide.
-                    type: str
-                    sample: "https://docs.aws.amazon.com/devops-guru/latest/advice/rds-connection-optimization.html"
 
-reactive_insight:
-    description: Details about a reactive insight (detected after an operational issue occurs).
-    returned: when the specified or filtered insight is reactive
-    type: dict
-    contains:
-        id:
-            description: The unique identifier of the reactive insight.
-            type: str
-            sample: "fedcba98-7654-3210-abcd-ef9876543210"
-        name:
-            description: The name assigned to the insight by DevOps Guru.
-            type: str
-            sample: "high_latency_detected_on_api_gateway"
-        severity:
-            description: The severity level of the insight.
-            type: str
-            sample: "medium"
-        status:
-            description: The current status of the insight.
-            type: str
-            sample: "closed"
-        insight_time_range:
-            description: The time period during which the insight was active.
-            type: dict
-            contains:
-                start_time:
-                    description: When the issue was first detected.
-                    type: str
-                    sample: "2025-03-04T10:15:00Z"
-                end_time:
-                    description: When the issue ended.
-                    type: str
-                    sample: "2025-03-04T11:45:00Z"
-        resource_collection:
-            description: The set of AWS resources impacted by this insight.
-            type: dict
-            contains:
-                cloud_formation:
-                    description: Affected CloudFormation stack names.
-                    type: dict
-                    contains:
-                        stack_names:
-                            type: list
-                            elements: str
-                            sample: ["api-stack"]
-        ssm_ops_items:
-            description: Related AWS Systems Manager OpsItem IDs created for this insight.
-            type: list
-            elements: str
-            sample: ["ops-item-5678abcd"]
-        anomalies:
-            description: A list of anomalies related to this reactive issue.
-            type: list
-            elements: dict
-            sample:
-                - id: "anomaly-5678"
-                  start_time: "2025-03-04T10:00:00Z"
-                  end_time: "2025-03-04T10:30:00Z"
-                  source_details:
-                      service_name: "api_gateway"
-                      metric_name: "latency"
-        recommendations:
-            description: A list of recommendations to resolve or prevent future occurrences of this issue.
-            type: list
-            elements: dict
-            sample:
-                - name: "check_backend_integrations"
-                  description: "investigate slow responses from backend lambda functions."
-                  link: "https://docs.aws.amazon.com/devops-guru/latest/advice/api-gateway-latency.html"
 """
 
 
@@ -344,14 +169,12 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible.module_utils.common.dict_transformations import \
-    camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import \
-    AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import \
-    AnsibleAWSModule
-from ansible_collections.amazon.aws.plugins.module_utils.retries import \
-    AWSRetry
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import (
+    AnsibleAWSError,
+)
+from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
 @AWSRetry.jittered_backoff(retries=10)
