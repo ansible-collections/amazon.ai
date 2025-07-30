@@ -5,7 +5,6 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
----
 module: devopsguru_resource_collection_info
 short_description: Fetches information about Amazon DevOps Guru resource collection
 version_added: 1.0.0
@@ -31,14 +30,12 @@ author:
 """
 
 EXAMPLES = r"""
----
 - name: Gather information about DevOpsGuru Resource Collections
   amazon.ai.devopsguru_resource_collection_info:
     resource_collection_type: "AWS_CLOUD_FORMATION"
 """
 
 RETURN = r"""
----
 resource_collection:
     description: Information about the DevOps Guru resource collection of the specified type.
     returned: always
@@ -78,7 +75,8 @@ resource_collection:
 """
 
 
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
 try:
     import botocore
@@ -86,16 +84,12 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible.module_utils.common.dict_transformations import \
-    camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import \
-    is_boto3_error_code
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import \
-    AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import \
-    AnsibleAWSModule
-from ansible_collections.amazon.aws.plugins.module_utils.retries import \
-    AWSRetry
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
+from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -122,9 +116,7 @@ def main() -> None:
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 
     try:
-        client = module.client(
-            "devops-guru", retry_decorator=AWSRetry.jittered_backoff()
-        )
+        client = module.client("devops-guru", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 

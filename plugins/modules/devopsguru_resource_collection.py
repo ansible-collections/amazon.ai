@@ -5,7 +5,6 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
----
 module: devopsguru_resource_collection
 short_description: Manages DevOps Guru resource collections
 version_added: 1.0.0
@@ -47,7 +46,8 @@ options:
             tag_values:
                 description:
                     - The values in an Amazon Web Services tag collection.
-                type: str
+                type: list
+                elements: str
     notification_channel_config:
         description:
             - A NotificationChannelConfig that specifies what type of notification channel to add.
@@ -74,7 +74,7 @@ options:
                         elements: str
                         choices:
                             - 'LOW'
-                            - 'MEDIUM
+                            - 'MEDIUM'
                             - 'HIGH'
                     MessageTypes:
                         description:
@@ -96,33 +96,31 @@ author:
 """
 
 EXAMPLES = r"""
----
 - name: Add Cloudformation stacks to resource collection
   amazon.ai.devopsguru_resource_collection:
     state: present
     cloudformation_stack_names:
-        - StackA
-        - StackB
+      - StackA
+      - StackB
 
 - name: Remove Cloudformation stacks to resource collection
   amazon.ai.devopsguru_resource_collection:
     state: absent
     cloudformation_stack_names:
-        - StackA
-        - StackB
+      - StackA
+      - StackB
 
 - name: Add resource to resource collection using tags
   amazon.ai.devopsguru_resource_collection:
     state: absent
     tags:
-        - app_boundary_key: devops-guru-workshop
-          tag_values:
-            - devops-guru-serverless
-            - devops-guru-aurora
+      - app_boundary_key: devops-guru-workshop
+        tag_values:
+          - devops-guru-serverless
+          - devops-guru-aurora
 """
 
 RETURN = r"""
----
 resource_collection:
     description: Details about the current DevOps Guru resource collection after the module operation.
     returned: always
@@ -155,7 +153,10 @@ changed:
 """
 
 
-from typing import Any, Dict, List, Tuple
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Tuple
 
 try:
     import botocore
@@ -163,16 +164,12 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible.module_utils.common.dict_transformations import \
-    camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import \
-    is_boto3_error_code
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import \
-    AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import \
-    AnsibleAWSModule
-from ansible_collections.amazon.aws.plugins.module_utils.retries import \
-    AWSRetry
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
+from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
 def update_tags(
@@ -197,11 +194,7 @@ def update_tags(
 
         # Find the tag with the same AppBoundaryKey
         matching_tag = next(
-            (
-                tag
-                for tag in updated_tags
-                if tag.get("AppBoundaryKey") == app_boundary_key
-            ),
+            (tag for tag in updated_tags if tag.get("AppBoundaryKey") == app_boundary_key),
             None,
         )
 
@@ -213,33 +206,21 @@ def update_tags(
                     update = True
             else:
                 # If no matching AppBoundaryKey, add the new tag
-                updated_tags.append(
-                    {"AppBoundaryKey": app_boundary_key, "TagValues": new_tag_values}
-                )
+                updated_tags.append({"AppBoundaryKey": app_boundary_key, "TagValues": new_tag_values})
                 update = True
 
         elif state == "absent" and matching_tag:
             # If TagValues match and we want to remove them, remove the tag
             if matching_tag["TagValues"] == new_tag_values:
-                updated_tags = [
-                    tag
-                    for tag in updated_tags
-                    if tag.get("AppBoundaryKey") != app_boundary_key
-                ]
+                updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
                 update = True
             else:
                 # If TagValues don't match, just update the tag with remaining values
                 matching_tag["TagValues"] = [
-                    value
-                    for value in matching_tag["TagValues"]
-                    if value not in new_tag_values
+                    value for value in matching_tag["TagValues"] if value not in new_tag_values
                 ]
                 if not matching_tag["TagValues"]:
-                    updated_tags = [
-                        tag
-                        for tag in updated_tags
-                        if tag.get("AppBoundaryKey") != app_boundary_key
-                    ]
+                    updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
                 update = True
 
     return update, updated_tags
@@ -272,8 +253,8 @@ def add_notification_channel(client, config: Dict[str, Any]):
 
 def main() -> None:
     argument_spec = dict(
-        state=dict(required=True, choices=["present", "absent"]),
-        cloudformation_stack_names=dict(type="list", elements="str", aliases=[""]),
+        state=dict(choices=["present", "absent"], default="present"),
+        cloudformation_stack_names=dict(type="list", elements="str", aliases=["stack_names"]),
         tags=dict(type="list", elements="dict"),
         notification_channel_config=dict(type="dict"),
     )
@@ -285,9 +266,7 @@ def main() -> None:
     )
 
     try:
-        client = module.client(
-            "devops-guru", retry_decorator=AWSRetry.jittered_backoff()
-        )
+        client = module.client("devops-guru", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
@@ -301,43 +280,30 @@ def main() -> None:
     try:
         resource_collection = _get_resource_collection(client, module)
         if resource_collection and (
-            resource_collection.get("CloudFormation", {}).get("StackNames", [])
-            or resource_collection.get("Tags", [])
+            resource_collection.get("CloudFormation", {}).get("StackNames", []) or resource_collection.get("Tags", [])
         ):
-            if stack_names is not None and resource_collection.get(
-                "CloudFormation", {}
-            ).get("StackNames", []):
-                if set(stack_names).issubset(
-                    set(resource_collection["CloudFormation"]["StackNames"])
-                ):
+            if stack_names is not None and resource_collection.get("CloudFormation", {}).get("StackNames", []):
+                if set(stack_names).issubset(set(resource_collection["CloudFormation"]["StackNames"])):
                     if state == "absent":
                         changed = True
                         params["Action"] = "REMOVE"
-                        params["ResourceCollection"]["CloudFormation"] = {
-                            "StackNames": stack_names
-                        }
+                        params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
                         update_resource_collection(client, **params)
                     if stack_names == [] and state == "absent":
                         changed = True
                         params["Action"] = "REMOVE"
                         params["ResourceCollection"]["CloudFormation"] = {
-                            "StackNames": resource_collection["CloudFormation"][
-                                "StackNames"
-                            ]
+                            "StackNames": resource_collection["CloudFormation"]["StackNames"]
                         }
                         update_resource_collection(client, **params)
                 else:
                     if state == "present":
                         changed = True
                         params["Action"] = "ADD"
-                        params["ResourceCollection"]["CloudFormation"] = {
-                            "StackNames": stack_names
-                        }
+                        params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
                         update_resource_collection(client, **params)
             elif tags is not None and resource_collection.get("Tags", []):
-                update, updated_tags = update_tags(
-                    resource_collection["Tags"], tags, state="present"
-                )
+                update, updated_tags = update_tags(resource_collection["Tags"], tags, state="present")
                 if update:
                     changed = True
                     if state == "present":
@@ -349,9 +315,7 @@ def main() -> None:
         else:
             params["Action"] = "ADD"
             if stack_names:
-                params["ResourceCollection"]["CloudFormation"] = {
-                    "StackNames": stack_names
-                }
+                params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
             elif tags:
                 params["ResourceCollection"]["Tags"] = tags
             changed = True
@@ -363,10 +327,7 @@ def main() -> None:
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
-    module.exit_json(
-        changed=changed,
-        **camel_dict_to_snake_dict(_get_resource_collection(client, module))
-    )
+    module.exit_json(changed=changed, **camel_dict_to_snake_dict(_get_resource_collection(client, module)))
 
 
 if __name__ == "__main__":

@@ -5,7 +5,6 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
----
 module: devopsguru_insight_info
 short_description: Fetches information about Amazon DevOps Guru insights
 version_added: 1.0.0
@@ -119,46 +118,44 @@ author:
 
 
 EXAMPLES = r"""
----
 - name: Gather information about DevOpsGuru Resource Insights
   amazon.ai.devopsguru_insight_info:
     status_filter:
-        Any:
-            Type: 'REACTIVE'
-            StartTimeRange:
-                FromTime: "2025-02-10"
-                ToTime: "2025-02-12"
+      Any:
+        Type: 'REACTIVE'
+        StartTimeRange:
+          FromTime: "2025-02-10"
+          ToTime: "2025-02-12"
 
 - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
   amazon.ai.devopsguru_insight_info:
     status_filter:
-        Closed:
-            Type: 'REACTIVE'
-            EndTimeRange:
-                FromTime: "2025-03-04"
-                ToTime: "2025-03-06"
+      Closed:
+        Type: 'REACTIVE'
+        EndTimeRange:
+          FromTime: "2025-03-04"
+          ToTime: "2025-03-06"
     include_recommendations:
-        locale: EN_US
+      locale: EN_US
     include_anomalies:
-        filters:
+      filters:
         service_collection:
-            service_names:
+          service_names:
             - RDS
 
 - name: Gather information about a specific DevOpsGuru Insight
   amazon.ai.devopsguru_insight_info:
     insight_id: "{{ insight_id }}"
     include_recommendations:
-        locale: EN_US
+      locale: EN_US
     include_anomalies:
-        filters:
+      filters:
         service_collection:
-            service_names:
-                - RDS
+          service_names:
+            - RDS
 """
 
 RETURN = r"""
----
 proactive_insight:
     description: Details about a proactive insight (predictive alerts) returned by Amazon DevOps Guru.
     returned: when the specified or filtered insight is proactive
@@ -305,6 +302,8 @@ reactive_insight:
                     type: dict
                     contains:
                         stack_names:
+                            description:
+                                - List of CloudFormation stack names associated with the reactive insight.
                             type: list
                             elements: str
                             sample: ["api-stack"]
@@ -336,7 +335,10 @@ reactive_insight:
 
 
 from datetime import datetime
-from typing import Any, Dict, List, Union
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Union
 
 try:
     import botocore
@@ -344,14 +346,11 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible.module_utils.common.dict_transformations import \
-    camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import \
-    AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import \
-    AnsibleAWSModule
-from ansible_collections.amazon.aws.plugins.module_utils.retries import \
-    AWSRetry
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
+from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -383,9 +382,7 @@ def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
         return None
 
 
-def merge_data(
-    target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]
-) -> None:
+def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
     """Merges data into a dictionary or list of dictionaries."""
     if isinstance(target, dict):
         target.update(source)
@@ -411,10 +408,7 @@ def convert_time_ranges(status_filter):
                     for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
                         if time_key in status_filter[key][time_range_key]:
                             # Determine if "ToTime"/"to_time" should have midnight set
-                            set_midnight = (
-                                time_key.lower() == "to_time"
-                                or time_key.lower() == "to_time"
-                            )
+                            set_midnight = time_key.lower() == "to_time" or time_key.lower() == "to_time"
                             status_filter[key][time_range_key][time_key] = convert_time(
                                 status_filter[key][time_range_key][time_key],
                                 set_midnight,
@@ -437,9 +431,7 @@ def main() -> None:
     )
 
     try:
-        client = module.client(
-            "devops-guru", retry_decorator=AWSRetry.jittered_backoff()
-        )
+        client = module.client("devops-guru", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
@@ -487,9 +479,7 @@ def main() -> None:
                         if include_flag.get("filters"):
                             params["Filters"] = {
                                 "ServiceCollection": {
-                                    "ServiceNames": include_flag["filters"][
-                                        "service_collection"
-                                    ]["service_names"]
+                                    "ServiceNames": include_flag["filters"]["service_collection"]["service_names"]
                                 }
                             }
                         if include_flag.get("start_time_range"):
@@ -505,9 +495,7 @@ def main() -> None:
                     elif isinstance(insight_info[insight_type], list):
                         for insight in insight_info[insight_type]:
                             params["InsightId"] = insight["Id"]
-                            fetched_data = globals()[fetch_func](
-                                client, api_call, **params
-                            )
+                            fetched_data = globals()[fetch_func](client, api_call, **params)
                             merge_data(insight, fetched_data)
 
         module.exit_json(**camel_dict_to_snake_dict(insight_info))
