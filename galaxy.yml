@@ -1,24 +1,29 @@
 ---
 # See https://docs.ansible.com/ansible/latest/dev_guide/collections_galaxy_meta.html
 
-namespace: community
-name: FIXME
-version: 0.1.0
+namespace: amazon
+name: ai
+version: 1.0.0
 readme: README.md
 authors:
-  - YOUR NAME (github.com/YOURGITHUB)
-description: null
+  - Alina Buzachis (github.com/alinabuzachis)
+description: Ansible Collection for Amazon AI and ML Resources
 license_file: LICENSE
 tags:
 # tags so people can search for collections https://galaxy.ansible.com/search
 # tags are all lower-case, no spaces, no dashes.
-  - example1
-  - example2
-repository: https://github.com/ansible-collections/community.REPO_NAME
+  - ai
+  - amazon
+dependencies:
+  amazon.aws: '>=10.0.0'
+  community.aws: '>=10.0.0'
+repository: https://github.com/ansible-collections/amazon.ai
 #documentation: https://github.com/ansible-collection-migration/community.REPO_NAME/tree/main/docs
-homepage: https://github.com/ansible-collections/community.REPO_NAME
-issues: https://github.com/ansible-collections/community.REPO_NAME/issues
+homepage: https://github.com/ansible-collections/amazon.ai
+issues: https://github.com/ansible-collections/amazon.ai/issues
 build_ignore:
 # https://docs.ansible.com/ansible/devel/dev_guide/developing_collections_distributing.html#ignoring-files-and-folders
   - .gitignore
   - changelogs/.plugin-cache.yaml
+  - '*cloud-config-aws.ini'
+  - '*cloud-config-aws.yml'
