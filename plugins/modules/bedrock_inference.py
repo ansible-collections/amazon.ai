@@ -113,13 +113,13 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 def main():
     module_args = dict(
-        model_id=dict(type='str', required=True),
-        prompt=dict(type='str', required=True),
-        trace=dict(type='str', choices=['ENABLED', 'DISABLED', 'ENABLED_FULL'], default='DISABLED'),
-        guardrail_identifier=dict(type='str', required=False),
-        guardrail_version=dict(type='str', required=False),
-        performance_config_latency=dict(type='str', choices=['standard', 'optimized'], default='standard'),
-        max_tokens=dict(type='int', default=250),
+        model_id=dict(type="str", required=True),
+        prompt=dict(type="str", required=True),
+        trace=dict(type="str", choices=["ENABLED", "DISABLED", "ENABLED_FULL"], default="DISABLED"),
+        guardrail_identifier=dict(type="str", required=False),
+        guardrail_version=dict(type="str", required=False),
+        performance_config_latency=dict(type="str", choices=["standard", "optimized"], default="standard"),
+        max_tokens=dict(type="int", default=250),
     )
 
     module = AnsibleAWSModule(
@@ -130,55 +130,43 @@ def main():
     if module.check_mode:
         module.exit_json(changed=False)
 
-    model_id = module.params['model_id']
-    prompt = module.params['prompt']
-    max_tokens = module.params['max_tokens']
+    model_id = module.params["model_id"]
+    prompt = module.params["prompt"]
+    max_tokens = module.params["max_tokens"]
 
     # Initialize a dictionary to hold optional parameters for the API call
     optional_params = {}
-    if module.params['trace'] != 'DISABLED':
-        optional_params['trace'] = module.params['trace']
-    if module.params.get('guardrail_identifier'):
-        optional_params['guardrailIdentifier'] = module.params['guardrail_identifier']
+    if module.params["trace"] != "DISABLED":
+        optional_params["trace"] = module.params["trace"]
+    if module.params.get("guardrail_identifier"):
+        optional_params["guardrailIdentifier"] = module.params["guardrail_identifier"]
         # The guardrailVersion is required if guardrailIdentifier is provided
-        if not module.params.get('guardrail_version'):
+        if not module.params.get("guardrail_version"):
             module.fail_json(msg="guardrail_version is required when guardrail_identifier is specified.")
-        optional_params['guardrailVersion'] = module.params['guardrail_version']
-    if module.params['performance_config_latency'] != 'standard':
-        optional_params['performanceConfigLatency'] = module.params['performance_config_latency']
+        optional_params["guardrailVersion"] = module.params["guardrail_version"]
+    if module.params["performance_config_latency"] != "standard":
+        optional_params["performanceConfigLatency"] = module.params["performance_config_latency"]
 
     try:
         client = module.client("bedrock-runtime", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    body = {
-        "prompt": "\n\nHuman: {}\n\nAssistant:".format(prompt),
-        "max_tokens_to_sample": max_tokens
-    }
+    body = {"prompt": "\n\nHuman: {}\n\nAssistant:".format(prompt), "max_tokens_to_sample": max_tokens}
 
     try:
         response = client.invoke_model(
-            body=json.dumps(body),
-            modelId=model_id,
-            contentType='application/json',
-            accept='*/*',
-            **optional_params
+            body=json.dumps(body), modelId=model_id, contentType="application/json", accept="*/*", **optional_params
         )
 
-        response_body = json.loads(response['body'].read())
-        completion = response_body.get('completion')
+        response_body = json.loads(response["body"].read())
+        completion = response_body.get("completion")
 
-        module.exit_json(
-            changed=True,
-            model_id=model_id,
-            prompt=prompt,
-            completion=completion
-        )
+        module.exit_json(changed=True, model_id=model_id, prompt=prompt, completion=completion)
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

@@ -127,22 +127,12 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 def main():
     module_args = dict(
-        by_provider=dict(type='str', required=False),
+        by_provider=dict(type="str", required=False),
         by_customization_type=dict(
-            type='str',
-            choices=['FINE_TUNING', 'CONTINUED_PRE_TRAINING', 'DISTILLATION'],
-            required=False
+            type="str", choices=["FINE_TUNING", "CONTINUED_PRE_TRAINING", "DISTILLATION"], required=False
         ),
-        by_output_modality=dict(
-            type='str',
-            choices=['TEXT', 'IMAGE', 'EMBEDDING'],
-            required=False
-        ),
-        by_inference_type=dict(
-            type='str',
-            choices=['ON_DEMAND', 'PROVISIONED'],
-            required=False
-        ),
+        by_output_modality=dict(type="str", choices=["TEXT", "IMAGE", "EMBEDDING"], required=False),
+        by_inference_type=dict(type="str", choices=["ON_DEMAND", "PROVISIONED"], required=False),
     )
 
     module = AnsibleAWSModule(
@@ -155,14 +145,14 @@ def main():
 
     # Dictionary to hold optional parameters for the API call
     params = {}
-    if module.params.get('by_provider'):
-        params['byProvider'] = module.params['by_provider']
-    if module.params.get('by_customization_type'):
-        params['byCustomizationType'] = module.params['by_customization_type']
-    if module.params.get('by_output_modality'):
-        params['byOutputModality'] = module.params['by_output_modality']
-    if module.params.get('by_inference_type'):
-        params['byInferenceType'] = module.params['by_inference_type']
+    if module.params.get("by_provider"):
+        params["byProvider"] = module.params["by_provider"]
+    if module.params.get("by_customization_type"):
+        params["byCustomizationType"] = module.params["by_customization_type"]
+    if module.params.get("by_output_modality"):
+        params["byOutputModality"] = module.params["by_output_modality"]
+    if module.params.get("by_inference_type"):
+        params["byInferenceType"] = module.params["by_inference_type"]
 
     try:
         client = module.client("bedrock", retry_decorator=AWSRetry.jittered_backoff())
@@ -173,14 +163,11 @@ def main():
         response = client.list_foundation_models(**params)
         response_snake_case = camel_dict_to_snake_dict(response)
 
-        module.exit_json(
-            changed=False,
-            model_summaries=response_snake_case.get('model_summaries', [])
-        )
+        module.exit_json(changed=False, model_summaries=response_snake_case.get("model_summaries", []))
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
