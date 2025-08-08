@@ -8,14 +8,19 @@
 DOCUMENTATION = r"""
 ---
 module: bedrock_foundation_models_info
-short_description: Lists Amazon Bedrock foundation models
+short_description: Lists or gets details for Amazon Bedrock foundation models
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)
 description:
-    - This module lists Amazon Bedrock foundation models.
+    - This module lists or gets details for Amazon Bedrock foundation models
     - It supports filtering the results by provider, customization type, output modality, and inference type.
 options:
+    model_id:
+        description:
+            - The model ID of the specific foundation model to retrieve.
+            - When this option is provided, all other filtering options are ignored.
+        type: str
     by_provider:
         description:
             - Return models belonging to the model provider that you specify.
@@ -47,6 +52,11 @@ EXAMPLES = r"""
   amazon.ai.bedrock_foundation_models_info:
   register: all_models
 
+- name: Get info for a specific model by ID
+  amazon.ai.bedrock_foundation_models_info:
+    model_id: 'anthropic.claude-v2'
+  register: claude_info
+
 - name: List only models from the 'anthropic' provider
   amazon.ai.bedrock_foundation_models_info:
     by_provider: 'Anthropic'
@@ -68,7 +78,7 @@ RETURN = r"""
 model_summaries:
     description: A list of dictionaries, where each dictionary contains summary information for a foundation model.
     type: list
-    returned: success
+    returned: success if no model_id is provided
     contains:
         model_arn:
             description: The Amazon Resource Name (ARN) of the foundation model.
@@ -80,7 +90,7 @@ model_summaries:
             description: The name of the model.
             type: str
         provider_name:
-            description: The model’s provider name.
+            description: The model's provider name.
             type: str
         input_modalities:
             description: The input modalities that the model supports.
@@ -105,11 +115,46 @@ model_summaries:
                     description: Specifies whether a model version is available (ACTIVE) or deprecated (LEGACY).
                     type: str
                     choices: ['ACTIVE', 'LEGACY']
-changed:
-    description: Indicates whether the state of the system was changed. This module is for fact-gathering and will always be false.
-    type: bool
-    returned: always
-    sample: false
+model_summary:
+    description: A dictionary containing summary information for the specified foundation model.
+    type: dict
+    returned: success if model_id is provided
+    contains:
+        model_arn:
+            description: The Amazon Resource Name (ARN) of the foundation model.
+            type: str
+        model_id:
+            description: The model ID of the foundation model.
+            type: str
+        model_name:
+            description: The name of the model.
+            type: str
+        provider_name:
+            description: The model's provider name.
+            type: str
+        input_modalities:
+            description: The input modalities that the model supports.
+            type: list
+        output_modalities:
+            description: The output modalities that the model supports.
+            type: list
+        response_streaming_supported:
+            description: Indicates whether the model supports streaming.
+            type: bool
+        customizations_supported:
+            description: Whether the model supports fine-tuning or continual pre-training.
+            type: list
+        inference_types_supported:
+            description: The inference types that the model supports.
+            type: list
+        model_lifecycle:
+            description: Contains details about whether a model version is available or deprecated.
+            type: dict
+            contains:
+                status:
+                    description: Specifies whether a model version is available (ACTIVE) or deprecated (LEGACY).
+                    type: str
+                    choices: ['ACTIVE', 'LEGACY']
 """
 
 
@@ -125,8 +170,39 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
+def _get_model_details(module, client, model_id):
+    """
+    Handles the get_foundation_model API call.
+    """
+    response = client.get_foundation_model(modelId=model_id)
+    response_snake_case = camel_dict_to_snake_dict(response)
+
+    module.exit_json(changed=False, model_summary=response_snake_case.get("model_summary", {}))
+
+
+def _list_models_with_filters(module, client):
+    """
+    Handles the list_foundation_models API call with optional filters.
+    """
+    params = {}
+    if module.params.get("by_provider"):
+        params["byProvider"] = module.params["by_provider"]
+    if module.params.get("by_customization_type"):
+        params["byCustomizationType"] = module.params["by_customization_type"]
+    if module.params.get("by_output_modality"):
+        params["byOutputModality"] = module.params["by_output_modality"]
+    if module.params.get("by_inference_type"):
+        params["byInferenceType"] = module.params["by_inference_type"]
+
+    response = client.list_foundation_models(**params)
+    response_snake_case = camel_dict_to_snake_dict(response)
+
+    module.exit_json(changed=False, model_summaries=response_snake_case.get("model_summaries", []))
+
+
 def main():
     module_args = dict(
+        model_id=dict(type="str", required=False),
         by_provider=dict(type="str", required=False),
         by_customization_type=dict(
             type="str", choices=["FINE_TUNING", "CONTINUED_PRE_TRAINING", "DISTILLATION"], required=False
@@ -140,31 +216,17 @@ def main():
         supports_check_mode=True,
     )
 
-    if module.check_mode:
-        module.exit_json(changed=False)
-
-    # Dictionary to hold optional parameters for the API call
-    params = {}
-    if module.params.get("by_provider"):
-        params["byProvider"] = module.params["by_provider"]
-    if module.params.get("by_customization_type"):
-        params["byCustomizationType"] = module.params["by_customization_type"]
-    if module.params.get("by_output_modality"):
-        params["byOutputModality"] = module.params["by_output_modality"]
-    if module.params.get("by_inference_type"):
-        params["byInferenceType"] = module.params["by_inference_type"]
-
     try:
         client = module.client("bedrock", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
+    # Route the request based on whether a model_id was provided
     try:
-        response = client.list_foundation_models(**params)
-        response_snake_case = camel_dict_to_snake_dict(response)
-
-        module.exit_json(changed=False, model_summaries=response_snake_case.get("model_summaries", []))
-
+        if module.params.get("model_id"):
+            _get_model_details(module, client, module.params["model_id"])
+        else:
+            _list_models_with_filters(module, client)
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
