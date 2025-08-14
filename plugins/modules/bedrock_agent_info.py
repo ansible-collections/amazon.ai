@@ -150,6 +150,88 @@ agents:
 """
 
 
+RETURN = r"""
+agent:
+    description: A dictionary or list of dictionaries containing the details of the agent.
+    type: dict
+    returned: always
+    contains:
+        agent_id:
+            description: The unique ID of the agent.
+            type: str
+            sample: "EXAMPLEAGENTID"
+        agent_name:
+            description: The name of the agent.
+            type: str
+            sample: "my-test-agent"
+        agent_arn:
+            description: The Amazon Resource Name (ARN) of the agent.
+            type: str
+        agent_version:
+            description: The version of the agent.
+            type: str
+        client_token:
+            description: A unique, case-sensitive identifier to ensure idempotency.
+            type: str
+        instruction:
+            description: Instructions that tell the agent what it should do.
+            type: str
+        agent_status:
+            description: The status of the agent.
+            type: str
+        foundation_model:
+            description: The foundation model used for orchestration by the agent.
+            type: str
+        description:
+            description: The description of the agent.
+            type: str
+        orchestration_type:
+            description: Specifies the orchestration strategy for the agent.
+            type: str
+        custom_orchestration:
+            description: Contains custom orchestration configurations.
+            type: dict
+        idle_session_ttl_in_seconds:
+            description: The number of seconds for which Bedrock keeps information about a user’s conversation.
+            type: int
+        agent_resource_role_arn:
+            description: The ARN of the IAM role with permissions to invoke API operations on the agent.
+            type: str
+        customer_encryption_key_arn:
+            description: The ARN of the KMS key that encrypts the agent.
+            type: str
+        created_at:
+            description: The time at which the agent was created.
+            type: str
+        updated_at:
+            description: The time at which the agent was last updated.
+            type: str
+        prepared_at:
+            description: The time at which the agent was last prepared.
+            type: str
+        failure_reasons:
+            description: Reasons that the agent API operation failed.
+            type: list
+            elements: str
+        recommended_actions:
+            description: Recommended actions to take for the agent API operation to succeed.
+            type: list
+            elements: str
+        prompt_override_configuration:
+            description: Contains configurations to override prompt templates.
+            type: dict
+        guardrail_configuration:
+            description: Details about the guardrail associated with the agent.
+            type: dict
+        memory_configuration:
+            description: Contains memory configuration for the agent.
+            type: dict
+        agent_collaboration:
+            description: The agent’s collaboration settings.
+            type: str
+"""
+
+
 try:
     import botocore
 except ImportError:
@@ -169,6 +251,35 @@ from ansible.module_utils.common.dict_transformations import camel_dict_to_snake
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_aliases 
+
+
+def _add_related_info(client, module, agent_info):
+    """
+    Helper function to add action groups and aliases to an agent's info.
+    
+    Args:
+        client: The Boto3 client.
+        module: The Ansible module object.
+        agent_info: A dictionary containing the agent's summary or details.
+    
+    Returns:
+        The updated agent_info dictionary.
+    """
+    list_action_groups = module.params.get('list_action_groups')
+    list_aliases = module.params.get('list_aliases')
+    
+    agent_id = agent_info.get('agentId')
+    
+    if list_action_groups:
+        agent_info['actionGroups'] = _list_agent_action_groups(client, agentId=agent_id, agentVersion='DRAFT')
+        
+    if list_aliases:
+        agent_info['aliases'] = _list_agent_aliases(client, agentId=agent_id)
+        
+    return agent_info
 
 
 def _add_related_info(client, module: AnsibleAWSModule, agent_info: Dict[str, Any]) -> Dict[str, Any]:

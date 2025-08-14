@@ -1,0 +1,32 @@
+---
+- name: Delete Bedrock Agent
+  amazon.aibedrock_agent:
+    state: absent
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    role_arn: "{{ agent_role_arn }}"
+
+- name: Delete Lambda function
+  community.aws.lambda_function:
+    name: "{{ lambda_name }}"
+    state: absent
+
+- name: Delete IAM role for Lambda
+  community.aws.iam_role:
+    name: "{{ lambda_role_name }}"
+    state: absent
+
+- name: Delete IAM role for Bedrock Agent
+  community.aws.iam_role:
+    name: "{{ agent_role_name }}"
+    state: absent
+
+- name: Remove temporary files
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "./lambda.zip"
+    - "./test_vars.yml"
+  delegate_to: localhost

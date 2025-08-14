@@ -10,6 +10,8 @@ short_description: Manages DevOps Guru resource collections
 version_added: 1.0.0
 description:
     - Manages DevOps Guru resource collections.
+author:
+    - Alina Buzachis (@alinabuzachis)
 options:
     state:
         description:
@@ -91,8 +93,6 @@ extends_documentation_fragment:
     - amazon.aws.common.modules
     - amazon.aws.region.modules
     - amazon.aws.boto3
-author:
-    - Alina Buzachis (@alinabuzachis)
 """
 
 EXAMPLES = r"""
