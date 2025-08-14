@@ -1,13 +1,14 @@
 ---
 - name: Amazon DevOps Guru integration tests
   module_defaults:
-    group/aws:
+    group/amazon.ai.aws:
       access_key: "{{ aws_access_key }}"
       secret_key: "{{ aws_secret_key }}"
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
     block:
-      - ansible.builtin.include_tasks: create.yml
-      - ansible.builtin.include_tasks: enable_sns.yml
+      - ansible.builtin.include_tasks: infra_setup.yml
+      - ansible.builtin.include_tasks: test_agent.yml
     always:
-      - ansible.builtin.include_tasks: delete.yml
+      - ansible.builtin.include_tasks: teardown.yml
+

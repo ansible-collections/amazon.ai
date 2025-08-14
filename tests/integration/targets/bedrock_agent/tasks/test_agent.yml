@@ -1,0 +1,71 @@
+---
+- name: Create Bedrock Agent (First Run)
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "anthropic.claude-v2"
+    instruction: "You are a friendly chat bot."
+    role_arn: "{{ agent_role_arn }}"
+  register: agent_create_first_run
+
+- name: Assert first run created the agent
+  ansible.builtin.assert:
+    that: agent_create_first_run.changed
+
+- name: Save agent ID for subsequent tasks
+  ansible.builtin.set_fact:
+    agent_id: "{{ agent_create_first_run.agent_id }}"
+
+- name: Create Bedrock Agent (Second Run - Idempotency Test)
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "anthropic.claude-v2"
+    instruction: "You are a friendly chat bot."
+    role_arn: "{{ agent_role_arn }}"
+  register: agent_create_second_run
+
+- name: Assert second run was idempotent
+  ansible.builtin.assert:
+    that: not agent_create_second_run.changed
+
+- name: Create Agent Action Group
+  amazon.ai.bedrock_agent_action_group:
+    state: present
+    agent_id: "{{ agent_id }}"
+    action_group_name: "get-time"
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema_path: "./api_schema.yaml"
+  register: action_group_result
+
+- name: Create Agent Alias
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_id: "{{ agent_id }}"
+    alias_name: "test-alias"
+  register: alias_result
+
+- name: Get info about a specific agent
+  amazon.ai.bedrock_agent_info:
+    agent_id: "{{ agent_id }}"
+  register: agent_details
+
+- name: Assert agent status is PREPARED
+  ansible.builtin.assert:
+    that: '"PREPARED" in get_agent_output'
+
+- name: Verify Action Group exists
+  ansible.builtin.command: "aws bedrock-agent list-agent-action-groups --agent-id {{ agent_id }} --agent-version DRAFT --region {{ region }}"
+  register: list_action_groups_output
+
+- name: Assert 'get-time' action group is listed
+  ansible.builtin.assert:
+    that: '"get-time" in list_action_groups_output.stdout'
+
+- name: Verify Alias exists
+  ansible.builtin.command: "aws bedrock-agent list-agent-aliases --agent-id {{ agent_id }} --region {{ region }}"
+  register: list_aliases_output
+
+- name: Assert 'test-alias' is listed
+  ansible.builtin.assert:
+    that: '"test-alias" in list_aliases_output.stdout'

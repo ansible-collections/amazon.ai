@@ -1,0 +1,6 @@
+---
+test_id: "{{ lookup('pipe', 'date +%Y%m%d%H%M%S') }}"
+agent_name: "test-bedrock-agent-{{ test_id }}"
+lambda_name: "test-bedrock-lambda-{{ test_id }}"
+agent_role_name: "test-bedrock-agent-role-{{ test_id }}"
+lambda_role_name: "test-bedrock-lambda-role-{{ test_id }}"
