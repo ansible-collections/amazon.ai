@@ -49,11 +49,46 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_aliases 
 
+
+def _find_alias(client, agent_id, alias_name):
+    """
+    Finds an existing alias for a given agent.
+    """
+    aliases = _list_agent_aliases(client, agentId=agent_id)
+    for alias in aliases:
+        if alias.get('agentAliasName') == alias_name:
+            return alias
+    return None
+
+
+def _create_alias(client, agent_id, alias_name):
+    """
+    Creates a new agent alias.
+    """
+    response = client.create_agent_alias(
+        agentAliasName=alias_name,
+        agentId=agent_id
+    )
+    alias_info = response.get('agentAlias')
+    return True, alias_info
+
+
+def _delete_alias(client, agent_id, alias_id):
+    """
+    Deletes an existing agent alias.
+    """
+    client.delete_agent_alias(
+        agentId=agent_id,
+        agentAliasId=alias_id
+    )
+    return True
+ 
 
 def main():
     argument_spec=dict(
@@ -70,42 +105,40 @@ def main():
     state = module.params['state']
     agent_id = module.params['agent_id']
     alias_name = module.params['alias_name']
-    region = module.params['region']
 
     try:
         client = module.client('bedrock-agent', retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
+    changed = False
+    alias_info = None
+    result = {"alias": {}}
+
     try:
-        existing_aliases = client.list_agent_aliases(agentId=agent_id)
-        found_alias = None
-        for alias in existing_aliases.get('agentAliasSummaries', []):
-            if alias['agentAliasName'] == alias_name:
-                found_alias = alias
-                break
-
-        changed = False
-
+        found_alias = _find_alias(client, agent_id, alias_name)
         if state == 'present':
             if not found_alias:
                 if not module.check_mode:
-                    client.create_agent_alias(
-                        agentAliasName=alias_name,
-                        agentId=agent_id
-                    )
+                    changed, alias_info = _create_alias(client, agent_id, alias_name)
+
                 changed = True
+                if not alias_info:
+                    alias_info = _find_alias(client, agent_id, alias_name)
+            else:
+                alias_info = found_alias
+                changed = False
         
         elif state == 'absent':
             if found_alias:
                 if not module.check_mode:
-                    client.delete_agent_alias(
-                        agentId=agent_id,
-                        agentAliasId=found_alias['agentAliasId']
-                    )
+                    changed = _delete_alias(client, agent_id, found_alias.get('agentAliasId'))
                 changed = True
+            else:
+                changed = False
         
-        module.exit_json(changed=changed)
+        result['alias'] = camel_dict_to_snake_dict(alias_info)
+        module.exit_json(changed=changed, **result)
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)

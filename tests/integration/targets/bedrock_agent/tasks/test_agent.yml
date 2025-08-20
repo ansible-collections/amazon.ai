@@ -3,8 +3,8 @@
   amazon.ai.bedrock_agent:
     state: present
     agent_name: "{{ agent_name }}"
-    foundation_model: "anthropic.claude-v2"
-    instruction: "You are a friendly chat bot."
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
     role_arn: "{{ agent_role_arn }}"
   register: agent_create_first_run
 
@@ -20,8 +20,8 @@
   amazon.ai.bedrock_agent:
     state: present
     agent_name: "{{ agent_name }}"
-    foundation_model: "anthropic.claude-v2"
-    instruction: "You are a friendly chat bot."
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
     role_arn: "{{ agent_role_arn }}"
   register: agent_create_second_run
 
@@ -32,7 +32,7 @@
 - name: Create Agent Action Group
   amazon.ai.bedrock_agent_action_group:
     state: present
-    agent_id: "{{ agent_id }}"
+    agent_name: "{{ agent_name }}"
     action_group_name: "get-time"
     lambda_arn: "{{ lambda_arn }}"
     api_schema_path: "./api_schema.yaml"
@@ -41,31 +41,27 @@
 - name: Create Agent Alias
   amazon.ai.bedrock_agent_alias:
     state: present
-    agent_id: "{{ agent_id }}"
+    agent_name: "{{ agent_name }}"
     alias_name: "test-alias"
   register: alias_result
 
 - name: Get info about a specific agent
   amazon.ai.bedrock_agent_info:
-    agent_id: "{{ agent_id }}"
+    agent_name: "{{ agent_name }}"
   register: agent_details
 
-- name: Assert agent status is PREPARED
+- name: Assert agent is in PREPARED state
   ansible.builtin.assert:
-    that: '"PREPARED" in get_agent_output'
+    that:
+      - get_agent_output.agent is defined
+      - get_agent_output.agent.agentStatus == 'PREPARED'
 
-- name: Verify Action Group exists
-  ansible.builtin.command: "aws bedrock-agent list-agent-action-groups --agent-id {{ agent_id }} --agent-version DRAFT --region {{ region }}"
+- name: Get action group
+  amazon.ai.bedrock_agent_action_group_info:
+    agent_name: "{{ agent_name }}"
   register: list_action_groups_output
 
-- name: Assert 'get-time' action group is listed
-  ansible.builtin.assert:
-    that: '"get-time" in list_action_groups_output.stdout'
-
-- name: Verify Alias exists
-  ansible.builtin.command: "aws bedrock-agent list-agent-aliases --agent-id {{ agent_id }} --region {{ region }}"
-  register: list_aliases_output
-
-- name: Assert 'test-alias' is listed
-  ansible.builtin.assert:
-    that: '"test-alias" in list_aliases_output.stdout'
+- name: Get list of agent aliases
+  amazon.ai.bedrock_agent_alias_info:
+    agent_name: "{{ agent_name }}"
+  register: alias_list

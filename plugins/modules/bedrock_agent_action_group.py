@@ -72,10 +72,62 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _prepare_agent
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
+
+def _find_action_group(client, agent_id, action_group_name):
+    """Finds an existing action group by name and returns its details."""
+    action_groups = _list_agent_action_groups(client, agentId=agent_id, agentVersion='DRAFT')
+    for group in action_groups:
+        if group['actionGroupName'] == action_group_name:
+            return client.get_agent_action_group(
+                agentId=agent_id,
+                agentVersion='DRAFT',
+                actionGroupId=group['actionGroupId']
+            )['actionGroup']
+    return None
+
+
+def _create_action_group(client, agent_id, action_group_name, description, lambda_arn, api_schema):
+    """Creates a new action group."""
+    response = client.create_agent_action_group(
+        agentId=agent_id,
+        agentVersion='DRAFT',
+        actionGroupName=action_group_name,
+        description=description,
+        actionGroupExecutor={'lambda': lambda_arn},
+        apiSchema={'payload': api_schema}
+    )
+    return True, response.get('agentActionGroup')
+
+
+def _update_action_group(client, agent_id, action_group_id, action_group_name, description, lambda_arn, api_schema):
+    """Updates an existing action group."""
+    response = client.update_agent_action_group(
+        agentId=agent_id,
+        agentVersion='DRAFT',
+        actionGroupId=action_group_id,
+        actionGroupName=action_group_name,
+        description=description,
+        actionGroupExecutor={'lambda': lambda_arn},
+        apiSchema={'payload': api_schema}
+    )
+    return True, response.get('agentActionGroup')
+ 
+
+def _delete_action_group(client, agent_id, action_group_id):
+    """Deletes an existing action group."""
+    client.delete_agent_action_group(
+        agentId=agent_id,
+        agentVersion='DRAFT',
+        actionGroupId=action_group_id
+    )
+    return True
 
 
 def main():
@@ -100,84 +152,61 @@ def main():
     lambda_arn = module.params['lambda_arn']
     api_schema_path = module.params['api_schema_path']
 
+    changed = False
+    action_group_info = None
+    result = {"action_group": {}}
 
     try:
         client = module.client('bedrock-agent', retry_decorator=AWSRetry.jittered_backoff())
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
+        found_action_group = _find_action_group(client, agent_id, action_group_name)
 
-    try:
-        # Load API schema from file
-        with open(api_schema_path, 'r') as file:
-            api_schema = json.dumps(yaml.safe_load(file))
-
-        existing_action_groups = client.list_agent_action_groups(agentId=agent_id, agentVersion='DRAFT')
-        found_action_group = None
-        for group in existing_action_groups.get('actionGroupSummaries', []):
-            if group['actionGroupName'] == action_group_name:
-                found_action_group = client.get_agent_action_group(
-                    agentId=agent_id,
-                    agentVersion='DRAFT',
-                    actionGroupId=group['actionGroupId']
-                )['actionGroup']
-                break
-
-        changed = False
-        
         if state == 'present':
+            api_schema = None
+            try:
+                with open(api_schema_path, 'r') as file:
+                    api_schema = json.dumps(yaml.safe_load(file))
+            except (IOError, yaml.YAMLError) as e:
+                module.fail_json(msg="Failed to read API schema file: %s" % str(e))
+
             if found_action_group:
-                # Compare and update if necessary. Update logic can be more complex based on specific fields.
-                # For this example, we'll assume a change in schema or description requires an update.
-                current_api_schema = json.dumps(client.get_agent_action_group(
-                    agentId=agent_id,
-                    agentVersion='DRAFT',
-                    actionGroupId=found_action_group['actionGroupId']
-                )['actionGroup']['apiSchema']['payload'])
+                current_api_schema = json.dumps(found_action_group['apiSchema']['payload'])
                 
                 if current_api_schema != api_schema or found_action_group.get('description') != description:
                     if not module.check_mode:
-                        client.update_agent_action_group(
-                            agentId=agent_id,
-                            agentVersion='DRAFT',
-                            actionGroupId=found_action_group['actionGroupId'],
-                            actionGroupName=action_group_name,
-                            description=description,
-                            actionGroupExecutor={'lambda': lambda_arn},
-                            apiSchema={'payload': api_schema}
+                        changed, action_group_info = _update_action_group(
+                            client, agent_id, found_action_group['actionGroupId'], action_group_name, description, lambda_arn, api_schema
                         )
-                    changed = True
+                    else:
+                        changed = True
+                else:
+                    action_group_info = found_action_group
+
             else:
                 if not module.check_mode:
-                    client.create_agent_action_group(
-                        agentId=agent_id,
-                        agentVersion='DRAFT',
-                        actionGroupName=action_group_name,
-                        description=description,
-                        actionGroupExecutor={'lambda': lambda_arn},
-                        apiSchema={'payload': api_schema}
-                    )
-                changed = True
+                    changed, action_group_info = _create_action_group(client, agent_id, action_group_name, description, lambda_arn, api_schema)
+                else:
+                    changed = True
 
         elif state == 'absent':
             if found_action_group:
                 if not module.check_mode:
-                    client.delete_agent_action_group(
-                        agentId=agent_id,
-                        agentVersion='DRAFT',
-                        actionGroupId=found_action_group['actionGroupId']
-                    )
-                changed = True
+                    changed = _delete_action_group(client, agent_id, found_action_group['actionGroupId'])
+                else:
+                    changed = True
 
-        # Always prepare the agent after any changes to an action group
+        # Conditionally prepare the agent after a change
         if changed and not module.check_mode:
-            client.prepare_agent(agentId=agent_id)
-            while client.get_agent(agentId=agent_id)['agent']['agentStatus'] != 'PREPARED':
-                time.sleep(5)
-        
-        module.exit_json(changed=changed)
+            _prepare_agent(client, agent_id)
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
+    
+    result = dict(changed=changed)
+    if action_group_info:
+        result['action_group'] = camel_dict_to_snake_dict(action_group_info)
+    
+    module.exit_json(changed=changed, **result)
+
 
 if __name__ == '__main__':
     main()

@@ -62,8 +62,6 @@ EXAMPLES = r"""
 """
 
 
-import time
-
 try:
     import botocore
 except ImportError:
@@ -72,13 +70,13 @@ except ImportError:
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _wait_for_status
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import  _find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_status
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent, _prepare_agent
 
 
 def _create_agent(module, client):
@@ -95,9 +93,10 @@ def _create_agent(module, client):
         agentResourceRoleArn=role_arn
     )
     agent_id = new_agent['agent']['agentId']
-    _wait_for_status(client, agent_id, 'NOT_PREPARED')
-    client.prepare_agent(agentId=agent_id)
-    _wait_for_status(client, agent_id, 'PREPARED')
+    wait_for_status(client, agent_id, 'NOT_PREPARED')
+    
+    _prepare_agent(client, agent_id)
+
     return agent_id
 
 
@@ -125,9 +124,10 @@ def _update_agent(module, client, existing_agent):
             instruction=instruction,
             agentResourceRoleArn=role_arn
         )
-        _wait_for_status(client,existing_agent_id, 'UPDATING')
-        client.prepare_agent(agentId=existing_agent_id)
-        _wait_for_status(client, existing_agent_id, 'PREPARED')
+        
+        wait_for_status(client,existing_agent_id, 'UPDATING')
+        
+        _prepare_agent(client, existing_agent_id)
     
     return needs_update, existing_agent_id
 
@@ -161,29 +161,30 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     changed = False
-    result = dict(changed=False, agent_id=None)
-    existing_agent = _find_agent(client)
+    result = dict(agent={})
+    existing_agent = find_agent(client)
 
     try:
         if state == 'present':
             if existing_agent:
                 # Update existing agent
                 changed, agent_id = _update_agent(module, client, existing_agent)
-                result['agent_id'] = agent_id
+                result['agent'] = _get_agent(client, agent_id)
             else:
                 # Create a new agent
                 if not module.check_mode:
                     agent_id = _create_agent(module, client)
-                    result['agent_id'] = agent_id
+                    result['agent'] = _get_agent(client, agent_id)
                 changed = True
         
         elif state == 'absent':
             if existing_agent:
                 # Delete existing agent
                 changed = _delete_agent(module, client, existing_agent)
+                module.exit_json(changed=changed, **result)
     
-        result['changed'] = changed
-        module.exit_json(**result)
+        module.exit_json(changed=changed, **camel_dict_to_snake_dict(result))
+    
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

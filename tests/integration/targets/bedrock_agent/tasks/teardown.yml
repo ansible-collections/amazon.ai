@@ -3,9 +3,9 @@
   amazon.aibedrock_agent:
     state: absent
     agent_name: "{{ agent_name }}"
-    foundation_model: "anthropic.claude-v2"  # Required for idempotent deletion
-    instruction: "You are a friendly chat bot." # Required for idempotent deletion
-    role_arn: "{{ agent_role_arn }}"           # Required for idempotent deletion
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    role_arn: "{{ agent_role_arn }}"
 
 - name: Delete Lambda function
   community.aws.lambda_function:
@@ -29,4 +29,3 @@
   loop:
     - "./lambda.zip"
     - "./test_vars.yml"
-  delegate_to: localhost
