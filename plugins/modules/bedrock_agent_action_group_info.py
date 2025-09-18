@@ -1,7 +1,8 @@
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
-from __future__ import (absolute_import, division, print_function)
-__metaclass__ = type
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
 ---
@@ -42,31 +43,90 @@ EXAMPLES = r"""
 
 - name: List all action groups with full details
   amazon.ai.bedrock_agent_action_group_info:
-    agent_mname: "my_test_agent"
+    agent_mame: "my_test_agent"
   register: all_action_groups
 """
 
-RETURN = r"""
-"""
 
+RETURN = r"""
+action_group:
+    description: A dictionary or list of dictionaries containing the detailed configuration of action groups.
+    type: dict
+    returned: always
+    contains:
+        action_group_id:
+            description: The unique identifier of the action group.
+            type: str
+            sample: "9IXXEEO8FR"
+        action_group_name:
+            description: The name of the action group.
+            type: str
+            sample: "get-weather-info-test"
+        action_group_state:
+            description: The state of the action group.
+            type: str
+            sample: "ENABLED"
+        agent_id:
+            description: The unique identifier of the agent this action group belongs to.
+            type: str
+            sample: "RNKFFDOKFN"
+        agent_version:
+            description: The version of the agent this action group is associated with.
+            type: str
+            sample: "DRAFT"
+        action_group_executor:
+            description: Details about the action group's executor.
+            type: dict
+            contains:
+                lambda:
+                    description: The ARN of the Lambda function that executes the action group.
+                    type: str
+                    sample: "arn:aws:lambda:us-east-1:123456789012:function:test-bedrock-lambda-test:12"
+        api_schema:
+            description: The OpenAPI 3.0 schema that defines the action group's API.
+            type: dict
+            contains:
+                payload:
+                    description: The raw YAML/JSON content of the API schema.
+                    type: str
+        description:
+            description: A description of the action group.
+            type: str
+            sample: Gets the current date and time.
+        created_at:
+            description: The timestamp when the action group was created.
+            type: str
+        updated_at:
+            description: The timestamp when the action group was last updated.
+            type: str
+"""
 
 try:
     import botocore
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
+
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent, _list_agent_action_groups, _get_agent_action_group
+
 
 def main():
     argument_spec = dict(
-        agent_name=dict(type='str', required=True),
-        agent_version=dict(type='str', default='DRAFT'),
-        action_group_name=dict(type='str'),
+        agent_name=dict(type="str", required=True),
+        agent_version=dict(type="str", default="DRAFT"),
+        action_group_name=dict(type="str"),
     )
 
     module = AnsibleAWSModule(
@@ -74,50 +134,59 @@ def main():
         supports_check_mode=True,
     )
 
-    agent_name = module.params['agent_name']
-    agent_version = module.params['agent_version']
-    action_group_name = module.params.get('action_group_name')
+    agent_name: str = module.params["agent_name"]
+    agent_version: str = module.params["agent_version"]
+    action_group_name: Optional[str] = module.params.get("action_group_name")
 
     try:
-        client = module.client('bedrock-agent', retry_decorator=AWSRetry.jittered_backoff())
+        client = module.client("bedrock-agent", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result = {}
-    action_groups_details = []
+    result: Dict[str, Any] = {}
+    action_groups_details: List[Dict[str, Any]] = []
 
     try:
         # Find the agent ID from the provided name
-        agent_id = find_agent(client, module)
-        if not agent_id:
+        agent: Optional[Dict[str, Any]] = find_agent(client, module)
+        if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
-    
+        agent_id: str = agent.get("agentId")
+
         if action_group_name:
             # Find a specific action group by name
-            action_groups_summaries = _list_agent_action_groups(client, agentId=agent_id, agentVersion=agent_version)
-            found_id = None
+            action_groups_summaries: List[Dict[str, Any]] = _list_agent_action_groups(
+                client, agentId=agent_id, agentVersion=agent_version
+            )
+            found_id: Optional[str] = None
             for summary in action_groups_summaries:
-                if summary.get('actionGroupName') == action_group_name:
-                    found_id = summary.get('actionGroupId')
+                if summary.get("actionGroupName") == action_group_name:
+                    found_id = summary.get("actionGroupId")
                     break
-            
+
             if found_id:
-                details = _get_agent_action_group(client, agent_id, agent_version, found_id)
-                action_groups_details.append(details)
+                details: Dict[str, Any] = _get_agent_action_group(client, agent_id, agent_version, found_id)
+                result["action_group"] = details
+            else:
+                result["action_group"] = {}
 
         else:
             # List all action groups and get full details for each
-            action_groups_summaries = _list_agent_action_groups(client, agentId=agent_id, agentVersion=agent_version)
+            action_groups_summaries: List[Dict[str, Any]] = _list_agent_action_groups(
+                client, agentId=agent_id, agentVersion=agent_version
+            )
             for summary in action_groups_summaries:
-                details = _get_agent_action_group(client, agent_id, agent_version, summary.get('actionGroupId'))
+                details: Dict[str, Any] = _get_agent_action_group(
+                    client, agent_id, agent_version, summary.get("actionGroupId")
+                )
                 action_groups_details.append(details)
-
-        result['action_groups'] = action_groups_details
+            result["action_group"] = action_groups_details
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
     module.exit_json(**camel_dict_to_snake_dict(result))
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

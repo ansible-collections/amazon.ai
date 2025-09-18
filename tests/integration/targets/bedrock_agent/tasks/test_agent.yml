@@ -1,11 +1,25 @@
 ---
+- name: Create Bedrock Agent (First Run - check_mode)
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    agent_resource_role_arn: "{{ agent_role_arn }}"
+  check_mode: true
+  register: agent_create_first_run
+
+- name: Assert first run created the agent (check_mode)
+  ansible.builtin.assert:
+    that: agent_create_first_run.changed
+
 - name: Create Bedrock Agent (First Run)
   amazon.ai.bedrock_agent:
     state: present
     agent_name: "{{ agent_name }}"
     foundation_model: "{{ foundation_model }}"
     instruction: "{{ instruction }}"
-    role_arn: "{{ agent_role_arn }}"
+    agent_resource_role_arn: "{{ agent_role_arn }}"
   register: agent_create_first_run
 
 - name: Assert first run created the agent
@@ -14,36 +28,7 @@
 
 - name: Save agent ID for subsequent tasks
   ansible.builtin.set_fact:
-    agent_id: "{{ agent_create_first_run.agent_id }}"
-
-- name: Create Bedrock Agent (Second Run - Idempotency Test)
-  amazon.ai.bedrock_agent:
-    state: present
-    agent_name: "{{ agent_name }}"
-    foundation_model: "{{ foundation_model }}"
-    instruction: "{{ instruction }}"
-    role_arn: "{{ agent_role_arn }}"
-  register: agent_create_second_run
-
-- name: Assert second run was idempotent
-  ansible.builtin.assert:
-    that: not agent_create_second_run.changed
-
-- name: Create Agent Action Group
-  amazon.ai.bedrock_agent_action_group:
-    state: present
-    agent_name: "{{ agent_name }}"
-    action_group_name: "get-time"
-    lambda_arn: "{{ lambda_arn }}"
-    api_schema_path: "./api_schema.yaml"
-  register: action_group_result
-
-- name: Create Agent Alias
-  amazon.ai.bedrock_agent_alias:
-    state: present
-    agent_name: "{{ agent_name }}"
-    alias_name: "test-alias"
-  register: alias_result
+    agent_id: "{{ agent_create_first_run.agent.agent_id }}"
 
 - name: Get info about a specific agent
   amazon.ai.bedrock_agent_info:
@@ -53,10 +38,189 @@
 - name: Assert agent is in PREPARED state
   ansible.builtin.assert:
     that:
-      - get_agent_output.agent is defined
-      - get_agent_output.agent.agentStatus == 'PREPARED'
+      - agent_details.agent is defined
+      - agent_details.agent.agent_status == 'PREPARED'
+
+- name: Create Bedrock Agent (Second Run - Idempotency Test - check_mode)
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    agent_resource_role_arn: "{{ agent_role_arn }}"
+  check_mode: true
+  register: agent_create_second_run
+
+- name: Assert second run was idempotent (check_mode)
+  ansible.builtin.assert:
+    that: not agent_create_second_run.changed
+
+- name: Create Bedrock Agent (Second Run - Idempotency Test)
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    agent_resource_role_arn: "{{ agent_role_arn }}"
+  register: agent_create_second_run
+
+- name: Assert second run was idempotent
+  ansible.builtin.assert:
+    that: not agent_create_second_run.changed
+
+- name: Create Agent Action Group (First Run - check_mode)
+  amazon.ai.bedrock_agent_action_group:
+    state: present
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    description: "Gets the current date and time."
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  check_mode: true
+  register: action_group_result
+
+- name: Assert result has changed (check_mode)
+  ansible.builtin.assert:
+    that: action_group_result.changed
+
+- name: Create Agent Action Group (First Run)
+  amazon.ai.bedrock_agent_action_group:
+    state: present
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    description: "Gets the current date and time."
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  register: action_group_result
+
+- name: Assert result has changed
+  ansible.builtin.assert:
+    that: action_group_result.changed
+
+- name: Save agent action group ID for subsequent tasks
+  ansible.builtin.set_fact:
+    action_group_id: "{{ action_group_result.action_group.action_group_id }}"
+
+- name: Create Agent Action Group (Second Run - Idempotency Test -  check_mode)
+  amazon.ai.bedrock_agent_action_group:
+    state: present
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    description: "Gets the current date and time."
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  check_mode: true
+  register: action_group_second_run
+
+- name: Assert second run was idempotent
+  ansible.builtin.assert:
+    that: not action_group_second_run.changed
+
+- name: Create Agent Action Group (Second Run - Idempotency Test)
+  amazon.ai.bedrock_agent_action_group:
+    state: present
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    description: "Gets the current date and time."
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  register: action_group_second_run
+
+- name: Assert second run was idempotent
+  ansible.builtin.assert:
+    that: not action_group_second_run.changed
+
+- name: Create Agent Alias (First Run - check_mode)
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+  check_mode: true
+  register: alias_result
+
+- name: Assert result has changed (check_mode)
+  ansible.builtin.assert:
+    that: alias_result.changed
+
+- name: Create Agent Alias (First Run)
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+  register: alias_result
+
+- name: Assert result has changed
+  ansible.builtin.assert:
+    that: alias_result.changed
+
+- name: Save agent alias ID for subsequent tasks
+  ansible.builtin.set_fact:
+    agent_alias_id: "{{ alias_result.agent_alias.agent_alias_id }}"
+
+- name: Create Agent Alias (Second Run - Idempotency Test - check_mode)
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+  check_mode: true
+  register: alias_result
+
+- name: Assert second run was idempotent (check_mode)
+  ansible.builtin.assert:
+    that: not alias_result.changed
+
+- name: Create Agent Alias (Second Run - Idempotency Test)
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+  register: alias_result
+
+- name: Assert second run was idempotent
+  ansible.builtin.assert:
+    that: not alias_result.changed
+  
+- name: Get info about a specific agent
+  amazon.ai.bedrock_agent_info:
+    agent_name: "{{ agent_name }}"
+  register: agent_details
+
+- name: Assert agent is in PREPARED state
+  ansible.builtin.assert:
+    that:
+      - agent_details.agent is defined
+      - agent_details.agent.agent_status == 'PREPARED'
 
 - name: Get action group
+  amazon.ai.bedrock_agent_action_group_info:
+     agent_name: "{{ agent_name }}"
+     action_group_name: "{{ action_group_name }}"
+
+- name: Get info about a specific agent
+  amazon.ai.bedrock_agent_info:
+    agent_name: "{{ agent_name }}"
+  register: agent_details
+
+- name: Assert agent is in PREPARED state
+  ansible.builtin.assert:
+    that:
+      - agent_details.agent is defined
+      - agent_details.agent.agent_status == 'PREPARED'
+
+- name: Update Bedrock Agent
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "You are a friendly chat bot that provides helpful information and assistance to users. Please take in consideration this new instruction."
+    agent_resource_role_arn: "{{ agent_role_arn }}"
+  register: agent_update
+
+- name: Assert agent has been updated
+  ansible.builtin.assert:
+    that: agent_update.changed
+
+- name: List action groups
   amazon.ai.bedrock_agent_action_group_info:
     agent_name: "{{ agent_name }}"
   register: list_action_groups_output
@@ -65,3 +229,94 @@
   amazon.ai.bedrock_agent_alias_info:
     agent_name: "{{ agent_name }}"
   register: alias_list
+
+- name: Delete Agent action group
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    state: absent
+  register: action_group_delete
+  ignore_errors: true
+
+- name: Assert delete Agent action group has failed
+  ansible.builtin.assert:
+    that:
+      - action_group_delete is failed
+
+- name: Disable Agent action group (First Run - check_mode)
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    action_group_state: "DISABLED"
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  check_mode: true
+  register: action_group_disable
+
+- name: Assert that Agent action group has been disabled (check_mode)
+  ansible.builtin.assert:
+    that:
+      - action_group_disable.changed
+
+- name: Disable Agent action group (First Run)
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    action_group_state: "DISABLED"
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  register: action_group_disable
+
+- name: Assert that Agent action group has been disabled
+  ansible.builtin.assert:
+    that:
+      - action_group_disable.changed
+      - action_group_disable.action_group.action_group_state == 'DISABLED'
+
+- name: Disable Agent action group (Second Run - Idempotency Test)
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    action_group_state: "DISABLED"
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  register: action_group_disable
+
+- name: Assert that Agent action group has been disabled
+  ansible.builtin.assert:
+    that:
+      - not action_group_disable.changed
+
+- name: Wait until the action group state is DISABLED
+  amazon.ai.bedrock_agent_action_group_info:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+  register: list_action_groups_output
+  until: list_action_groups_output.action_group.action_group_state == 'DISABLED'
+  retries: 20
+  delay: 10
+
+- name: Delete Agent action group (check_mode)
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    state: absent
+  check_mode: true
+  register: action_group_delete
+
+- name: Assert delete Agent action group has been deleted (check_mode)
+  ansible.builtin.assert:
+    that:
+      - action_group_delete.changed
+
+- name: Delete Agent action group
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    state: absent
+  register: action_group_delete
+
+- name: Assert delete Agent action group has been deleted
+  ansible.builtin.assert:
+    that:
+      - action_group_delete.changed

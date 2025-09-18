@@ -1,7 +1,13 @@
 ---
-requires_ansible: '>=2.17.0'  # Use '>=2.9.10' instead, if needed
+requires_ansible: '>=2.17.0'
 action_groups:
-  ai:
+  aws:
+    - bedrock_agent
+    - bedrock_agent_alias
+    - bedrock_agent_info
+    - bedrock_agent_alias_info
+    - bedrock_agent_action_group
+    - bedrock_agent_action_group_info
     - devopsguru_resource_colletion
     - devopsguru_resource_colletion_info
     - devopsguru_insight_info

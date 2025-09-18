@@ -1,4 +1,8 @@
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+
 import time
+
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 try:
@@ -6,19 +10,24 @@ try:
 except ImportError:
     pass
 
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
-def wait_for_status(client, agent_id, status):
+
+def wait_for_agent_status(client, agent_id: str, status: str) -> None:
     """Waits for an agent to reach a specific status."""
     while True:
         try:
-            current_status = client.get_agent(agentId=agent_id)['agent']['agentStatus']
+            current_status = client.get_agent(agentId=agent_id)["agent"]["agentStatus"]
             if current_status == status:
                 break
             time.sleep(5)
         except ClientError as e:
-            if e.response['Error']['Code'] == 'ResourceNotFoundException':
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
                 # Handle cases where the agent might be deleted during wait
-                if status == 'DELETED':
+                if status == "DELETED":
                     break
                 # Or re-raise the error if it's an unexpected deletion
                 raise
@@ -26,45 +35,85 @@ def wait_for_status(client, agent_id, status):
                 raise
 
 
+def wait_for_alias_status(client, agent_id: str, alias_id: str, status: str) -> None:
+    """Waits for an agent alias to reach a specific status."""
+    while True:
+        try:
+            alias_info = client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)
+            current_status = alias_info["agentAlias"]["agentAliasStatus"]
+            if current_status == status:
+                break
+            time.sleep(5)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                if status == "DELETED":
+                    break
+                raise
+            else:
+                raise
+
+
 @AWSRetry.jittered_backoff(retries=10)
-def _prepare_agent(client, agent_id):
+def _prepare_agent(client, agent_id: str) -> bool:
     """
     Prepares a Bedrock Agent and waits for it to be in the 'PREPARED' state.
     """
     client.prepare_agent(agentId=agent_id)
-    wait_for_status(client, agent_id, "PREPARED")
+    wait_for_agent_status(client, agent_id, "PREPARED")
 
     return True
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def _list_agents(client, **params):
+def _list_agents(client, **params: Any) -> List[Dict[str, Any]]:
     paginator = client.get_paginator("list_agents")
     return paginator.paginate(**params).build_full_result()["agentSummaries"]
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def _get_agent(client, agent_id):
+def _get_agent(client, agent_id: str) -> Optional[Dict[str, Any]]:
     try:
-        return client.get_agent(agentId=agent_id)['agent']
+        return client.get_agent(agentId=agent_id)["agent"]
     except ClientError as e:
-        if e.response['Error']['Code'] == 'ResourceNotFoundException':
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
             return None
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def _list_action_groups(client, **params):
+def _get_agent_action_group(
+    client, agent_id: str, agent_version: str, action_group_id: str
+) -> Optional[Dict[str, Any]]:
+    try:
+        return client.get_agent_action_group(
+            agentId=agent_id, agentVersion=agent_version, actionGroupId=action_group_id
+        )["agentActionGroup"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _get_agent_alias(client, agent_id: str, alias_id: str) -> Optional[Dict[str, Any]]:
+    try:
+        return client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)["agentAlias"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _list_agent_action_groups(client, **params: Any) -> List[Dict[str, Any]]:
     paginator = client.get_paginator("list_agent_action_groups")
     return paginator.paginate(**params).build_full_result()["actionGroupSummaries"]
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def _list_agent_aliases(client, **params):
+def _list_agent_aliases(client, **params: Any) -> List[Dict[str, Any]]:
     paginator = client.get_paginator("list_agent_aliases")
     return paginator.paginate(**params).build_full_result()["agentAliasSummaries"]
 
 
-def find_agent(client, module):
+def find_agent(client, module) -> Optional[Dict[str, Any]]:
     """
     Finds a specific agent by name or retrieves details for all agents.
 
@@ -76,17 +125,17 @@ def find_agent(client, module):
         dict or list: The detailed information for a single agent or a list of agent details.
                       Returns None if a specific agent is not found.
     """
-    agent_name = module.params.get('agent_name')
+    agent_name: Optional[str] = module.params.get("agent_name")
 
-    agents_list = _list_agents(client)
+    agents_list: List[Dict[str, Any]] = _list_agents(client)
     if not agents_list:
         return []
 
     if agent_name:
         for agent_summary in agents_list:
-            if agent_summary['agentName'] == agent_name:
-                return _get_agent(client, agent_summary['agentId'])
+            if agent_summary["agentName"] == agent_name:
+                return _get_agent(client, agent_summary["agentId"])
         return None  # Return None if the specific agent is not found
     else:
         # Return a list of all agents with their detailed information
-        return [_get_agent(client, agent['agentId']) for agent in agents_list]
+        return [_get_agent(client, agent["agentId"]) for agent in agents_list]

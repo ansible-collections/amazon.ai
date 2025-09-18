@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
 ---
@@ -20,29 +22,191 @@ options:
         default: 'present'
     agent_name:
         description:
-            - The name of the agent.
+            - Specifies a new name for the agent.
         type: str
         required: true
+    new_agent_name:
+        description:
+            - The name of the agent.
+        type: str
+    orchestration_type:
+        description:
+            - Specifies the type of orchestration strategy for the agent.
+        type: str
+        choices: ['DEFAULT','CUSTOM_ORCHESTRATION']
+        default: "DEFAULT"
     foundation_model:
         description:
             - The foundation model to be used by the agent.
+            - Required when O(state=present).
         type: str
-        required: true
     instruction:
         description:
             - The instructions for the agent.
+            - Required when O(state=present).
         type: str
-        required: true
-    role_arn:
+    agent_resource_role_arn:
         description:
             - The ARN of the IAM role for the agent.
+            - Required when O(state=present).
         type: str
-        required: true
+    agent_collaboration:
+        description:
+            - The agent's collaboration role.
+        type: str
+        choices: ['SUPERVISOR', 'SUPERVISOR_ROUTER', 'DISABLED']
+    prompt_override_configuration:
+        description:
+            - A dictionary to define custom prompt configurations for the agent.
+            - Supports fields to customize prompts at various stages of the agent's processing.
+        type: dict
+        suboptions:
+            prompt_configurations:
+                description:
+                    - A list of prompt configuration dictionaries.
+                type: list
+                elements: dict
+                suboptions:
+                    prompt_type:
+                        description:
+                            - Step in the agent sequence that this prompt configuration applies to.
+                        type: str
+                    base_prompt_template:
+                        description:
+                            - The prompt template to replace the default prompt template.
+                        type: str
+                    inference_configuration:
+                        description:
+                            - Inference parameters to use when invoking a foundation model.
+                        type: dict
+                        suboptions:
+                            maximum_length:
+                                description: Maximum number of tokens to generate.
+                                type: int
+                            temperature:
+                                description: Sampling temperature for generation.
+                                type: float
+                            top_k:
+                                description: Top-K sampling parameter.
+                                type: int
+                            top_p:
+                                description: Top-P (nucleus) sampling parameter.
+                                type: float
+                            stop_sequences:
+                                description: List of strings that signal the end of generation.
+                                type: list
+                                elements: str
+                    parser_mode:
+                        description:
+                            - Specifies whether to override the default parser.
+                        type: str
+                    prompt_creation_mode:
+                        description:
+                            - Specifies whether to override the default prompt template.
+                        type: str
+                    prompt_state:
+                        description:
+                            - Specifies whether to allow the agent to carry out the step specified in the prompt type.
+                        type: str
+                    foundation_model:
+                        description:
+                            - The agent's foundation model.
+                        type: str
+            override_lambda:
+                description:
+                    - ARN of a Lambda function to override the prompt orchestration for the agent.
+                type: str
+    tags:
+        description:
+            - Any tags that you want to attach to the agent.
+            - Tags cannot be modified. They are only applied when a new Amazon Bedrock Agent is created.
+        type: dict
+        aliases: ["resource_tags"]
 extends_documentation_fragment:
     - amazon.aws.common.modules
     - amazon.aws.region.modules
     - amazon.aws.boto3
 """
+
+
+RETURN = r"""
+agent:
+    description: A dictionary containing the detailed configuration of the managed Bedrock agent.
+    type: dict
+    returned: always, on success
+    contains:
+        agent_id:
+            description: The unique identifier of the agent.
+            type: str
+            sample: "RNKFFDOKFN"
+        agent_name:
+            description: The name of the agent.
+            type: str
+            sample: "test-bedrock-agent-test"
+        agent_arn:
+            description: The Amazon Resource Name (ARN) of the agent.
+            type: str
+            sample: "arn:aws:bedrock:us-east-1:123456789901:agent/RNKFFDOKFN"
+        agent_resource_role_arn:
+            description: The ARN of the IAM role with permissions to invoke the agent.
+            type: str
+        agent_status:
+            description: The current status of the agent.
+            type: str
+            sample: PREPARED
+        foundation_model:
+            description: The foundation model used for orchestration by the agent.
+            type: str
+            sample: amazon.nova-micro-v1:0
+        instruction:
+            description: The instructions that tell the agent what it should do.
+            type: str
+        orchestration_type:
+            description: The orchestration strategy for the agent.
+            type: str
+            sample: "DEFAULT"
+        idle_session_ttl_in_seconds:
+            description: The number of seconds for which the agent keeps conversation information.
+            type: int
+            sample: 600
+        created_at:
+            description: The timestamp when the agent was created.
+            type: str
+        updated_at:
+            description: The timestamp when the agent was last updated.
+            type: str
+        prepared_at:
+            description: The timestamp when the agent was last prepared.
+            type: str
+        prompt_override_configuration:
+            description: Contains configurations to override prompt templates in different parts of an agent sequence.
+            type: dict
+            contains:
+                prompt_configurations:
+                    description: A list of prompt configuration dictionaries.
+                    type: list
+                    elements: dict
+                    contains:
+                        prompt_type:
+                            description: The step in the agent sequence that this prompt configuration applies to.
+                            type: str
+                        base_prompt_template:
+                            description: The prompt template to replace the default prompt template.
+                            type: str
+                        inference_configuration:
+                            description: Inference parameters to use when the agent invokes a foundation model.
+                            type: dict
+                        parser_mode:
+                            description: Specifies whether to override the default parser Lambda function.
+                            type: str
+                        prompt_creation_mode:
+                            description: Specifies whether to override the default prompt template for this prompt type.
+                            type: str
+                        prompt_state:
+                            description: Specifies whether to allow the agent to carry out the step specified in the prompt type.
+                            type: str
+"""
+
 
 EXAMPLES = r"""
 - name: Create a Bedrock Agent
@@ -51,14 +215,12 @@ EXAMPLES = r"""
     agent_name: "test-agent"
     foundation_model: "anthropic.claude-v2"
     instruction: "You are a friendly chat bot that helps with tasks."
-    role_arn: "arn:aws:iam::123456789012:role/BedrockAgentRole"
-    region: "us-east-1"
+    agent_resource_role_arn: "arn:aws:iam::123456789012:role/BedrockAgentRole"
 
 - name: Delete a Bedrock Agent
   amazon.ai.bedrock_agent:
     state: absent
     agent_name: "my-first-agent"
-    region: "us-east-1"
 """
 
 
@@ -68,125 +230,192 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
+from typing import Any
+from typing import Dict
+from typing import Tuple
+
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _prepare_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_agent_status
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_status
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent, _prepare_agent
+
+def remove_none_recursive(obj):
+    """Recursively remove None values from dicts and lists."""
+    if isinstance(obj, dict):
+        return {k: remove_none_recursive(v) for k, v in obj.items() if v is not None}
+    elif isinstance(obj, list):
+        return [remove_none_recursive(v) for v in obj if v is not None]
+    else:
+        return obj
 
 
-def _create_agent(module, client):
+def _create_agent(module: AnsibleAWSModule, client) -> str:
     """Creates a new agent."""
-    agent_name = module.params['agent_name']
-    foundation_model = module.params['foundation_model']
-    instruction = module.params['instruction']
-    role_arn = module.params['role_arn']
+    params: Dict[str, Any] = {
+        "agent_name": module.params["agent_name"],
+        "foundation_model": module.params["foundation_model"],
+        "instruction": module.params["instruction"],
+        "agent_resource_role_arn": module.params["agent_resource_role_arn"],
+        "orchestration_type": module.params["orchestration_type"],
+        "tags": module.params.get("tags"),
+        "agent_collaboration": module.params.get("agent_collaboration"),
+        "prompt_override_configuration": module.params.get("prompt_override_configuration"),
+    }
 
-    new_agent = client.create_agent(
-        agentName=agent_name,
-        foundationModel=foundation_model,
-        instruction=instruction,
-        agentResourceRoleArn=role_arn
-    )
-    agent_id = new_agent['agent']['agentId']
-    wait_for_status(client, agent_id, 'NOT_PREPARED')
-    
+    # Convert snake_case to camelCase for AWS API
+    camel_params = snake_dict_to_camel_dict(remove_none_recursive(params))
+
+    new_agent = client.create_agent(**camel_params)
+    agent_id: str = new_agent["agent"]["agentId"]
+    wait_for_agent_status(client, agent_id, "NOT_PREPARED")
     _prepare_agent(client, agent_id)
 
     return agent_id
 
 
-def _update_agent(module, client, existing_agent):
+def _update_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> Tuple[bool, str]:
     """Updates an existing agent if necessary."""
+    existing_agent_id: str = existing_agent["agentId"]
+    needs_update: Dict[str, Any] = {}
+    changed: bool = False
 
-    agent_name = module.params['agent_name']
-    foundation_model = module.params['foundation_model']
-    instruction = module.params['instruction']
-    role_arn = module.params['role_arn']
-    existing_agent_id = existing_agent['agentId']
+    # Handle new_agent_name separately
+    if module.params.get("new_agent_name") and existing_agent["agentName"] != module.params["new_agent_name"]:
+        needs_update["agentName"] = module.params["new_agent_name"]
 
-    needs_update = (
-        existing_agent['agentName'] != agent_name or
-        existing_agent['foundationModel'] != foundation_model or
-        existing_agent['instruction'] != instruction or
-        existing_agent['agentResourceRoleArn'] != role_arn
-    )
+    # Generic fields to check and update
+    generic_fields = [
+        "foundation_model",
+        "instruction",
+        "agent_resource_role_arn",
+        "orchestration_type",
+        "agent_collaboration",
+    ]
 
-    if needs_update and not module.check_mode:
-        client.update_agent(
-            agentId=existing_agent_id,
-            agentName=agent_name,
-            foundationModel=foundation_model,
-            instruction=instruction,
-            agentResourceRoleArn=role_arn
-        )
-        
-        wait_for_status(client,existing_agent_id, 'UPDATING')
-        
-        _prepare_agent(client, existing_agent_id)
-    
-    return needs_update, existing_agent_id
+    for field in generic_fields:
+        value = module.params.get(field)
+        if value:
+            # Convert snake_case to camelCase to match existing_agent keys
+            camel_key = snake_dict_to_camel_dict({field: None}).popitem()[0]
+            if existing_agent.get(camel_key) != value:
+                needs_update[field] = value
+
+    if module.params.get("prompt_override_configuration"):
+        dromedary_case_prompt_config = snake_dict_to_camel_dict(module.params["prompt_override_configuration"])
+        if existing_agent["promptOverrideConfiguration"] != dromedary_case_prompt_config:
+            needs_update["promptOverrideConfiguration"] = dromedary_case_prompt_config
+
+    if needs_update:
+        for required in ["agentName", "foundationModel", "agentResourceRoleArn"]:
+            if required not in needs_update:
+                # Pull from existing agent
+                needs_update[required] = existing_agent[required]
+
+        changed = True
+        if not module.check_mode:
+            needs_update["agentId"] = existing_agent_id
+            client.update_agent(**needs_update)
+            _prepare_agent(client, existing_agent_id)
+
+    return changed, existing_agent_id
 
 
-def _delete_agent(module, client, existing_agent):
+def _delete_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> None:
     """Deletes an existing agent."""
     if not module.check_mode:
-        client.delete_agent(agentId=existing_agent['agentId'])
-    return True
+        client.delete_agent(agentId=existing_agent["agentId"])
 
 
 def main():
-    argument_spec=dict(
-        state=dict(type='str', default='present', choices=['present', 'absent']),
-        agent_name=dict(type='str', required=True),
-        foundation_model=dict(type='str', required=True),
-        instruction=dict(type='str', required=True),
-        role_arn=dict(type='str', required=True),
+    argument_spec = dict(
+        state=dict(type="str", default="present", choices=["present", "absent"]),
+        agent_name=dict(type="str", required=True),
+        new_agent_name=dict(type="str"),
+        foundation_model=dict(type="str"),
+        instruction=dict(type="str"),
+        agent_resource_role_arn=dict(type="str"),
+        orchestration_type=dict(type="str", default="DEFAULT", choices=["DEFAULT", "CUSTOM_ORCHESTRATION"]),
+        tags=dict(type="dict", aliases=["resource_tags"]),
+        agent_collaboration=dict(type="str", choices=["SUPERVISOR", "SUPERVISOR_ROUTER", "DISABLED"]),
+        prompt_override_configuration=dict(
+            type="dict",
+            options=dict(
+                prompt_configurations=dict(
+                    type="list",
+                    elements="dict",
+                    options=dict(
+                        prompt_type=dict(type="str"),
+                        base_prompt_template=dict(type="str"),
+                        inference_configuration=dict(
+                            type="dict",
+                            options=dict(
+                                maximum_length=dict(type="int"),
+                                temperature=dict(type="float"),
+                                top_k=dict(type="int"),
+                                top_p=dict(type="float"),
+                                stop_sequences=dict(type="list", elements="str"),
+                            ),
+                        ),
+                        parser_mode=dict(type="str"),
+                        prompt_creation_mode=dict(type="str"),
+                        prompt_state=dict(type="str"),
+                        foundation_model=dict(type="str"),
+                    ),
+                ),
+                override_lambda=dict(type="str"),
+            ),
+        ),
     )
 
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
-        supports_check_mode=True
+        supports_check_mode=True,
+        required_if=[("state", "present", ("foundation_model", "instruction", "agent_resource_role_arn"))],
     )
 
-    state = module.params['state']
+    state: str = module.params["state"]
 
     try:
-        client = module.client('bedrock-agent', retry_decorator=AWSRetry.jittered_backoff())
+        client = module.client("bedrock-agent", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    changed = False
-    result = dict(agent={})
-    existing_agent = find_agent(client)
+    changed: bool = False
+    result: Dict[str, Any] = dict(agent={})
+    existing_agent: Dict[str, Any] = find_agent(client, module)
 
     try:
-        if state == 'present':
+        if state == "present":
             if existing_agent:
                 # Update existing agent
                 changed, agent_id = _update_agent(module, client, existing_agent)
-                result['agent'] = _get_agent(client, agent_id)
+                result["agent"] = _get_agent(client, agent_id)
             else:
                 # Create a new agent
                 if not module.check_mode:
                     agent_id = _create_agent(module, client)
-                    result['agent'] = _get_agent(client, agent_id)
+                    result["agent"] = _get_agent(client, agent_id)
                 changed = True
-        
-        elif state == 'absent':
+
+        elif state == "absent":
             if existing_agent:
                 # Delete existing agent
-                changed = _delete_agent(module, client, existing_agent)
-                module.exit_json(changed=changed, **result)
-    
+                _delete_agent(module, client, existing_agent)
+                module.exit_json(changed=True, **result)
+
         module.exit_json(changed=changed, **camel_dict_to_snake_dict(result))
-    
+
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

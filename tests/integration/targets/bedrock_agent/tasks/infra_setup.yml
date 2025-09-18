@@ -1,47 +1,103 @@
 ---
+- name: Get AWS caller info
+  amazon.aws.aws_caller_info:
+  register: caller_info
+
+- name: Save account ID
+  ansible.builtin.set_fact:
+    aws_account_id: "{{ caller_info.account }}"
+
 - name: Create IAM role for Bedrock Agent
-  community.aws.iam_role:
+  amazon.aws.iam_role:
     name: "{{ agent_role_name }}"
     assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
     state: present
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
   register: agent_role
 
+- name: Save role ARN
+  ansible.builtin.set_fact:
+    agent_role_arn: "{{ agent_role.iam_role.arn }}"
+
 - name: Create IAM role for Lambda
-  community.aws.iam_role:
+  amazon.aws.iam_role:
     name: "{{ lambda_role_name }}"
     assume_role_policy_document: "{{ lookup('file', 'assume_role_lambda.json') }}"
     state: present
+    managed_policies:
+      - "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
   register: lambda_role
 
-- name: Attach basic Lambda execution policy to Lambda role
-  community.aws.iam_policy:
-    iam_role: "{{ lambda_role_name }}"
-    policy_arn: "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-    state: present
+- name: Wait for IAM role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for IAM role to be fully propagated."
 
 - name: Create a dummy Lambda function deployment package
-  ansible.builtin.command: |
-    python -c "import zipfile; zf = zipfile.ZipFile('lambda.zip', 'w'); zf.writestr('lambda_function.py', 'def lambda_handler(event, context): return {\"statusCode\": 200}'); zf.close()"
+  ansible.builtin.shell: |
+    # Create a temporary directory for the deployment package
+    mkdir /tmp/lambda_package
+    cd /tmp/lambda_package
+
+    # Copy the script from the local files directory
+    cp "{{ lookup('file', 'files/script.py') }}" lambda_function.py
+
+    # Install Python dependencies into the package directory
+    pip install requests -t .
+
+    # Create the zip file containing the script and dependencies
+    zip -r /tmp/lambda.zip .
   args:
-    creates: "lambda.zip"
+    creates: "/tmp/lambda.zip"
 
 - name: Create Lambda function
-  community.aws.lambda_function:
+  amazon.aws.lambda:
     name: "{{ lambda_name }}"
     runtime: python3.11
-    role: "{{ lambda_role.arn }}"
+    role: "{{ lambda_role.iam_role.arn }}"
     handler: lambda_function.lambda_handler
-    zip_file: "./lambda.zip"
-    publish: true
+    zip_file: "/tmp/lambda.zip"
   register: lambda_function
 
-- name: Save test variables to a file
-  ansible.builtin.copy:
-    content: |
-      agent_name: "{{ agent_name }}"
-      agent_role_arn: "{{ agent_role.arn }}"
-      lambda_name: "{{ lambda_name }}"
-      lambda_arn: "{{ lambda_function.function.function_arn }}"
-      region: "{{ region }}"
-    dest: "test_vars.yml"
-  delegate_to: localhost
+- name: Attach Lambda resource-based policy for Bedrock action group
+  amazon.aws.lambda_policy:
+    state: present
+    function_name: "{{ lambda_name }}"
+    statement_id: "AllowBedrockInvocation"
+    action: "lambda:InvokeFunction"
+    principal: "bedrock.amazonaws.com"
+    source_account: "{{ aws_account_id }}"
+    source_arn: "arn:aws:bedrock:{{ aws_region }}:{{ aws_account_id }}:agent/*"
+
+- name: Wait for Lambda policy to propagate
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for Lambda resource-based policy to propagate."
+
+- name: Save test variables
+  ansible.builtin.set_fact:
+    agent_role_arn: "{{ agent_role.iam_role.arn }}"
+    lambda_arn: "{{ lambda_function.configuration.function_arn }}"
+
+- name: Allow Bedrock Agent to invoke Lambda
+  amazon.aws.iam_policy:
+    iam_type: role
+    iam_name: "{{ agent_role_name }}"
+    policy_name: "BedrockInvokeLambdaPolicy"
+    state: present
+    policy_json: >
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "lambda:InvokeFunction",
+            "Resource": "{{ lambda_arn }}"
+          }
+        ]
+      }
+- name: Wait for policy to propagate
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for policy to propagate."
