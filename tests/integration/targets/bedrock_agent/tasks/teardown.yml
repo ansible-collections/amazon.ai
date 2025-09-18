@@ -1,31 +1,75 @@
 ---
+- name: Delete Agent alias
+  amazon.ai.bedrock_agent_alias:
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+    state: absent
+  ignore_errors: true
+
+- name: Disable Agent action group
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    action_group_state: "DISABLED"
+    lambda_arn: "{{ lambda_arn }}"
+    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+  ignore_errors: true
+
+- name: Delete Agent action group
+  amazon.ai.bedrock_agent_action_group:
+    agent_name: "{{ agent_name }}"
+    action_group_name: "{{ action_group_name }}"
+    state: absent
+  ignore_errors: true
+
 - name: Delete Bedrock Agent
-  amazon.aibedrock_agent:
+  amazon.ai.bedrock_agent:
     state: absent
     agent_name: "{{ agent_name }}"
-    foundation_model: "{{ foundation_model }}"
-    instruction: "{{ instruction }}"
-    role_arn: "{{ agent_role_arn }}"
+  ignore_errors: true
+
+- name: Remove Bedrock access from Lambda for agent action groups
+  amazon.aws.lambda_policy:
+    state: absent
+    function_name: "{{ lambda_name }}"
+    statement_id: "BedrockInvokeFunction"
+    action: "lambda:InvokeFunction"
+    principal: "bedrock.amazonaws.com"
+    source_account: "{{ aws_account_id }}"
+    source_arn: "arn:aws:bedrock:{{ aws_region }}:{{ aws_account_id }}:agent/{{ agent_id }}"
+  ignore_errors: true
 
 - name: Delete Lambda function
-  community.aws.lambda_function:
+  amazon.aws.lambda:
     name: "{{ lambda_name }}"
     state: absent
+  ignore_errors: true
 
 - name: Delete IAM role for Lambda
-  community.aws.iam_role:
+  amazon.aws.iam_role:
     name: "{{ lambda_role_name }}"
     state: absent
+  ignore_errors: true
+
+- name: Delete policy
+  amazon.aws.iam_policy:
+    state: absent
+    iam_name: "{{ agent_role_name }}"
+    iam_type: "role"
+    policy_name: "bedrock_permissions_policy"
+  ignore_errors: true
 
 - name: Delete IAM role for Bedrock Agent
-  community.aws.iam_role:
+  amazon.aws.iam_role:
     name: "{{ agent_role_name }}"
     state: absent
+  ignore_errors: true
 
 - name: Remove temporary files
   ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
-    - "./lambda.zip"
-    - "./test_vars.yml"
+    - "./tmp/lambda.zip"
+    - "./tmp/lambda_package"
+  ignore_errors: true

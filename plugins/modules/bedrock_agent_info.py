@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 DOCUMENTATION = r"""
 ---
@@ -55,82 +57,79 @@ EXAMPLES = r"""
 RETURN = r"""
 agent:
     description: A dictionary or list of dictionaries containing the details of the agent.
-    type: dict
+    type: complex
     returned: always
     contains:
         agent_id:
-            description: The unique ID of the agent.
+            description: The unique identifier of the agent.
             type: str
-            sample: "EXAMPLEAGENTID"
+            sample: "RNKFFDOKFN"
         agent_name:
             description: The name of the agent.
             type: str
-            sample: "my-test-agent"
+            sample: "test-bedrock-agent-test"
         agent_arn:
             description: The Amazon Resource Name (ARN) of the agent.
             type: str
-        agent_version:
-            description: The version of the agent.
-            type: str
-        client_token:
-            description: A unique, case-sensitive identifier to ensure idempotency.
-            type: str
-        instruction:
-            description: Instructions that tell the agent what it should do.
+            sample: "arn:aws:bedrock:us-east-1:123456789901:agent/RNKFFDOKFN"
+        agent_resource_role_arn:
+            description: The ARN of the IAM role with permissions to invoke the agent.
             type: str
         agent_status:
-            description: The status of the agent.
+            description: The current status of the agent.
             type: str
+            sample: PREPARED
         foundation_model:
             description: The foundation model used for orchestration by the agent.
             type: str
-        description:
-            description: The description of the agent.
+            sample: amazon.nova-micro-v1:0
+        instruction:
+            description: The instructions that tell the agent what it should do.
             type: str
         orchestration_type:
-            description: Specifies the orchestration strategy for the agent.
+            description: The orchestration strategy for the agent.
             type: str
-        custom_orchestration:
-            description: Contains custom orchestration configurations.
-            type: dict
+            sample: "DEFAULT"
         idle_session_ttl_in_seconds:
-            description: The number of seconds for which Bedrock keeps information about a user’s conversation.
+            description: The number of seconds for which the agent keeps conversation information.
             type: int
-        agent_resource_role_arn:
-            description: The ARN of the IAM role with permissions to invoke API operations on the agent.
-            type: str
-        customer_encryption_key_arn:
-            description: The ARN of the KMS key that encrypts the agent.
-            type: str
+            sample: 600
         created_at:
-            description: The time at which the agent was created.
+            description: The timestamp when the agent was created.
             type: str
         updated_at:
-            description: The time at which the agent was last updated.
+            description: The timestamp when the agent was last updated.
             type: str
         prepared_at:
-            description: The time at which the agent was last prepared.
+            description: The timestamp when the agent was last prepared.
             type: str
-        failure_reasons:
-            description: Reasons that the agent API operation failed.
-            type: list
-            elements: str
-        recommended_actions:
-            description: Recommended actions to take for the agent API operation to succeed.
-            type: list
-            elements: str
         prompt_override_configuration:
-            description: Contains configurations to override prompt templates.
+            description: Contains configurations to override prompt templates in different parts of an agent sequence.
             type: dict
-        guardrail_configuration:
-            description: Details about the guardrail associated with the agent.
-            type: dict
-        memory_configuration:
-            description: Contains memory configuration for the agent.
-            type: dict
-        agent_collaboration:
-            description: The agent’s collaboration settings.
-            type: str
+            contains:
+                prompt_configurations:
+                    description: A list of prompt configuration dictionaries.
+                    type: list
+                    elements: dict
+                    contains:
+                        prompt_type:
+                            description: The step in the agent sequence that this prompt configuration applies to.
+                            type: str
+                        base_prompt_template:
+                            description: The prompt template to replace the default prompt template.
+                            type: str
+                        inference_configuration:
+                            description: Inference parameters to use when the agent invokes a foundation model.
+                            type: dict
+                        parser_mode:
+                            description: Specifies whether to override the default parser Lambda function.
+                            type: str
+                        prompt_creation_mode:
+                            description: Specifies whether to override the default prompt template for this prompt type.
+                            type: str
+                        prompt_state:
+                            description: Specifies whether to allow the agent to carry out the step specified in the prompt type.
+                            type: str
 """
 
 
@@ -139,48 +138,53 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
+
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_aliases
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_action_groups
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_aliases 
 
 
-def _add_related_info(client, module, agent_info):
+def _add_related_info(client, module: AnsibleAWSModule, agent_info: Dict[str, Any]) -> Dict[str, Any]:
     """
     Helper function to add action groups and aliases to an agent's info.
-    
+
     Args:
         client: The Boto3 client.
         module: The Ansible module object.
         agent_info: A dictionary containing the agent's summary or details.
-    
+
     Returns:
         The updated agent_info dictionary.
     """
-    list_action_groups = module.params.get('list_action_groups')
-    list_aliases = module.params.get('list_aliases')
-    
-    agent_id = agent_info.get('agentId')
-    
+    list_action_groups: Optional[bool] = module.params.get("list_action_groups")
+    list_aliases: Optional[bool] = module.params.get("list_aliases")
+
+    agent_id: Optional[str] = agent_info.get("agentId")
+
     if list_action_groups:
-        agent_info['actionGroups'] = _list_agent_action_groups(client, agentId=agent_id, agentVersion='DRAFT')
-        
+        agent_info["actionGroups"] = _list_agent_action_groups(client, agentId=agent_id, agentVersion="DRAFT")
+
     if list_aliases:
-        agent_info['aliases'] = _list_agent_aliases(client, agentId=agent_id)
-        
+        agent_info["aliases"] = _list_agent_aliases(client, agentId=agent_id)
+
     return agent_info
 
 
 def main():
-    argument_spec=dict(
-        agent_name=dict(type='str'),
-        list_action_groups=dict(type='bool', default=False),
-        list_aliases=dict(type='bool', default=False),
+    argument_spec = dict(
+        agent_name=dict(type="str"),
+        list_action_groups=dict(type="bool", default=False),
+        list_aliases=dict(type="bool", default=False),
     )
 
     module = AnsibleAWSModule(
@@ -188,39 +192,39 @@ def main():
         supports_check_mode=True,
     )
 
-    agent_name = module.params.get('agent_name')
-    
+    agent_name: Optional[str] = module.params.get("agent_name")
+
     try:
-        client = module.client('bedrock-agent', retry_decorator=AWSRetry.jittered_backoff())
+        client = module.client("bedrock-agent", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result = None
-    
+    result: Dict[str, Any] = {}
+
     try:
         if agent_name:
             # Find a single agent by name
-            agent_details = find_agent(client, module, agent_name)
+            agent_details: Optional[Dict[str, Any]] = find_agent(client, module)
             if agent_details:
-                result['agent'] = _add_related_info(client, module, agent_details)
+                result["agent"] = _add_related_info(client, module, agent_details)
             else:
-                result['agent'] = {} # Agent not found
+                result["agent"] = {}  # Agent not found
         else:
             # List all agents
-            agents_list = find_agent(client, module)
-            
+            agents_list: List[Dict[str, Any]] = find_agent(client, module)
+
             # Conditionally fetch and add related info for each agent
             updated_agents_list = []
             for agent_summary in agents_list:
                 updated_agents_list.append(_add_related_info(client, module, agent_summary))
-            
-            result['agent'] = updated_agents_list
-            
+
+            result["agent"] = updated_agents_list
+
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
     module.exit_json(**camel_dict_to_snake_dict(result))
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

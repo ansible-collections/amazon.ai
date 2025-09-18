@@ -1,14 +1,18 @@
 ---
-- name: Amazon DevOps Guru integration tests
+- name: Amazon Bedrock integration tests
   module_defaults:
     group/amazon.ai.aws:
       access_key: "{{ aws_access_key }}"
       secret_key: "{{ aws_secret_key }}"
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
-    block:
-      - ansible.builtin.include_tasks: infra_setup.yml
-      - ansible.builtin.include_tasks: test_agent.yml
-    always:
-      - ansible.builtin.include_tasks: teardown.yml
-
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - ansible.builtin.include_tasks: infra_setup.yml
+    - ansible.builtin.include_tasks: test_agent.yml
+  always:
+   - ansible.builtin.include_tasks: teardown.yml
