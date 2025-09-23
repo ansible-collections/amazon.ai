@@ -5,6 +5,7 @@ action_groups:
     - bedrock_agent
     - bedrock_agent_alias
     - bedrock_agent_info
+    - bedrock_agent_inference
     - bedrock_agent_alias_info
     - bedrock_agent_action_group
     - bedrock_agent_action_group_info
