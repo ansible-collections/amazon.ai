@@ -4,7 +4,6 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-
 DOCUMENTATION = r"""
 ---
 module: bedrock_foundation_models_info
@@ -78,7 +77,7 @@ RETURN = r"""
 model_summaries:
     description: A list of dictionaries, where each dictionary contains summary information for a foundation model.
     type: list
-    returned: success if no model_id is provided
+    returned: success if no O(model_id) is provided
     contains:
         model_arn:
             description: The Amazon Resource Name (ARN) of the foundation model.
@@ -154,7 +153,6 @@ model_summary:
                 status:
                     description: Specifies whether a model version is available (ACTIVE) or deprecated (LEGACY).
                     type: str
-                    choices: ['ACTIVE', 'LEGACY']
 """
 
 
@@ -187,10 +185,13 @@ def _list_models_with_filters(module, client):
     params = {}
     if module.params.get("by_provider"):
         params["byProvider"] = module.params["by_provider"]
+
     if module.params.get("by_customization_type"):
         params["byCustomizationType"] = module.params["by_customization_type"]
+
     if module.params.get("by_output_modality"):
         params["byOutputModality"] = module.params["by_output_modality"]
+
     if module.params.get("by_inference_type"):
         params["byInferenceType"] = module.params["by_inference_type"]
 

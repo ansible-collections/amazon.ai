@@ -19,39 +19,39 @@
           - list_all_result.model_summaries | length > 0
         msg: "The bedrock_foundation_models_info task failed or did not return a valid list."
 
-    - name: List models filtered by provider 'Anthropic'
+    - name: List models filtered by provider 'Amazon'
       amazon.ai.bedrock_foundation_models_info:
-        by_provider: 'Anthropic'
-      register: list_anthropic_result
+        by_provider: 'Amazon'
+      register: list_amazon_result
 
-    - name: Assert that all models in the list are from the 'Anthropic' provider
+    - name: Assert that all models in the list are from the 'Amazon' provider
       ansible.builtin.assert:
         that:
-          - list_anthropic_result.model_summaries | selectattr('provider_name', 'equalto', 'Anthropic') | list | length == list_anthropic_result.model_summaries | length
+          - list_amazon_result.model_summaries | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.model_summaries | length
         msg: "The list contains models from other providers, which is incorrect."
 
-    - name: Extract an on-demand 'Claude' model ID
+    - name: Extract an on-demand 'Nova Micro' model ID
       ansible.builtin.set_fact:
-        claude_model_summary: >-
-          {{ list_anthropic_result.model_summaries
-            | selectattr('model_name', 'equalto', 'Claude')
+        amazon_model_summary: >-
+          {{ list_amazon_result.model_summaries
+            | selectattr('model_name', 'contains', 'Nova Micro')
             | selectattr('inference_types_supported', 'contains', 'ON_DEMAND')
             | first }}
 
-    - name: Assert that a valid 'Claude' on-demand model was found
+    - name: Assert that a valid 'Nova Micro' on-demand model was found
       ansible.builtin.assert:
         that:
-          - claude_model_summary is defined
-          - claude_model_summary.model_id is defined
-          - "'ON_DEMAND' in claude_model_summary.inference_types_supported"
-        msg: "Could not find an on-demand Claude 3 Haiku model. Your AWS account may not have access."
+          - amazon_model_summary is defined
+          - amazon_model_summary.model_id is defined
+          - "'ON_DEMAND' in amazon_model_summary.inference_types_supported"
+        msg: "Could not find an on-demand Nova Micro model. Your AWS account may not have access."
 
     - name: Extract a model_id from the filtered list
       ansible.builtin.set_fact:
-        model_id: "{{ claude_model_summary.model_id }}"
+        model_id: "{{ amazon_model_summary.model_id }}"
 
     - name: Invoke the Bedrock model with a simple prompt
-      amazon.ai.bedrock_inference:
+      amazon.ai.bedrock_model_inference:
         model_id: "{{ model_id }}"
         prompt: "{{ test_prompt }}"
       register: inference_result
@@ -63,17 +63,15 @@
           - inference_result is changed
         msg: "The bedrock_inference task did not succeed or did not report a change."
 
-    - name: Assert the returned completion is a non-empty string
+    - name: Assert the returned raw_response is a non-empty 
       ansible.builtin.assert:
         that:
-          - inference_result.completion is defined
-          - inference_result.completion is string
-          - inference_result.completion | length > 0
-        msg: "The completion text was not returned or was empty."
+          - inference_result.raw_response is defined
+        msg: "The inference_result.raw_response was not returned or was empty."
 
     - name: Assert the returned values match the input
       ansible.builtin.assert:
         that:
-          - inference_result.model_id == test_model_id
+          - inference_result.model_id == model_id
           - inference_result.prompt == test_prompt
         msg: "The returned model_id or prompt did not match the input."
