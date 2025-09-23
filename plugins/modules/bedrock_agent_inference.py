@@ -153,7 +153,7 @@ def main():
             if module.params.get("session_state"):
                 params["sessionState"] = module.params["session_state"]
 
-            response: Dict[str, Any] = client.invoke_agent(**params)
+            response: Dict[str, Any] = client.invoke_agent(aws_retry=True, **params)
             for event in response.get("completion", []):
                 result["raw_api_response"].append(event)
 

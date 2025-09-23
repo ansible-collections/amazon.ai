@@ -1,19 +1,41 @@
 ---
 - name: Delete Agent alias
   amazon.ai.bedrock_agent_alias:
-    agent_name: "{{ agent_name }}"
-    alias_name: "{{ alias_name }}"
+    agent_name: "{{ item.agent_name }}"
+    alias_name: "{{ item.alias_name }}"
     state: absent
+  loop:
+    - {"agent_name": "{{ agent_name }}", alias_name: "{{ alias_name }}"}
+    - {"agent_name": "{{ second_agent_name }}", alias_name: "{{ second_alias_name }}"}
   ignore_errors: true
 
-- name: Disable Agent action group
-  amazon.ai.bedrock_agent_action_group:
-    agent_name: "{{ agent_name }}"
-    action_group_name: "{{ action_group_name }}"
-    action_group_state: "DISABLED"
-    lambda_arn: "{{ lambda_arn }}"
-    api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+- name: Get action group
+  amazon.ai.bedrock_agent_action_group_info:
+     agent_name: "{{ agent_name }}"
+     action_group_name: "{{ action_group_name }}"
+  register: get_action_group
   ignore_errors: true
+
+- block:
+  - name: Disable Agent action group
+    amazon.ai.bedrock_agent_action_group:
+      agent_name: "{{ agent_name }}"
+      action_group_name: "{{ action_group_name }}"
+      action_group_state: "DISABLED"
+      lambda_arn: "{{ lambda_arn }}"
+      api_schema: "{{ lookup('file', 'files/api_schema.yaml') }}"
+    ignore_errors: true
+  
+  - name: Wait until the action group state is DISABLED
+    amazon.ai.bedrock_agent_action_group_info:
+      agent_name: "{{ agent_name }}"
+      action_group_name: "{{ action_group_name }}"
+    register: list_action_groups_output
+    ignore_errors: true
+    until: list_action_groups_output.action_group.action_group_state == 'DISABLED'
+    retries: 20
+    delay: 10
+  when: get_action_group.action_group != {} and get_action_group.action_group.action_group_state != 'DISABLED'
 
 - name: Delete Agent action group
   amazon.ai.bedrock_agent_action_group:
@@ -25,7 +47,10 @@
 - name: Delete Bedrock Agent
   amazon.ai.bedrock_agent:
     state: absent
-    agent_name: "{{ agent_name }}"
+    agent_name: "{{ item }}"
+  loop:
+    - "{{ agent_name }}"
+    - "{{ second_agent_name }}"
   ignore_errors: true
 
 - name: Remove Bedrock access from Lambda for agent action groups
@@ -56,7 +81,7 @@
     state: absent
     iam_name: "{{ agent_role_name }}"
     iam_type: "role"
-    policy_name: "bedrock_permissions_policy"
+    policy_name: "BedrockInvokeLambdaPolicy"
   ignore_errors: true
 
 - name: Delete IAM role for Bedrock Agent
@@ -70,6 +95,6 @@
     path: "{{ item }}"
     state: absent
   loop:
-    - "./tmp/lambda.zip"
-    - "./tmp/lambda_package"
+    - "/tmp/lambda.zip"
+    - "/tmp/lambda_package"
   ignore_errors: true

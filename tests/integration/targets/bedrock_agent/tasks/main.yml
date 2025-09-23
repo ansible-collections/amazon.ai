@@ -15,4 +15,4 @@
     - ansible.builtin.include_tasks: infra_setup.yml
     - ansible.builtin.include_tasks: test_agent.yml
   always:
-   - ansible.builtin.include_tasks: teardown.yml
+    - ansible.builtin.include_tasks: teardown.yml

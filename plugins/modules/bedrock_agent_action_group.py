@@ -153,6 +153,7 @@ from typing import Tuple
 
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_action_group
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _prepare_agent
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -230,10 +231,17 @@ def _update_action_group(
                 "agentId": agent_id,
                 "agentVersion": "DRAFT",
                 "actionGroupId": existing_action_group["actionGroupId"],
+                "actionGroupState": module.params["action_group_state"],
             }
         )
         if update_obj.get("apiSchema") is None:
             update_obj["apiSchema"] = existing_action_group["apiSchema"]
+
+        if update_obj.get("actionGroupName") is None:
+            update_obj["actionGroupName"] = existing_action_group["actionGroupName"]
+
+        if update_obj.get("actionGroupExecutor") is None:
+            update_obj["actionGroupExecutor"] = existing_action_group["actionGroupExecutor"]
 
         changed = True
         if not module.check_mode:
@@ -304,6 +312,10 @@ def main():
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
+
+    # Conditionally prepare the agent after a change
+    if changed and not module.check_mode:
+        _prepare_agent(client, agent_id)
 
     result["changed"] = changed
     if action_group_info:

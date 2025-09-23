@@ -164,6 +164,8 @@ def main():
             )
             if found_alias:
                 result["agent_alias"] = _get_agent_alias(client, agent_id, found_alias.get("agentAliasId"))
+            else:
+                result["agent_alias"] = {}
         else:
             for alias in aliases_summary:
                 aliases_details.append(_get_agent_alias(client, agent_id, alias.get("agentAliasId")))

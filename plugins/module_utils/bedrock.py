@@ -16,7 +16,7 @@ from typing import List
 from typing import Optional
 
 
-def wait_for_status(client, agent_id: str, status: str) -> None:
+def wait_for_agent_status(client, agent_id: str, status: str) -> None:
     """Waits for an agent to reach a specific status."""
     while True:
         try:
@@ -35,13 +35,31 @@ def wait_for_status(client, agent_id: str, status: str) -> None:
                 raise
 
 
+def wait_for_alias_status(client, agent_id: str, alias_id: str, status: str) -> None:
+    """Waits for an agent alias to reach a specific status."""
+    while True:
+        try:
+            alias_info = client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)
+            current_status = alias_info["agentAlias"]["agentAliasStatus"]
+            if current_status == status:
+                break
+            time.sleep(5)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                if status == "DELETED":
+                    break
+                raise
+            else:
+                raise
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def _prepare_agent(client, agent_id: str) -> bool:
     """
     Prepares a Bedrock Agent and waits for it to be in the 'PREPARED' state.
     """
     client.prepare_agent(agentId=agent_id)
-    wait_for_status(client, agent_id, "PREPARED")
+    wait_for_agent_status(client, agent_id, "PREPARED")
 
     return True
 

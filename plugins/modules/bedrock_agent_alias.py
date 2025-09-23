@@ -156,6 +156,7 @@ from typing import Optional
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_alias
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_aliases
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_alias_status
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
@@ -194,8 +195,9 @@ def _create_alias(client, module: AnsibleAWSModule, agent_id: str) -> Optional[D
         params["routingConfiguration"] = snake_dict_to_camel_dict(module.params["routing_configuration"])
 
     response = client.create_agent_alias(**params)
-
     alias_info: Optional[Dict[str, Any]] = response.get("agentAlias")
+    wait_for_alias_status(client, agent_id, alias_info["agentAliasId"], "PREPARED")
+
     return alias_info
 
 
@@ -238,7 +240,7 @@ def main():
 
     changed: bool = False
     alias_info: Optional[Dict[str, Any]] = None
-    result: Dict[str, Any] = {"alias": {}}
+    result: Dict[str, Any] = {"agent_alias": {}}
 
     try:
         # Get the agent ID from the provided name
@@ -253,13 +255,15 @@ def main():
             if not found_alias:
                 if not module.check_mode:
                     alias_info = _create_alias(client, module, agent_id)
-                    result["alias"] = camel_dict_to_snake_dict(
+                    result["agent_alias"] = camel_dict_to_snake_dict(
                         _get_agent_alias(client, agent_id, alias_info["agentAliasId"])
                     )
                 changed = True
 
             else:
-                alias_info = _get_agent_alias(client, agent_id, found_alias["agentAliasId"])
+                result["agent_alias"] = camel_dict_to_snake_dict(
+                    _get_agent_alias(client, agent_id, found_alias["agentAliasId"])
+                )
 
         elif state == "absent":
             if found_alias:

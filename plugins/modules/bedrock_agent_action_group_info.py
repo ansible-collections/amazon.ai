@@ -167,6 +167,8 @@ def main():
             if found_id:
                 details: Dict[str, Any] = _get_agent_action_group(client, agent_id, agent_version, found_id)
                 result["action_group"] = details
+            else:
+                result["action_group"] = {}
 
         else:
             # List all action groups and get full details for each

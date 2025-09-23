@@ -12,6 +12,8 @@
     name: "{{ agent_role_name }}"
     assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
     state: present
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
   register: agent_role
 
 - name: Save role ARN
@@ -68,7 +70,35 @@
     source_account: "{{ aws_account_id }}"
     source_arn: "arn:aws:bedrock:{{ aws_region }}:{{ aws_account_id }}:agent/*"
 
+- name: Wait for Lambda policy to propagate
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for Lambda resource-based policy to propagate."
+
 - name: Save test variables
   ansible.builtin.set_fact:
     agent_role_arn: "{{ agent_role.iam_role.arn }}"
     lambda_arn: "{{ lambda_function.configuration.function_arn }}"
+
+- name: Allow Bedrock Agent to invoke Lambda
+  amazon.aws.iam_policy:
+    iam_type: role
+    iam_name: "{{ agent_role_name }}"
+    policy_name: "BedrockInvokeLambdaPolicy"
+    state: present
+    policy_json: >
+      {
+        "Version": "2012-10-17",
+        "Statement": [
+          {
+            "Effect": "Allow",
+            "Action": "lambda:InvokeFunction",
+            "Resource": "{{ lambda_arn }}"
+          }
+        ]
+      }
+
+- name: Wait for policy to propagate
+  ansible.builtin.pause:
+    seconds: 15
+    prompt: "Waiting for policy to propagate."
