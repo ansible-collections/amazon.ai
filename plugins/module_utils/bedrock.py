@@ -1,9 +1,18 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+import time
+
+from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+
+try:
+    from botocore.exceptions import ClientError
+except ImportError:
+    pass
 
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -56,3 +65,191 @@ def list_models_with_filters(module: AnsibleAWSModule, client) -> List[Dict[str,
 
     response = client.list_foundation_models(**params)
     return [camel_dict_to_snake_dict(model) for model in response.get("modelSummaries", [])]
+
+
+def wait_for_agent_status(client, agent_id: str, status: str) -> None:
+    """
+    Poll the Bedrock Agent until it reaches the specified status.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+        status: The desired target status to wait for (e.g., "PREPARED", "DELETED").
+
+    Raises:
+        ClientError: If AWS returns an unexpected error during polling.
+        Exception: Re-raises any non-recoverable errors encountered during waiting.
+
+    Behavior:
+        - Repeatedly checks the agent's current status using `client.get_agent()`.
+        - Sleeps for 5 seconds between polling attempts.
+        - Gracefully handles cases where the agent is deleted while waiting,
+          only exiting silently if the desired status is `"DELETED"`.
+    """
+    while True:
+        try:
+            current_status = client.get_agent(agentId=agent_id)["agent"]["agentStatus"]
+            if current_status == status:
+                break
+            time.sleep(5)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                # Handle cases where the agent might be deleted during wait
+                if status == "DELETED":
+                    break
+                # Or re-raise the error if it's an unexpected deletion
+                raise
+            else:
+                raise
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _prepare_agent(client, agent_id: str) -> bool:
+    """
+    Prepare a Bedrock Agent and wait until it reaches the 'PREPARED' state.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+
+    Returns:
+        True once the agent successfully reaches the 'PREPARED' state.
+
+    Behavior:
+        - Calls the `prepare_agent()` API operation.
+        - Waits using `wait_for_agent_status()` until the agent reports status 'PREPARED'.
+        - Retries automatically using the AWS jittered backoff decorator.
+    """
+    client.prepare_agent(agentId=agent_id)
+    wait_for_agent_status(client, agent_id, "PREPARED")
+
+    return True
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _list_agents(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve a list of Bedrock Agents using pagination.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        **params: Additional filter parameters accepted by the `list_agents` API.
+
+    Returns:
+        A list of agent summary dictionaries.
+    """
+    paginator = client.get_paginator("list_agents")
+    return paginator.paginate(**params).build_full_result()["agentSummaries"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _get_agent(client, agent_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific Bedrock Agent.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+
+    Returns:
+        A dictionary with detailed agent information if found, otherwise None.
+
+    Raises:
+        ClientError: If AWS returns an error other than 'ResourceNotFoundException'.
+    """
+    try:
+        return client.get_agent(agentId=agent_id)["agent"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _get_agent_action_group(
+    client, agent_id: str, agent_version: str, action_group_id: str
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific action group associated with a Bedrock Agent.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+        agent_version: The version identifier of the agent.
+        action_group_id: The unique identifier of the action group.
+
+    Returns:
+        The action group details as a dictionary if found, otherwise None.
+    """
+    try:
+        return client.get_agent_action_group(
+            agentId=agent_id, agentVersion=agent_version, actionGroupId=action_group_id
+        )["agentActionGroup"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _list_agent_action_groups(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve all action groups for a given Bedrock Agent.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        **params: Additional parameters (e.g., `agentId`, `agentVersion`) for the paginator.
+
+    Returns:
+        A list of action group summary dictionaries.
+    """
+    paginator = client.get_paginator("list_agent_action_groups")
+    return paginator.paginate(**params).build_full_result()["actionGroupSummaries"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _list_agent_aliases(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve all aliases for a given Bedrock Agent.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        **params: Additional parameters (e.g., `agentId`) for the paginator.
+
+    Returns:
+        A list of alias summary dictionaries.
+    """
+    paginator = client.get_paginator("list_agent_aliases")
+    return paginator.paginate(**params).build_full_result()["agentAliasSummaries"]
+
+
+def find_agent(client, module) -> Optional[Dict[str, Any]]:
+    """
+    Find a specific Bedrock Agent by name, or list all available agents.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        module: The Ansible module instance containing user parameters.
+
+    Returns:
+        - A dictionary with details for the matching agent if found.
+        - A list of all agent detail dictionaries if no name was provided.
+        - None if the specified agent name does not exist.
+
+    Behavior:
+        - Uses `_list_agents()` to enumerate all agents.
+        - If `agent_name` is provided in module params, filters for a name match.
+        - If no name is given, returns detailed info for all agents.
+    """
+    agent_name: Optional[str] = module.params.get("agent_name")
+
+    agents_list: List[Dict[str, Any]] = _list_agents(client)
+    if not agents_list:
+        return []
+
+    if agent_name:
+        for agent_summary in agents_list:
+            if agent_summary["agentName"] == agent_name:
+                return _get_agent(client, agent_summary["agentId"])
+        return None  # Return None if the specific agent is not found
+    else:
+        # Return a list of all agents with their detailed information
+        return [_get_agent(client, agent["agentId"]) for agent in agents_list]

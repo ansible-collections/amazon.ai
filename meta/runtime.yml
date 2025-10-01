@@ -2,6 +2,8 @@
 requires_ansible: '>=2.17.0'
 action_groups:
   aws:
+    - bedrock_agent
+    - bedrock_agent_info
     - bedrock_foundation_models_info
     - bedrock_invoke_model
     - devopsguru_resource_colletion
