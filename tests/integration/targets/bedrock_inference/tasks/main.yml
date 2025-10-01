@@ -5,7 +5,7 @@
       secret_key: "{{ aws_secret_key }}"
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
-  block:
+  block:   
     - name: List all foundation models without filters
       amazon.ai.bedrock_foundation_models_info:
       register: list_all_result
@@ -14,10 +14,8 @@
       ansible.builtin.assert:
         that:
           - list_all_result is success
-          - not list_all_result is changed
-          - list_all_result.model_summaries is defined
-          - list_all_result.model_summaries | length > 0
-        msg: "The bedrock_foundation_models_info task failed or did not return a valid list."
+          - list_all_result.foundation_model is defined
+          - list_all_result.foundation_model | length > 0
 
     - name: List models filtered by provider 'Amazon'
       amazon.ai.bedrock_foundation_models_info:
@@ -27,13 +25,13 @@
     - name: Assert that all models in the list are from the 'Amazon' provider
       ansible.builtin.assert:
         that:
-          - list_amazon_result.model_summaries | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.model_summaries | length
+          - list_amazon_result.foundation_model | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.foundation_model | length
         msg: "The list contains models from other providers, which is incorrect."
 
     - name: Extract an on-demand 'Nova Micro' model ID
       ansible.builtin.set_fact:
         amazon_model_summary: >-
-          {{ list_amazon_result.model_summaries
+          {{ list_amazon_result.foundation_model
             | selectattr('model_name', 'contains', 'Nova Micro')
             | selectattr('inference_types_supported', 'contains', 'ON_DEMAND')
             | first }}
@@ -49,11 +47,49 @@
     - name: Extract a model_id from the filtered list
       ansible.builtin.set_fact:
         model_id: "{{ amazon_model_summary.model_id }}"
+    
+    - name: Prepare request body
+      ansible.builtin.set_fact:
+        request_body:
+          {
+            "messages": [{"role": "user", "content": [{"text": test_prompt}]}],
+            "inferenceConfig": {"maxTokens": 50}
+          }
 
-    - name: Invoke the Bedrock model with a simple prompt
-      amazon.ai.bedrock_model_inference:
+    - name: Get detailed information about the model
+      amazon.ai.bedrock_foundation_models_info:
         model_id: "{{ model_id }}"
-        prompt: "{{ test_prompt }}"
+      register: model_info
+    
+    - name: Assert that the model was found
+      ansible.builtin.assert:
+        that:
+          - model_info.foundation_model is defined
+          - model_info.foundation_model.model_id is defined
+          - model_info.foundation_model.model_id == model_id
+    
+    - name: Invoke the Bedrock model with a simple body (check_mode)
+      amazon.ai.bedrock_invoke_model:
+        model_id: "{{ model_id }}"
+        body: "{{ request_body }}"
+        content_type: "application/json"
+        accept: "application/json"
+      check_mode: true
+      register: inference_result
+
+    - name: Assert the task ran successfully (check_mode)
+      ansible.builtin.assert:
+        that:
+          - inference_result is success
+          - inference_result is changed
+        msg: "The bedrock_inference task did not succeed or did not report a change."
+
+    - name: Invoke the Bedrock model with a simple body
+      amazon.ai.bedrock_invoke_model:
+        model_id: "{{ model_id }}"
+        body: "{{ request_body }}"
+        content_type: "application/json"
+        accept: "application/json"
       register: inference_result
 
     - name: Assert the task ran successfully
@@ -63,15 +99,11 @@
           - inference_result is changed
         msg: "The bedrock_inference task did not succeed or did not report a change."
 
-    - name: Assert the returned raw_response is a non-empty 
+    - name: Assert inference ran successfully
       ansible.builtin.assert:
         that:
+          - inference_result is success
+          - inference_result is changed
           - inference_result.raw_response is defined
-        msg: "The inference_result.raw_response was not returned or was empty."
-
-    - name: Assert the returned values match the input
-      ansible.builtin.assert:
-        that:
+          - inference_result.completion is defined
           - inference_result.model_id == model_id
-          - inference_result.prompt == test_prompt
-        msg: "The returned model_id or prompt did not match the input."

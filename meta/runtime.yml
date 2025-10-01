@@ -3,7 +3,7 @@ requires_ansible: '>=2.17.0'
 action_groups:
   aws:
     - bedrock_foundation_models_info
-    - bedrock_model_inference
+    - bedrock_invoke_model
     - devopsguru_resource_colletion
     - devopsguru_resource_colletion_info
     - devopsguru_insight_info

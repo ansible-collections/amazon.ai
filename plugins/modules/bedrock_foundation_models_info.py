@@ -74,9 +74,9 @@ EXAMPLES = r"""
 
 
 RETURN = r"""
-model_summaries:
-    description: A list of dictionaries, where each dictionary contains summary information for a foundation model.
-    type: list
+foundation_model:
+    description: A dictionary or a list of dictionaries, where each dictionary contains summary information for a foundation model.
+    type: complex
     returned: success if no O(model_id) is provided
     contains:
         model_arn:
@@ -106,53 +106,6 @@ model_summaries:
         inference_types_supported:
             description: The inference types that the model supports.
             type: list
-        model_lifecycle:
-            description: Contains details about whether a model version is available or deprecated.
-            type: dict
-            contains:
-                status:
-                    description: Specifies whether a model version is available (ACTIVE) or deprecated (LEGACY).
-                    type: str
-                    choices: ['ACTIVE', 'LEGACY']
-model_summary:
-    description: A dictionary containing summary information for the specified foundation model.
-    type: dict
-    returned: success if model_id is provided
-    contains:
-        model_arn:
-            description: The Amazon Resource Name (ARN) of the foundation model.
-            type: str
-        model_id:
-            description: The model ID of the foundation model.
-            type: str
-        model_name:
-            description: The name of the model.
-            type: str
-        provider_name:
-            description: The model's provider name.
-            type: str
-        input_modalities:
-            description: The input modalities that the model supports.
-            type: list
-        output_modalities:
-            description: The output modalities that the model supports.
-            type: list
-        response_streaming_supported:
-            description: Indicates whether the model supports streaming.
-            type: bool
-        customizations_supported:
-            description: Whether the model supports fine-tuning or continual pre-training.
-            type: list
-        inference_types_supported:
-            description: The inference types that the model supports.
-            type: list
-        model_lifecycle:
-            description: Contains details about whether a model version is available or deprecated.
-            type: dict
-            contains:
-                status:
-                    description: Specifies whether a model version is available (ACTIVE) or deprecated (LEGACY).
-                    type: str
 """
 
 
@@ -161,6 +114,10 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from typing import Any
+from typing import Dict
+from typing import List
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -168,21 +125,20 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def _get_model_details(module, client, model_id):
+def _get_model_details(client, model_id: str) -> Dict[str, Any]:
     """
     Handles the get_foundation_model API call.
     """
-    response = client.get_foundation_model(modelId=model_id)
-    response_snake_case = camel_dict_to_snake_dict(response)
-
-    module.exit_json(changed=False, model_summary=response_snake_case.get("model_summary", {}))
+    response = client.get_foundation_model(modelIdentifier=model_id)
+    return camel_dict_to_snake_dict(response.get("modelDetails", {}))
 
 
-def _list_models_with_filters(module, client):
+def _list_models_with_filters(module: AnsibleAWSModule, client) -> List[Dict[str, Any]]:
     """
     Handles the list_foundation_models API call with optional filters.
     """
-    params = {}
+    params: Dict[str, Any] = {}
+
     if module.params.get("by_provider"):
         params["byProvider"] = module.params["by_provider"]
 
@@ -196,9 +152,7 @@ def _list_models_with_filters(module, client):
         params["byInferenceType"] = module.params["by_inference_type"]
 
     response = client.list_foundation_models(**params)
-    response_snake_case = camel_dict_to_snake_dict(response)
-
-    module.exit_json(changed=False, model_summaries=response_snake_case.get("model_summaries", []))
+    return [camel_dict_to_snake_dict(model) for model in response.get("modelSummaries", [])]
 
 
 def main():
@@ -217,6 +171,8 @@ def main():
         supports_check_mode=True,
     )
 
+    result = {}
+
     try:
         client = module.client("bedrock", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
@@ -225,9 +181,11 @@ def main():
     # Route the request based on whether a model_id was provided
     try:
         if module.params.get("model_id"):
-            _get_model_details(module, client, module.params["model_id"])
+            result = _get_model_details(client, module.params["model_id"])
         else:
-            _list_models_with_filters(module, client)
+            result = _list_models_with_filters(module, client)
+
+        module.exit_json(changed=False, foundation_model=result)
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
