@@ -1,0 +1,9 @@
+botocore
+boto3
+
+mock
+pytest
+pytest-forked
+pytest-mock
+pytest-xdist
+pytest-ansible

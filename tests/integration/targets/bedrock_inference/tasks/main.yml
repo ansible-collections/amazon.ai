@@ -14,8 +14,8 @@
       ansible.builtin.assert:
         that:
           - list_all_result is success
-          - list_all_result.foundation_model is defined
-          - list_all_result.foundation_model | length > 0
+          - list_all_result.foundation_models is defined
+          - list_all_result.foundation_models | length > 0
 
     - name: List models filtered by provider 'Amazon'
       amazon.ai.bedrock_foundation_models_info:
@@ -25,13 +25,13 @@
     - name: Assert that all models in the list are from the 'Amazon' provider
       ansible.builtin.assert:
         that:
-          - list_amazon_result.foundation_model | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.foundation_model | length
+          - list_amazon_result.foundation_models | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.foundation_models | length
         msg: "The list contains models from other providers, which is incorrect."
 
     - name: Extract an on-demand 'Nova Micro' model ID
       ansible.builtin.set_fact:
         amazon_model_summary: >-
-          {{ list_amazon_result.foundation_model
+          {{ list_amazon_result.foundation_models
             | selectattr('model_name', 'contains', 'Nova Micro')
             | selectattr('inference_types_supported', 'contains', 'ON_DEMAND')
             | first }}
@@ -64,9 +64,9 @@
     - name: Assert that the model was found
       ansible.builtin.assert:
         that:
-          - model_info.foundation_model is defined
-          - model_info.foundation_model.model_id is defined
-          - model_info.foundation_model.model_id == model_id
+          - model_info.foundation_models is defined
+          - model_info.foundation_models[0].model_id is defined
+          - model_info.foundation_models[0].model_id == model_id
     
     - name: Invoke the Bedrock model with a simple body (check_mode)
       amazon.ai.bedrock_invoke_model:

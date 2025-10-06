@@ -54,28 +54,24 @@ EXAMPLES = r"""
 - name: Get info for a specific model by ID
   amazon.ai.bedrock_foundation_models_info:
     model_id: 'anthropic.claude-v2'
-  register: claude_info
 
 - name: List only models from the 'anthropic' provider
   amazon.ai.bedrock_foundation_models_info:
     by_provider: 'Anthropic'
-  register: anthropic_models
 
 - name: List models that support 'IMAGE' output
   amazon.ai.bedrock_foundation_models_info:
     by_output_modality: 'IMAGE'
-  register: image_models
 
 - name: List models that support on-demand inference
   amazon.ai.bedrock_foundation_models_info:
     by_inference_type: 'ON_DEMAND'
-  register: on_demand_models
 """
 
 
 RETURN = r"""
-foundation_model:
-    description: A dictionary or a list of dictionaries, where each dictionary contains summary information for a foundation model.
+foundation_models:
+    description: A list of dictionaries, where each dictionary contains summary information for a foundation model.
     type: complex
     returned: success if no O(model_id) is provided
     contains:
@@ -118,41 +114,12 @@ from typing import Any
 from typing import Dict
 from typing import List
 
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_model_details
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_models_with_filters
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-
-
-def _get_model_details(client, model_id: str) -> Dict[str, Any]:
-    """
-    Handles the get_foundation_model API call.
-    """
-    response = client.get_foundation_model(modelIdentifier=model_id)
-    return camel_dict_to_snake_dict(response.get("modelDetails", {}))
-
-
-def _list_models_with_filters(module: AnsibleAWSModule, client) -> List[Dict[str, Any]]:
-    """
-    Handles the list_foundation_models API call with optional filters.
-    """
-    params: Dict[str, Any] = {}
-
-    if module.params.get("by_provider"):
-        params["byProvider"] = module.params["by_provider"]
-
-    if module.params.get("by_customization_type"):
-        params["byCustomizationType"] = module.params["by_customization_type"]
-
-    if module.params.get("by_output_modality"):
-        params["byOutputModality"] = module.params["by_output_modality"]
-
-    if module.params.get("by_inference_type"):
-        params["byInferenceType"] = module.params["by_inference_type"]
-
-    response = client.list_foundation_models(**params)
-    return [camel_dict_to_snake_dict(model) for model in response.get("modelSummaries", [])]
 
 
 def main():
@@ -171,7 +138,7 @@ def main():
         supports_check_mode=True,
     )
 
-    result = {}
+    result: List[Dict[str, Any]] = []
 
     try:
         client = module.client("bedrock", retry_decorator=AWSRetry.jittered_backoff())
@@ -181,11 +148,11 @@ def main():
     # Route the request based on whether a model_id was provided
     try:
         if module.params.get("model_id"):
-            result = _get_model_details(client, module.params["model_id"])
+            result.append(get_model_details(client, module.params["model_id"]))
         else:
-            result = _list_models_with_filters(module, client)
+            result = list_models_with_filters(module, client)
 
-        module.exit_json(changed=False, foundation_model=result)
+        module.exit_json(changed=False, foundation_models=result)
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
