@@ -1,0 +1,191 @@
+---
+- name: Amazon Bedrock Agent Alias integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+      register: agent_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        agent_role_arn: "{{ agent_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Waiting for IAM role to be fully propagated."
+
+    - name: Create Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_create_first_run
+
+    - name: Assert first run created the agent
+      ansible.builtin.assert:
+        that:
+          - agent_create_first_run.changed
+          - "'created successfully' in agent_create_first_run.msg"
+
+    - name: Save agent ID for subsequent tasks
+      ansible.builtin.set_fact:
+        agent_id: "{{ agent_create_first_run.agent.agent_id }}"
+
+    - name: Create Agent Alias (First Run - check_mode)
+      amazon.ai.bedrock_agent_alias:
+        state: present
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      check_mode: true
+      register: alias_result
+
+    - name: Assert result has changed (First Run - check_mode)
+      ansible.builtin.assert:
+        that:
+          - alias_result.changed
+          - "'Check mode: would have created agent alias' in alias_result.msg"
+
+    - name: Create Agent Alias (First Run)
+      amazon.ai.bedrock_agent_alias:
+        state: present
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      register: alias_result
+
+    - name: Assert result has changed (First Run)
+      ansible.builtin.assert:
+        that:
+          - alias_result.changed
+          - "'created successfully' in alias_result.msg"
+
+    - name: Save agent alias ID for subsequent tasks
+      ansible.builtin.set_fact:
+        agent_alias_id: "{{ alias_result.agent_alias.agent_alias_id }}"
+
+    - name: Create Agent Alias (Second Run - Idempotency Test - check_mode)
+      amazon.ai.bedrock_agent_alias:
+        state: present
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      check_mode: true
+      register: alias_result
+
+    - name: Assert second run was idempotent (Second Run - Idempotency Test - check_mode)
+      ansible.builtin.assert:
+        that:
+          - not alias_result.changed
+          - "'exists and can not be updated.' in alias_result.msg"
+
+    - name: Create Agent Alias (Second Run - Idempotency Test)
+      amazon.ai.bedrock_agent_alias:
+        state: present
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      register: alias_result
+
+    - name: Assert second run was idempotent (Second Run - Idempotency Test)
+      ansible.builtin.assert:
+        that:
+          - not alias_result.changed
+          - "'exists and can not be updated.' in alias_result.msg"
+    
+    - name: Get information about a specific agent alias
+      amazon.ai.bedrock_agent_alias_info:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      register: alias_info
+    
+    - name: Assert that agent alias exists
+      ansible.builtin.assert:
+        that:
+          - alias_info.agent_aliases is defined
+          - alias_info.agent_aliases | length > 0
+
+    - name: Get list of agent aliases
+      amazon.ai.bedrock_agent_alias_info:
+        agent_name: "{{ agent_name }}"
+      register: alias_list
+    
+    - name: Assert that agent aliases exist
+      ansible.builtin.assert:
+        that:
+          - alias_list.agent_aliases is defined
+          - alias_list.agent_aliases | length > 0
+    
+    - name: Delete Agent alias (First Run - check mode)
+      amazon.ai.bedrock_agent_alias:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+        state: absent
+      check_mode: true
+      register: delete_alias
+    
+    - name: Assert that Agent alias has been deleted (First Run - check_mode)
+      ansible.builtin.assert:
+        that:
+          - delete_alias.changed
+          - "'Check mode: would have deleted agent alias' in delete_alias.msg"
+    
+    - name: Delete Agent alias (First Run)
+      amazon.ai.bedrock_agent_alias:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+        state: absent
+      register: delete_alias
+    
+    - name: Assert that Agent alias has been deleted (First Run)
+      ansible.builtin.assert:
+        that:
+          - delete_alias.changed
+          - "'deleted successfully' in delete_alias.msg"
+    
+    - name: Delete Agent alias (Second Run - Idempotency)
+      amazon.ai.bedrock_agent_alias:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+        state: absent
+      register: delete_alias
+    
+    - name: Assert that Agent alias has been deleted (Second Run - Idempotency)
+      ansible.builtin.assert:
+        that:
+          - not delete_alias.changed
+          - "'Agent alias does not exist.' in delete_alias.msg"
+  always:
+    - name: Delete Agent alias
+      amazon.ai.bedrock_agent_alias:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Delete Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      ignore_errors: true
+
+    - name: Delete IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        state: absent
+        delete_instance_profile: true
+      ignore_errors: true

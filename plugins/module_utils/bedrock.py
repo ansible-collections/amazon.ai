@@ -115,6 +115,43 @@ def wait_for_agent_status(client, module, agent_id: str, status: str) -> None:
             raise
 
 
+def wait_for_alias_status(client, agent_id: str, alias_id: str, status: str) -> None:
+    """
+    Poll the Bedrock Agent alias until it reaches the specified status.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+        alias_id: The unique identifier of the alias to monitor.
+        status: The desired target status to wait for (e.g., "PREPARED", "DELETED").
+
+    Raises:
+        ClientError: If AWS returns an unexpected error during polling.
+        Exception: Re-raises any non-recoverable errors encountered during waiting.
+
+    Behavior:
+        - Repeatedly invokes `client.get_agent_alias()` to check the alias status.
+        - Waits 5 seconds between polling attempts to avoid API throttling.
+        - Gracefully handles cases where the alias might be deleted mid-wait:
+          exits silently if waiting for `"DELETED"`, otherwise re-raises the error.
+        - Blocks execution until the alias reaches the desired state.
+    """
+    while True:
+        try:
+            alias_info = client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)
+            current_status = alias_info["agentAlias"]["agentAliasStatus"]
+            if current_status == status:
+                break
+            time.sleep(5)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                if status == "DELETED":
+                    break
+                raise
+            else:
+                raise
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def _prepare_agent(client, module, agent_id: str) -> bool:
     """
@@ -171,6 +208,34 @@ def _get_agent(client, agent_id: str) -> Optional[Dict[str, Any]]:
     """
     try:
         return client.get_agent(agentId=agent_id)["agent"]
+    except ClientError as e:
+        if e.response["Error"]["Code"] == "ResourceNotFoundException":
+            return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _get_agent_alias(client, agent_id: str, alias_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific alias of a Bedrock Agent.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+        alias_id: The unique identifier of the alias.
+
+    Returns:
+        A dictionary containing the alias details if it exists, otherwise None.
+
+    Raises:
+        ClientError: If AWS returns an unexpected error other than 'ResourceNotFoundException'.
+
+    Behavior:
+        - Uses the `get_agent_alias()` API to fetch alias metadata.
+        - Retries up to 10 times with exponential backoff using the `@AWSRetry.jittered_backoff` decorator.
+        - Returns None if the alias does not exist (i.e., has been deleted or never created).
+    """
+    try:
+        return client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)["agentAlias"]
     except ClientError as e:
         if e.response["Error"]["Code"] == "ResourceNotFoundException":
             return None
