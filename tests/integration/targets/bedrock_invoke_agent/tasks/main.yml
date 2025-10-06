@@ -1,0 +1,153 @@
+---
+- name: Amazon Bedrock Agent Alias integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+      register: agent_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        agent_role_arn: "{{ agent_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+    
+    - name: Create Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_create_first_run
+
+    - name: Assert first run created the agent
+      ansible.builtin.assert:
+        that:
+          - agent_create_first_run.changed
+          - "'created successfully' in agent_create_first_run.msg"
+  
+    - name: Get info about a specific agent
+      amazon.ai.bedrock_agent_info:
+        agent_name: "{{ agent_name }}"
+      register: agent_details
+
+    - name: Assert agent is in PREPARED state
+      ansible.builtin.assert:
+        that:
+          - agent_details.agents is defined
+          - agent_details.agents[0].agent_status == 'PREPARED'
+    
+    - name: Save agent ID
+      ansible.builtin.set_fact:
+        agent_id: "{{ agent_details.agents[0].agent_id }}"
+
+    - name: Create Agent Alias
+      amazon.ai.bedrock_agent_alias:
+        state: present
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      register: alias_result
+    
+    - name: Assert that Agent alias has been created
+      ansible.builtin.assert:
+        that:
+          - alias_result.changed
+          - "'created successfully' in alias_result.msg"
+    
+    - name: Get information about a specific agent alias
+      amazon.ai.bedrock_agent_alias_info:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+      register: alias_info
+    
+    - name: Assert that agent alias exists
+      ansible.builtin.assert:
+        that:
+          - alias_info.agent_aliases is defined
+          - alias_info.agent_aliases | length == 1
+    
+    - name: Save agent alias ID for subsequent tasks
+      ansible.builtin.set_fact:
+        alias_id: "{{ alias_info.agent_aliases[0].agent_alias_id }}"
+    
+    - name: Invoke Bedrock agent (check_mode)
+      amazon.ai.bedrock_invoke_agent:
+        agent_id: "{{ agent_id }}"
+        agent_alias_id: "{{ alias_id }}"
+        input_text: "What is the current time?"
+      check_mode: true
+      register: inference_result
+
+    - name: Assert invoke Bedrock agent results (check_mode)
+      ansible.builtin.assert:
+        that:
+          - inference_result is not failed
+          - "'Check mode: Would have invoked the agent.' in inference_result.msg"
+    
+    - name: Invoke Bedrock agent
+      amazon.ai.bedrock_invoke_agent:
+        agent_id: "{{ agent_id }}"
+        agent_alias_id: "{{ alias_id }}"
+        input_text: "What is the current time?"
+      register: inference_result
+
+    - name: Assert invoke Bedrock agent results
+      ansible.builtin.assert:
+        that:
+          - inference_result is not failed
+          - inference_result.session_id is defined
+          - inference_result.response_text is defined
+          - inference_result.raw_api_response | type_debug == 'list'
+
+    - name: Invoke Bedrock agent with same session and end it
+      amazon.ai.bedrock_invoke_agent:
+        agent_id: "{{ agent_id }}"
+        agent_alias_id: "{{ alias_id }}"
+        session_id: "{{ inference_result.session_id }}"
+        input_text: "Goodbye!"
+        end_session: true
+      register: inference_end
+
+    - name: Assert session reused and ended
+      ansible.builtin.assert:
+        that:
+          - inference_end.session_id == inference_result.session_id
+          - inference_end.response_text is defined
+  always:
+    - name: Delete Agent alias
+      amazon.ai.bedrock_agent_alias:
+        agent_name: "{{ agent_name }}"
+        alias_name: "{{ alias_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Delete Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      ignore_errors: true
+
+    - name: Delete IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        state: absent
+        delete_instance_profile: true
+      ignore_errors: true
