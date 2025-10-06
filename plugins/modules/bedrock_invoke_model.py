@@ -182,7 +182,7 @@ def build_optional_params(module: AnsibleAWSModule) -> Dict[str, Any]:
     if module.params["performance_config_latency"] != "standard":
         if not module.require_boto3_at_least("1.35.8"):
             module.warn(
-                "performance_config_latency and guardrail_version require botocore >= 1.35.8. performance_config_latency and guardrail_version will be ignored."
+                "performance_config_latency requires botocore >= 1.35.8. performance_config_latency will be ignored."
             )
         else:
             params["performanceConfigLatency"] = module.params["performance_config_latency"]
