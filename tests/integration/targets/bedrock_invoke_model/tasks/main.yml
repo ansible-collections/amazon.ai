@@ -1,4 +1,4 @@
-- name: Amazon Bedrock Inference integration tests
+- name: Amazon Bedrock Invoke Model integration tests
   module_defaults:
     group/amazon.ai.aws:
       access_key: "{{ aws_access_key }}"
