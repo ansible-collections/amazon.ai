@@ -1,0 +1,109 @@
+- name: Amazon Bedrock Invoke Model integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:   
+    - name: List all foundation models without filters
+      amazon.ai.bedrock_foundation_models_info:
+      register: list_all_result
+
+    - name: The task ran successfully and returned a list
+      ansible.builtin.assert:
+        that:
+          - list_all_result is success
+          - list_all_result.foundation_models is defined
+          - list_all_result.foundation_models | length > 0
+
+    - name: List models filtered by provider 'Amazon'
+      amazon.ai.bedrock_foundation_models_info:
+        by_provider: 'Amazon'
+      register: list_amazon_result
+
+    - name: Assert that all models in the list are from the 'Amazon' provider
+      ansible.builtin.assert:
+        that:
+          - list_amazon_result.foundation_models | selectattr('provider_name', 'equalto', 'Amazon') | list | length == list_amazon_result.foundation_models | length
+        msg: "The list contains models from other providers, which is incorrect."
+
+    - name: Extract an on-demand 'Nova Micro' model ID
+      ansible.builtin.set_fact:
+        amazon_model_summary: >-
+          {{ list_amazon_result.foundation_models
+            | selectattr('model_name', 'contains', 'Nova Micro')
+            | selectattr('inference_types_supported', 'contains', 'ON_DEMAND')
+            | first }}
+
+    - name: Assert that a valid 'Nova Micro' on-demand model was found
+      ansible.builtin.assert:
+        that:
+          - amazon_model_summary is defined
+          - amazon_model_summary.model_id is defined
+          - "'ON_DEMAND' in amazon_model_summary.inference_types_supported"
+        msg: "Could not find an on-demand Nova Micro model. Your AWS account may not have access."
+
+    - name: Extract a model_id from the filtered list
+      ansible.builtin.set_fact:
+        model_id: "{{ amazon_model_summary.model_id }}"
+    
+    - name: Prepare request body
+      ansible.builtin.set_fact:
+        request_body:
+          {
+            "messages": [{"role": "user", "content": [{"text": test_prompt}]}],
+            "inferenceConfig": {"maxTokens": 50}
+          }
+
+    - name: Get detailed information about the model
+      amazon.ai.bedrock_foundation_models_info:
+        model_id: "{{ model_id }}"
+      register: model_info
+    
+    - name: Assert that the model was found
+      ansible.builtin.assert:
+        that:
+          - model_info.foundation_models is defined
+          - model_info.foundation_models[0].model_id is defined
+          - model_info.foundation_models[0].model_id == model_id
+    
+    - name: Invoke the Bedrock model with a simple body (check_mode)
+      amazon.ai.bedrock_invoke_model:
+        model_id: "{{ model_id }}"
+        body: "{{ request_body }}"
+        content_type: "application/json"
+        accept: "application/json"
+      check_mode: true
+      register: inference_result
+
+    - name: Assert the task ran successfully (check_mode)
+      ansible.builtin.assert:
+        that:
+          - inference_result is success
+          - inference_result is changed
+        msg: "The bedrock_inference task did not succeed or did not report a change."
+
+    - name: Invoke the Bedrock model with a simple body
+      amazon.ai.bedrock_invoke_model:
+        model_id: "{{ model_id }}"
+        body: "{{ request_body }}"
+        content_type: "application/json"
+        accept: "application/json"
+      register: inference_result
+
+    - name: Assert the task ran successfully
+      ansible.builtin.assert:
+        that:
+          - inference_result is success
+          - inference_result is changed
+        msg: "The bedrock_inference task did not succeed or did not report a change."
+
+    - name: Assert inference ran successfully
+      ansible.builtin.assert:
+        that:
+          - inference_result is success
+          - inference_result is changed
+          - inference_result.raw_response is defined
+          - inference_result.completion is defined
+          - inference_result.model_id == model_id
