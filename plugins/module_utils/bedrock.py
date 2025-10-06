@@ -138,6 +138,43 @@ def wait_for_agent_status(client, module, agent_id: str, status: str, sleep_time
     )
 
 
+def wait_for_alias_status(client, agent_id: str, alias_id: str, status: str) -> None:
+    """
+    Poll the Bedrock Agent alias until it reaches the specified status.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique identifier of the Bedrock Agent.
+        alias_id: The unique identifier of the alias to monitor.
+        status: The desired target status to wait for (e.g., "PREPARED", "DELETED").
+
+    Raises:
+        ClientError: If AWS returns an unexpected error during polling.
+        Exception: Re-raises any non-recoverable errors encountered during waiting.
+
+    Behavior:
+        - Repeatedly invokes `client.get_agent_alias()` to check the alias status.
+        - Waits 5 seconds between polling attempts to avoid API throttling.
+        - Gracefully handles cases where the alias might be deleted mid-wait:
+          exits silently if waiting for `"DELETED"`, otherwise re-raises the error.
+        - Blocks execution until the alias reaches the desired state.
+    """
+    while True:
+        try:
+            alias_info = client.get_agent_alias(agentId=agent_id, agentAliasId=alias_id)
+            current_status = alias_info["agentAlias"]["agentAliasStatus"]
+            if current_status == status:
+                break
+            time.sleep(5)
+        except ClientError as e:
+            if e.response["Error"]["Code"] == "ResourceNotFoundException":
+                if status == "DELETED":
+                    break
+                raise
+            else:
+                raise
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def prepare_agent(client, module, agent_id: str) -> bool:
     """
@@ -414,7 +451,11 @@ def wait_for_alias_status(
 
 
 @AWSRetry.jittered_backoff(retries=10)
+<<<<<<< HEAD
 def get_agent_alias(client, agent_id: str, alias_id: str) -> Optional[Dict[str, Any]]:
+=======
+def _get_agent_alias(client, agent_id: str, alias_id: str) -> Optional[Dict[str, Any]]:
+>>>>>>> 4e6c0fa (Add bedrock_agent_alias and bedrock_agent_alias_info modules)
     """
     Retrieve details for a specific alias of a Bedrock Agent.
 
