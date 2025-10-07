@@ -67,44 +67,56 @@ def list_models_with_filters(module: AnsibleAWSModule, client) -> List[Dict[str,
     return [camel_dict_to_snake_dict(model) for model in response.get("modelSummaries", [])]
 
 
-def wait_for_agent_status(client, agent_id: str, status: str) -> None:
+def wait_for_agent_status(client, module, agent_id: str, status: str) -> None:
     """
-    Poll the Bedrock Agent until it reaches the specified status.
-
-    Args:
-        client: The boto3 Bedrock Agent client.
-        agent_id: The unique identifier of the Bedrock Agent.
-        status: The desired target status to wait for (e.g., "PREPARED", "DELETED").
-
-    Raises:
-        ClientError: If AWS returns an unexpected error during polling.
-        Exception: Re-raises any non-recoverable errors encountered during waiting.
+    Poll the Bedrock Agent until it reaches the specified status or timeout expires.
 
     Behavior:
         - Repeatedly checks the agent's current status using `client.get_agent()`.
         - Sleeps for 5 seconds between polling attempts.
-        - Gracefully handles cases where the agent is deleted while waiting,
-          only exiting silently if the desired status is `"DELETED"`.
+        - Stops polling once the agent reaches the desired status.
+        - Gracefully handles cases where the agent is deleted while waiting:
+          exits silently if the desired status is "DELETED".
+        - Raises a TimeoutError if the desired status is not reached within wait_timeout.
+
+    Args:
+        client: boto3 Bedrock Agent client.
+        agent_id: Agent ID to poll.
+        status: Target agent status to wait for.
+        wait_timeout: Max seconds to wait before timing out (default: 600).
+
+    Raises:
+        TimeoutError: If timeout expires before reaching target status.
+        ClientError: If AWS returns unexpected error.
     """
+    start_time = time.time()
+    wait_timeout = module.params["wait_timeout"]
+
     while True:
         try:
             current_status = client.get_agent(agentId=agent_id)["agent"]["agentStatus"]
+
             if current_status == status:
                 break
+
+            if time.time() - start_time > wait_timeout:
+                module.fail_json(
+                    msg=f"Timeout waiting for agent {agent_id} to reach status '{status}'. "
+                    f"Last known status: '{current_status}'."
+                )
+
             time.sleep(5)
+
         except ClientError as e:
             if e.response["Error"]["Code"] == "ResourceNotFoundException":
-                # Handle cases where the agent might be deleted during wait
                 if status == "DELETED":
                     break
-                # Or re-raise the error if it's an unexpected deletion
                 raise
-            else:
-                raise
+            raise
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def _prepare_agent(client, agent_id: str) -> bool:
+def _prepare_agent(client, module, agent_id: str) -> bool:
     """
     Prepare a Bedrock Agent and wait until it reaches the 'PREPARED' state.
 
@@ -121,7 +133,7 @@ def _prepare_agent(client, agent_id: str) -> bool:
         - Retries automatically using the AWS jittered backoff decorator.
     """
     client.prepare_agent(agentId=agent_id)
-    wait_for_agent_status(client, agent_id, "PREPARED")
+    wait_for_agent_status(client, module, agent_id, "PREPARED")
 
     return True
 
@@ -221,22 +233,21 @@ def _list_agent_aliases(client, **params: Any) -> List[Dict[str, Any]]:
     return paginator.paginate(**params).build_full_result()["agentAliasSummaries"]
 
 
-def find_agent(client, module) -> Optional[Dict[str, Any]]:
+def find_agent(client, module) -> List[Dict[str, Any]]:
     """
-    Find a specific Bedrock Agent by name, or list all available agents.
+    Find Bedrock Agents, optionally filtering by name.
 
     Args:
         client: The boto3 Bedrock Agent client.
         module: The Ansible module instance containing user parameters.
 
     Returns:
-        - A dictionary with details for the matching agent if found.
-        - A list of all agent detail dictionaries if no name was provided.
-        - None if the specified agent name does not exist.
+        List of agent detail dictionaries. Empty list if none are found.
 
     Behavior:
         - Uses `_list_agents()` to enumerate all agents.
-        - If `agent_name` is provided in module params, filters for a name match.
+        - If `agent_name` is provided in module params, returns a list
+          containing only the matching agent (if found), or an empty list.
         - If no name is given, returns detailed info for all agents.
     """
     agent_name: Optional[str] = module.params.get("agent_name")
@@ -248,8 +259,8 @@ def find_agent(client, module) -> Optional[Dict[str, Any]]:
     if agent_name:
         for agent_summary in agents_list:
             if agent_summary["agentName"] == agent_name:
-                return _get_agent(client, agent_summary["agentId"])
-        return None  # Return None if the specific agent is not found
+                return [_get_agent(client, agent_summary["agentId"])]
+        return []  # Empty list if no match found
     else:
         # Return a list of all agents with their detailed information
         return [_get_agent(client, agent["agentId"]) for agent in agents_list]

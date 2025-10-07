@@ -209,7 +209,7 @@ def main():
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
-        required_if=[("list_action_groups", "True", ["agent_version"])],
+        required_if=[("list_action_groups", True, ["agent_version"])],
     )
 
     agent_name: Optional[str] = module.params.get("agent_name")
@@ -222,18 +222,15 @@ def main():
     result: List[Dict[str, Any]] = []
 
     try:
+        agents: List[Dict[str, Any]] = find_agent(client, module)
+        # Filter by agent_name if provided
         if agent_name:
-            # Find a single agent by name
-            agent_details: Optional[Dict[str, Any]] = find_agent(client, module)
-            if agent_details:
-                result.append(_add_related_info(client, module, agent_details))
+            filtered_agents = [a for a in agents if a.get("agentName") == agent_name]
         else:
-            # List all agents
-            agents_list: List[Dict[str, Any]] = find_agent(client, module)
+            filtered_agents = agents
 
-            # Fetch and add related info for each agent
-            for agent_summary in agents_list:
-                result.append(_add_related_info(client, module, agent_summary))
+        for agent in filtered_agents:
+            result.append(_add_related_info(client, module, agent))
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)

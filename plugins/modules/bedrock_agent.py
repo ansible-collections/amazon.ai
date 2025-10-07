@@ -27,7 +27,7 @@ options:
         required: true
     new_agent_name:
         description:
-            - The new name to assing to the agent.
+            - The new name to assign to the agent.
         type: str
     orchestration_type:
         description:
@@ -118,10 +118,24 @@ options:
             - Tags cannot be modified. They are only applied when a new Amazon Bedrock Agent is created.
         type: dict
         aliases: ["resource_tags"]
+    wait_timeout:
+        description:
+            - Specifies the maximum amount of time, in seconds, that the module should wait
+              for the requested operation on the Bedrock Agent to complete before timing out.
+            - This applies to operations that may take time to reach a stable state, such as
+              creating, or updating an agent.
+            - During this period, the module will poll the agent's status at regular intervals
+              to detect when the operation has completed.
+            - If the agent does not reach the desired state within this timeout, the module
+              will fail.
+            - Increasing this value may be useful for slower or heavily loaded environments,
+              while decreasing it can make the module fail faster when quick feedback is desired.
+        default: 600
+        type: int
 extends_documentation_fragment:
-    - amazon.aws.common.modules
-    - amazon.aws.region.modules
-    - amazon.aws.boto3
+- amazon.aws.common.modules
+- amazon.aws.region.modules
+- amazon.aws.boto3
 """
 
 
@@ -247,6 +261,7 @@ except ImportError:
 
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Optional
 from typing import Tuple
 
@@ -295,8 +310,9 @@ def _create_agent(module: AnsibleAWSModule, client) -> Tuple[bool, Optional[str]
     camel_params = snake_dict_to_camel_dict(scrub_none_parameters(params))
     new_agent = client.create_agent(**camel_params)
     agent_id: str = new_agent["agent"]["agentId"]
-    wait_for_agent_status(client, agent_id, "NOT_PREPARED")
-    _prepare_agent(client, agent_id)
+
+    wait_for_agent_status(client, module, agent_id, "NOT_PREPARED")
+    _prepare_agent(client, module, agent_id)
 
     return changed, agent_id, f"Agent {module.params['agent_name']} created successfully."
 
@@ -355,14 +371,14 @@ def _update_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, An
 
         needs_update["agentId"] = existing_agent_id
         client.update_agent(**needs_update)
-        _prepare_agent(client, existing_agent_id)
+        _prepare_agent(client, module, existing_agent_id)
     else:
         return changed, existing_agent_id, "No updates needed."
 
     return changed, existing_agent_id, f"Agent {existing_agent['agentName']} updated successfully."
 
 
-def _delete_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> None:
+def _delete_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> Tuple[bool, str]:
     """
     Deletes an existing agent.
 
@@ -372,16 +388,16 @@ def _delete_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, An
         existing_agent: dict of existing agent details.
 
     Returns:
-        (changed, agent_id, message)
+        (changed, message)
     """
     if module.check_mode:
-        return True, None, f"Check mode: would have deleted agent '{existing_agent['agentName']}'."
+        return True, f"Check mode: would have deleted agent '{existing_agent['agentName']}'."
 
     if existing_agent["agentStatus"] == "DELETING":
-        return False, None, f"Agent {existing_agent['agentName']} in DELETING state."
+        return False, f"Agent {existing_agent['agentName']} in DELETING state."
 
     client.delete_agent(agentId=existing_agent["agentId"])
-    return True, None, f"Agent {existing_agent['agentName']} deleted successfully."
+    return True, f"Agent {existing_agent['agentName']} deleted successfully."
 
 
 def main():
@@ -395,6 +411,7 @@ def main():
         orchestration_type=dict(type="str", default="DEFAULT", choices=["DEFAULT", "CUSTOM_ORCHESTRATION"]),
         tags=dict(type="dict", aliases=["resource_tags"]),
         agent_collaboration=dict(type="str", choices=["SUPERVISOR", "SUPERVISOR_ROUTER", "DISABLED"]),
+        wait_timeout=dict(type="int", default=600, required=False),
         prompt_override_configuration=dict(
             type="dict",
             options=dict(
@@ -439,7 +456,8 @@ def main():
 
     changed: bool = False
     result: Dict[str, Any] = dict(agent={})
-    existing_agent: Dict[str, Any] = find_agent(client, module)
+    agents: List[Dict[str, Any]] = find_agent(client, module)
+    existing_agent: Optional[Dict[str, Any]] = agents[0] if agents else None
 
     try:
         if state == "present":
@@ -457,7 +475,7 @@ def main():
         elif state == "absent":
             if existing_agent:
                 # Delete existing agent
-                changed, agent_id, msg = _delete_agent(module, client, existing_agent)
+                changed, msg = _delete_agent(module, client, existing_agent)
                 result["msg"] = msg
             else:
                 result["msg"] = "Agent does not exist."
