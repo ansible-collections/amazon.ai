@@ -5,7 +5,8 @@
       secret_key: "{{ aws_secret_key }}"
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
-  block:   
+  block:
+    # Test 
     - name: List all foundation models without filters
       amazon.ai.bedrock_foundation_models_info:
       register: list_all_result
