@@ -1,0 +1,205 @@
+---
+- name: Amazon Bedrock integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+      register: agent_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        agent_role_arn: "{{ agent_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Waiting for IAM role to be fully propagated."
+
+    - name: Create Bedrock Agent (First Run - check_mode)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      check_mode: true
+      register: agent_create_first_run
+
+    - name: Assert first run created the agent (First Run - check_mode)
+      ansible.builtin.assert:
+        that:
+          - agent_create_first_run.changed
+          - "'would have created agent' in agent_create_first_run.msg"
+
+    - name: Create Bedrock Agent (First Run)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_create_first_run
+
+    - name: Assert first run created the agent (First Run)
+      ansible.builtin.assert:
+        that:
+          - agent_create_first_run.changed
+          - "'created successfully' in agent_create_first_run.msg"
+
+    - name: Save agent ID for subsequent tasks
+      ansible.builtin.set_fact:
+        agent_id: "{{ agent_create_first_run.agent.agent_id }}"
+
+    - name: Get info about a specific agent
+      amazon.ai.bedrock_agent_info:
+        agent_name: "{{ agent_name }}"
+      register: agent_details
+
+    - name: Assert agent is in PREPARED state
+      ansible.builtin.assert:
+        that:
+          - agent_details.agents is defined
+          - agent_details.agents[0].agent_status == 'PREPARED'
+
+    - name: Create Bedrock Agent (Second Run - Idempotency Test - check_mode)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      check_mode: true
+      register: agent_create_second_run
+
+    - name: Assert second run was idempotent (Second Run - Idempotency Test - check_mode)
+      ansible.builtin.assert:
+        that:
+          - not agent_create_second_run.changed
+          - agent_create_second_run.msg is search("No updates needed.")
+
+    - name: Create Bedrock Agent (Second Run - Idempotency Test)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "{{ instruction }}"
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_create_second_run
+
+    - name: Assert second run was idempotent (Second Run - Idempotency Test)
+      ansible.builtin.assert:
+        that:
+          - not agent_create_second_run.changed
+          - agent_create_second_run.msg is search("No updates needed.")
+
+    - name: Update Bedrock Agent (First Run - check_mode)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "You are a friendly chat bot that provides helpful information and assistance to users. Please take in consideration this new instruction."
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      check_mode: true
+      register: agent_update_first_run
+
+    - name: Assert agent has been updated (First Run - check_mode)
+      ansible.builtin.assert:
+        that:
+        - agent_update_first_run.changed
+        - "'would have updated agent' in agent_update_first_run.msg"
+
+    - name: Update Bedrock Agent (First Run)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "You are a friendly chat bot that provides helpful information and assistance to users. Please take in consideration this new instruction."
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_update_first_run
+
+    - name: Assert agent has been updated (First Run)
+      ansible.builtin.assert:
+        that:
+        - agent_update_first_run.changed
+        - "'updated successfully' in agent_update_first_run.msg"
+
+    - name: Update Bedrock Agent (Second Run - Idempotency)
+      amazon.ai.bedrock_agent:
+        state: present
+        agent_name: "{{ agent_name }}"
+        foundation_model: "{{ foundation_model }}"
+        instruction: "You are a friendly chat bot that provides helpful information and assistance to users. Please take in consideration this new instruction."
+        agent_resource_role_arn: "{{ agent_role_arn }}"
+      register: agent_update_second_run
+
+    - name: Assert agent has been updated (Second Run - Idempotency)
+      ansible.builtin.assert:
+        that:
+        - not agent_update_second_run.changed
+        - agent_update_second_run.msg is search("No updates needed.")
+
+    - name: Delete a Bedrock Agent (First Run - check_mode)
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      check_mode: true
+      register: agent_delete_first_run
+
+    - name: Assert first run deleted the agent (First Run - check_mode)
+      ansible.builtin.assert:
+        that:
+          - agent_delete_first_run.changed
+          - "'Check mode: would have deleted agent' in agent_delete_first_run.msg"
+
+    - name: Delete a Bedrock Agent (First Run)
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      register: agent_delete_first_run
+
+    - name: Assert first run deleted the agent (First Run)
+      ansible.builtin.assert:
+        that:
+          - agent_delete_first_run.changed
+          - "'deleted successfully' in agent_delete_first_run.msg"
+
+    - name: Delete a Bedrock Agent (Second Run - Idempotency)
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      register: agent_delete_second_run
+
+    - name: Assert second run deleted the agent (Second Run - Idempotency)
+      ansible.builtin.assert:
+        that:
+          - not agent_delete_second_run.changed
+          - "'in DELETING state.' in agent_delete_second_run.msg"
+
+  always:
+    - name: Delete Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
+      ignore_errors: true
+
+    - name: Delete IAM role for Bedrock Agent
+      amazon.aws.iam_role:
+        name: "{{ agent_role_name }}"
+        state: absent
+        delete_instance_profile: true
+      ignore_errors: true
