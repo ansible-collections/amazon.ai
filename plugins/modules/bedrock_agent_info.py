@@ -248,37 +248,37 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agen
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_action_groups
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_aliases
+from ansible_collections.amazon.aws.plugins.module_utils.bedrock import find_agent
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_action_groups
-from ansible_collections.amazon.aws.plugins.module_utils.bedrock import _list_agent_aliases 
 
 
 def _add_related_info(client, module, agent_info):
     """
     Helper function to add action groups and aliases to an agent's info.
-    
+
     Args:
         client: The Boto3 client.
         module: The Ansible module object.
         agent_info: A dictionary containing the agent's summary or details.
-    
+
     Returns:
         The updated agent_info dictionary.
     """
-    list_action_groups = module.params.get('list_action_groups')
-    list_aliases = module.params.get('list_aliases')
-    
-    agent_id = agent_info.get('agentId')
-    
+    list_action_groups = module.params.get("list_action_groups")
+    list_aliases = module.params.get("list_aliases")
+
+    agent_id = agent_info.get("agentId")
+
     if list_action_groups:
-        agent_info['actionGroups'] = _list_agent_action_groups(client, agentId=agent_id, agentVersion='DRAFT')
-        
+        agent_info["actionGroups"] = _list_agent_action_groups(client, agentId=agent_id, agentVersion="DRAFT")
+
     if list_aliases:
-        agent_info['aliases'] = _list_agent_aliases(client, agentId=agent_id)
-        
+        agent_info["aliases"] = _list_agent_aliases(client, agentId=agent_id)
+
     return agent_info
 
 

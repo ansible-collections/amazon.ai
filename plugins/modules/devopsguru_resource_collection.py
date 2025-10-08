@@ -164,91 +164,16 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import add_notification_channel
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_tags
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-
-
-def update_tags(
-    current_tags: List[Dict[str, Any]],
-    new_tags: List[Dict[str, Any]],
-    state: str = "present",
-) -> Tuple[bool, List[Dict[str, Any]]]:
-    """
-    Updates the tags list by adding, updating, or removing tags and TagValues based on the state.
-
-    :param current_tags: The existing list of tags to update.
-    :param new_tags: The list of new tags to process.
-    :param state: Determines whether to add ("present") or remove ("absent") tags.
-    :return: A dictionary with 'update' (bool) and 'tags' (new updated list of tags).
-    """
-    updated_tags = current_tags[:]
-    update = False
-
-    for new_tag in new_tags:
-        app_boundary_key = new_tag.get("app_boundary_key")
-        new_tag_values = new_tag.get("tag_values", [])
-
-        # Find the tag with the same AppBoundaryKey
-        matching_tag = next(
-            (tag for tag in updated_tags if tag.get("AppBoundaryKey") == app_boundary_key),
-            None,
-        )
-
-        if state == "present":
-            if matching_tag:
-                # Add missing TagValues
-                if matching_tag["TagValues"] != new_tag_values:
-                    matching_tag["TagValues"] = new_tag_values
-                    update = True
-            else:
-                # If no matching AppBoundaryKey, add the new tag
-                updated_tags.append({"AppBoundaryKey": app_boundary_key, "TagValues": new_tag_values})
-                update = True
-
-        elif state == "absent" and matching_tag:
-            # If TagValues match and we want to remove them, remove the tag
-            if matching_tag["TagValues"] == new_tag_values:
-                updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
-                update = True
-            else:
-                # If TagValues don't match, just update the tag with remaining values
-                matching_tag["TagValues"] = [
-                    value for value in matching_tag["TagValues"] if value not in new_tag_values
-                ]
-                if not matching_tag["TagValues"]:
-                    updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
-                update = True
-
-    return update, updated_tags
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _get_resource_collection(client, module) -> Dict[str, Any]:
-    stack_names = module.params.get("cloudformation_stack_names")
-    tags = module.params.get("tags")
-    params = {}
-    if stack_names is not None:
-        params["ResourceCollectionType"] = "AWS_CLOUD_FORMATION"
-    elif tags is not None:
-        params["ResourceCollectionType"] = "AWS_TAGS"
-
-    try:
-        paginator = client.get_paginator("get_resource_collection")
-        return paginator.paginate(**params).build_full_result()["ResourceCollection"]
-    except is_boto3_error_code("ResourceNotFoundException"):
-        return {}
-
-
-def update_resource_collection(client, **params) -> Dict[str, Any]:
-    return client.update_resource_collection(**params)
-
-
-def add_notification_channel(client, config: Dict[str, Any]):
-    client.add_notification_channel(**{"Config": config})
 
 
 def main() -> None:
@@ -278,7 +203,7 @@ def main() -> None:
     params = {"ResourceCollection": {}}
 
     try:
-        resource_collection = _get_resource_collection(client, module)
+        resource_collection = get_resource_collection(client, module)
         if resource_collection and (
             resource_collection.get("CloudFormation", {}).get("StackNames", []) or resource_collection.get("Tags", [])
         ):
@@ -327,7 +252,7 @@ def main() -> None:
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
-    module.exit_json(changed=changed, **camel_dict_to_snake_dict(_get_resource_collection(client, module)))
+    module.exit_json(changed=changed, **camel_dict_to_snake_dict(get_resource_collection(client, module)))
 
 
 if __name__ == "__main__":

@@ -3,8 +3,10 @@
 
 
 import json
+import datetime
 from typing import Any
 from typing import Dict
+from typing import List
 from typing import Union
 
 
@@ -55,3 +57,36 @@ def extract_completion(response_body: Union[Dict[str, Any], str]) -> Union[str, 
             except (KeyError, IndexError, TypeError):
                 return None
     return str(response_body) if isinstance(response_body, str) else None
+
+
+def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
+    """Merges data into a dictionary or list of dictionaries."""
+    if isinstance(target, dict):
+        target.update(source)
+    elif isinstance(target, list):
+        for item in target:
+            item.update(source)
+
+
+def convert_time_ranges(status_filter):
+    """Convert FromTime and ToTime to datetime objects for time ranges."""
+
+    def convert_time(date_str, set_midnight=False):
+        """Helper function to convert date string to datetime, optionally set to midnight."""
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        if set_midnight:
+            dt = dt.replace(hour=0, minute=0, second=0)
+        return dt
+
+    for key in status_filter:
+        if isinstance(status_filter[key], dict):
+            for time_range_key in ["EndTimeRange", "start_time_range"]:
+                if time_range_key in status_filter[key]:
+                    for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
+                        if time_key in status_filter[key][time_range_key]:
+                            # Determine if "ToTime"/"to_time" should have midnight set
+                            set_midnight = time_key.lower() == "to_time" or time_key.lower() == "to_time"
+                            status_filter[key][time_range_key][time_key] = convert_time(
+                                status_filter[key][time_range_key][time_key],
+                                set_midnight,
+                            )

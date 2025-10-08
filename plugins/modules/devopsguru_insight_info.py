@@ -334,85 +334,23 @@ reactive_insight:
 """
 
 
-from datetime import datetime
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Union
-
 try:
     import botocore
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import describe_insight
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import fetch_data
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_insight_type
+from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
+from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _fetch_data(client, api_call: str, **params: Dict[str, Any]) -> Dict[str, Any]:
-    """Generic function to fetch data using paginators."""
-    paginator = client.get_paginator(api_call)
-    return paginator.paginate(**params).build_full_result()
-
-
-def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[str, Any]:
-    params: Dict[str, Any] = {"Id": insight_id}
-    if account_id:
-        params["AccountId"] = account_id
-
-    return client.describe_insight(**params)
-
-
-def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
-    possible_keys = [
-        "ProactiveInsight",
-        "ReactiveInsight",
-        "ProactiveInsights",
-        "ReactiveInsights",
-    ]
-    try:
-        key = next(key for key in possible_keys if key in data)
-        return key
-    except StopIteration:
-        return None
-
-
-def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
-    """Merges data into a dictionary or list of dictionaries."""
-    if isinstance(target, dict):
-        target.update(source)
-    elif isinstance(target, list):
-        for item in target:
-            item.update(source)
-
-
-def convert_time_ranges(status_filter):
-    """Convert FromTime and ToTime to datetime objects for time ranges."""
-
-    def convert_time(date_str, set_midnight=False):
-        """Helper function to convert date string to datetime, optionally set to midnight."""
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
-        if set_midnight:
-            dt = dt.replace(hour=0, minute=0, second=0)
-        return dt
-
-    for key in status_filter:
-        if isinstance(status_filter[key], dict):
-            for time_range_key in ["EndTimeRange", "start_time_range"]:
-                if time_range_key in status_filter[key]:
-                    for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
-                        if time_key in status_filter[key][time_range_key]:
-                            # Determine if "ToTime"/"to_time" should have midnight set
-                            set_midnight = time_key.lower() == "to_time" or time_key.lower() == "to_time"
-                            status_filter[key][time_range_key][time_key] = convert_time(
-                                status_filter[key][time_range_key][time_key],
-                                set_midnight,
-                            )
 
 
 def main() -> None:
@@ -448,7 +386,7 @@ def main() -> None:
         insight_info = (
             describe_insight(client, insight_id, account_id)
             if insight_id
-            else _fetch_data(client, "list_insights", StatusFilter=status_filter)
+            else fetch_data(client, "list_insights", StatusFilter=status_filter)
         )
         insight_type = get_insight_type(insight_info)
         if insight_type:
