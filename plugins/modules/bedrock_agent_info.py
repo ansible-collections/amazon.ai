@@ -160,9 +160,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_action_groups
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_aliases
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agent_action_groups
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agent_aliases
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -190,10 +190,10 @@ def _add_related_info(client, module: AnsibleAWSModule, agent_info: Dict[str, An
     agent_id: str = agent_info.get("agentId")
 
     if list_action_groups:
-        agent_info["actionGroups"] = _list_agent_action_groups(client, agentId=agent_id, agentVersion=agent_version)
+        agent_info["actionGroups"] = list_agent_action_groups(client, agentId=agent_id, agentVersion=agent_version)
 
     if list_aliases:
-        agent_info["aliases"] = _list_agent_aliases(client, agentId=agent_id)
+        agent_info["aliases"] = list_agent_aliases(client, agentId=agent_id)
 
     return agent_info
 

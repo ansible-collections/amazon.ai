@@ -263,141 +263,18 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _prepare_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_agent
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_agent_status
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import update_agent
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
-
-
-def _create_agent(module: AnsibleAWSModule, client) -> Tuple[bool, Optional[str], str]:
-    """
-    Creates a new agent if not in check_mode, otherwise simulates creation.
-
-    Args:
-        module: The AnsibleAWSModule instance.
-        client: boto3 bedrock-agent client.
-
-    Returns:
-        (changed, agent_id, message)
-    """
-    changed: bool = True
-
-    if module.check_mode:
-        return changed, None, f"Check mode: would have created agent {module.params['agent_name']}."
-
-    params: Dict[str, Any] = {
-        "agent_name": module.params["agent_name"],
-        "foundation_model": module.params["foundation_model"],
-        "instruction": module.params["instruction"],
-        "agent_resource_role_arn": module.params["agent_resource_role_arn"],
-        "orchestration_type": module.params["orchestration_type"],
-        "tags": module.params.get("tags"),
-        "agent_collaboration": module.params.get("agent_collaboration"),
-        "prompt_override_configuration": module.params.get("prompt_override_configuration"),
-    }
-
-    # Convert snake_case to camelCase for AWS API
-    camel_params = snake_dict_to_camel_dict(scrub_none_parameters(params))
-    new_agent = client.create_agent(**camel_params)
-    agent_id: str = new_agent["agent"]["agentId"]
-
-    wait_for_agent_status(client, module, agent_id, "NOT_PREPARED")
-    _prepare_agent(client, module, agent_id)
-
-    return changed, agent_id, f"Agent {module.params['agent_name']} created successfully."
-
-
-def _update_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> Tuple[bool, Optional[str], str]:
-    """
-    Updates an existing agent if differences are detected.
-
-    Args:
-        module: The AnsibleAWSModule instance.
-        client: boto3 bedrock-agent client.
-        existing_agent: dict of existing agent details.
-
-    Returns:
-        (changed, agent_id, message)
-    """
-    existing_agent_id: str = existing_agent["agentId"]
-    needs_update: Dict[str, Any] = {}
-    changed: bool = False
-
-    # Handle new_agent_name separately
-    if module.params.get("new_agent_name") and existing_agent["agentName"] != module.params["new_agent_name"]:
-        needs_update["agentName"] = module.params["new_agent_name"]
-
-    # Generic fields to check and update
-    generic_fields = [
-        "foundation_model",
-        "instruction",
-        "agent_resource_role_arn",
-        "orchestration_type",
-        "agent_collaboration",
-    ]
-
-    for field in generic_fields:
-        value = module.params.get(field)
-        if value is not None:
-            # Convert snake_case to camelCase to match existing_agent keys
-            camel_key = snake_dict_to_camel_dict({field: None}).popitem()[0]
-            if existing_agent.get(camel_key) != value:
-                needs_update[field] = value
-
-    if module.params.get("prompt_override_configuration"):
-        dromedary_case_prompt_config = snake_dict_to_camel_dict(module.params["prompt_override_configuration"])
-        if existing_agent["promptOverrideConfiguration"] != dromedary_case_prompt_config:
-            needs_update["promptOverrideConfiguration"] = dromedary_case_prompt_config
-
-    if needs_update:
-        for required in ["agentName", "foundationModel", "agentResourceRoleArn"]:
-            if required not in needs_update:
-                # Pull from existing agent
-                needs_update[required] = existing_agent[required]
-
-        changed = True
-        if module.check_mode:
-            return True, existing_agent_id, f'Check mode: would have updated agent {existing_agent["agentName"]}.'
-
-        needs_update["agentId"] = existing_agent_id
-        client.update_agent(**needs_update)
-        _prepare_agent(client, module, existing_agent_id)
-    else:
-        return changed, existing_agent_id, "No updates needed."
-
-    return changed, existing_agent_id, f"Agent {existing_agent['agentName']} updated successfully."
-
-
-def _delete_agent(module: AnsibleAWSModule, client, existing_agent: Dict[str, Any]) -> Tuple[bool, str]:
-    """
-    Deletes an existing agent.
-
-    Args:
-        module: The AnsibleAWSModule instance.
-        client: boto3 bedrock-agent client.
-        existing_agent: dict of existing agent details.
-
-    Returns:
-        (changed, message)
-    """
-    if module.check_mode:
-        return True, f"Check mode: would have deleted agent '{existing_agent['agentName']}'."
-
-    if existing_agent["agentStatus"] == "DELETING":
-        return False, f"Agent {existing_agent['agentName']} in DELETING state."
-
-    client.delete_agent(agentId=existing_agent["agentId"])
-    return True, f"Agent {existing_agent['agentName']} deleted successfully."
 
 
 def main():
@@ -463,19 +340,19 @@ def main():
         if state == "present":
             if existing_agent:
                 # Update existing agent
-                changed, agent_id, msg = _update_agent(module, client, existing_agent)
-                result["agent"] = _get_agent(client, agent_id)
+                changed, agent_id, msg = update_agent(module, client, existing_agent)
+                result["agent"] = get_agent(client, agent_id)
                 result["msg"] = msg
             else:
                 # Create a new agent
-                changed, agent_id, msg = _create_agent(module, client)
-                result["agent"] = _get_agent(client, agent_id) if agent_id else {}
+                changed, agent_id, msg = create_agent(module, client)
+                result["agent"] = get_agent(client, agent_id) if agent_id else {}
                 result["msg"] = msg
 
         elif state == "absent":
             if existing_agent:
                 # Delete existing agent
-                changed, msg = _delete_agent(module, client, existing_agent)
+                changed, msg = delete_agent(module, client, existing_agent)
                 result["msg"] = msg
             else:
                 result["msg"] = "Agent does not exist."

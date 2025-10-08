@@ -177,107 +177,18 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Optional
-from typing import Tuple
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_alias
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_aliases
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_alias
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import wait_for_alias_status
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_alias
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-
-
-def _find_alias(client, agent_id: str, alias_name: str) -> Optional[Dict[str, Any]]:
-    """
-    Find an existing alias for a given Bedrock agent.
-
-    Args:
-        client: The boto3 Bedrock Agent client.
-        agent_id: The unique identifier of the agent.
-        alias_name: The name of the alias to search for.
-
-    Returns:
-        The alias dictionary if found, otherwise None.
-    """
-    aliases: List[Dict[str, Any]] = _list_agent_aliases(client, agentId=agent_id)
-    for alias in aliases:
-        if alias.get("agentAliasName") == alias_name:
-            return alias
-    return None
-
-
-def _create_alias(client, module: AnsibleAWSModule, agent_id: str) -> Tuple[bool, Optional[str], str]:
-    """
-    Create a new alias for a Bedrock agent.
-
-    Args:
-        client: The boto3 Bedrock Agent client.
-        module: The AnsibleAWSModule instance containing user parameters.
-        agent_id: The unique identifier of the Bedrock agent.
-
-    Returns:
-        Tuple containing:
-            - changed (bool): Whether the alias was created or would be created.
-            - alias_id (Optional[str]): The ID of the created alias (None in check mode).
-            - msg (str): Human-readable message about the operation.
-    """
-    changed: bool = True
-
-    if module.check_mode:
-        return changed, None, f"Check mode: would have created agent alias {module.params['alias_name']}."
-
-    params: Dict[str, Any] = {
-        "agentAliasName": module.params["alias_name"],
-        "agentId": agent_id,
-    }
-    if module.params.get("description"):
-        params["description"] = module.params["description"]
-
-    if module.params.get("tags"):
-        params["tags"] = module.params["tags"]
-
-    if module.params.get("routing_configuration"):
-        params["routingConfiguration"] = snake_dict_to_camel_dict(module.params["routing_configuration"])
-
-    response = client.create_agent_alias(**params)
-    alias_info: Dict[str, Any] = response.get("agentAlias")
-    alias_id = alias_info["agentAliasId"]
-
-    # Wait until alias reaches PREPARED state
-    wait_for_alias_status(client, agent_id, alias_id, "PREPARED")
-
-    return changed, alias_id, f"Agent alias {module.params['alias_name']} created successfully."
-
-
-def _delete_alias(
-    client, module: AnsibleAWSModule, agent_id: str, existing_alias: Dict[str, Any]
-) -> Tuple[bool, Optional[str], str]:
-    """
-    Delete an existing alias for a Bedrock agent.
-
-    Args:
-        client: The boto3 Bedrock Agent client.
-        module: The AnsibleAWSModule instance containing user parameters.
-        agent_id: The ID of the Bedrock Agent.
-        existing_alias: The alias dictionary returned by AWS to delete.
-
-    Returns:
-        Tuple containing:
-            - changed (bool): Whether the alias was deleted or would be deleted.
-            - alias_id (Optional[str]): The deleted alias ID (None in check mode).
-            - msg (str): Human-readable message about the operation.
-    """
-    if module.check_mode:
-        return True, None, f"Check mode: would have deleted agent alias '{existing_alias['agentAliasName']}'."
-
-    client.delete_agent_alias(agentId=agent_id, agentAliasId=existing_alias["agentAliasId"])
-
-    return True, None, f"Agent alias {existing_alias['agentAliasName']} deleted successfully."
 
 
 def main():
@@ -315,17 +226,18 @@ def main():
 
     try:
         # Get the agent ID from the provided name
-        agent: Optional[Dict[str, Any]] = find_agent(client, module)
+        agents_list: List[Dict[str, Any]] = find_agent(client, module)
+        agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
         if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
         agent_id: str = agent.get("agentId")
 
-        found_alias: Optional[Dict[str, Any]] = _find_alias(client, agent_id, alias_name)
+        found_alias: Optional[Dict[str, Any]] = find_alias(client, agent_id, alias_name)
 
         if state == "present":
             if found_alias is None:
-                changed, alias_id, msg = _create_alias(client, module, agent_id)
-                result["agent_alias"] = _get_agent_alias(client, agent_id, alias_id) if alias_id else {}
+                changed, alias_id, msg = create_alias(client, module, agent_id)
+                result["agent_alias"] = get_agent_alias(client, agent_id, alias_id) if alias_id else {}
                 result["msg"] = msg
                 changed = True
 
@@ -333,11 +245,11 @@ def main():
                 result[
                     "msg"
                 ] = f"An agent alias with name {found_alias['agentAliasName']} exists and can not be updated."
-                result["agent_alias"] = _get_agent_alias(client, agent_id, found_alias["agentAliasId"])
+                result["agent_alias"] = get_agent_alias(client, agent_id, found_alias["agentAliasId"])
 
         elif state == "absent":
             if found_alias is not None:
-                changed, agent_id, msg = _delete_alias(client, module, agent_id, found_alias)
+                changed, agent_id, msg = delete_alias(client, module, agent_id, found_alias)
                 result["msg"] = msg
             else:
                 result["msg"] = "Agent alias does not exist."

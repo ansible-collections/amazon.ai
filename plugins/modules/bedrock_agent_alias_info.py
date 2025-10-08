@@ -40,6 +40,7 @@ EXAMPLES = r"""
     alias_name: "my-test-agent-alias"
 """
 
+
 RETURN = r"""
 agent_aliases:
     description: A list of dictionaries, where each dictionary contains the detailed configuration of an agent alias.
@@ -78,7 +79,11 @@ agent_aliases:
                 agent_version:
                     description: The version of the agent the alias points to.
                     type: str
-                    sample: "1"
+            sample: [
+                {
+                    "agent_version": "1"
+                }
+            ]
         agent_alias_history_events:
             description: Contains details about the history of the alias.
             type: list
@@ -93,19 +98,35 @@ agent_aliases:
                 routing_configuration:
                     description: The routing configuration at a specific point in time.
                     type: list
-        client_token:
-            description: A unique, case-sensitive identifier for idempotency.
-            type: str
+            sample: [
+                {
+                    "end_date": "2025-10-06T10:15:05.278613+00:00",
+                    "routing_configuration": [
+                        {}
+                    ],
+                    "start_date": "2025-10-06T10:15:01.909990+00:00"
+                },
+                {
+                    "routing_configuration": [
+                        {
+                            "agent_version": "1"
+                        }
+                    ],
+                    "start_date": "2025-10-06T10:15:05.278613+00:00"
+                }
+            ]
         description:
             description: The description of the alias.
             type: str
-            sample: Test Alias for Agent
+            sample: "Test Alias for Agent."
         created_at:
             description: The timestamp when the alias was created.
             type: str
+            sample: "2025-10-06T10:15:01.909990+00:00"
         updated_at:
             description: The timestamp when the alias was last updated.
             type: str
+            sample: "2025-10-06T10:15:01.909990+00:00"
 """
 
 
@@ -119,9 +140,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_alias
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_aliases
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agent_aliases
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -152,24 +173,25 @@ def main():
 
     try:
         # Get the agent ID from the provided name
-        agent: Optional[Dict[str, Any]] = find_agent(client, module)
+        agents_list: List[Dict[str, Any]] = find_agent(client, module)
+        agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
         if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
 
         agent_id: str = agent.get("agentId")
 
         # List aliases using the found agent ID
-        aliases_summary: List[Dict[str, Any]] = _list_agent_aliases(client, agentId=agent_id)
+        aliases_summary: List[Dict[str, Any]] = list_agent_aliases(client, agentId=agent_id)
 
         if module.params.get("alias_name"):
             found_alias = next(
                 (alias for alias in aliases_summary if alias["agentAliasName"] == module.params["alias_name"]), None
             )
             if found_alias:
-                result.append(_get_agent_alias(client, agent_id, found_alias.get("agentAliasId")))
+                result.append(get_agent_alias(client, agent_id, found_alias.get("agentAliasId")))
         else:
             for alias in aliases_summary:
-                result.append(_get_agent_alias(client, agent_id, alias.get("agentAliasId")))
+                result.append(get_agent_alias(client, agent_id, alias.get("agentAliasId")))
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
