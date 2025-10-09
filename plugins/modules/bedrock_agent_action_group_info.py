@@ -111,9 +111,9 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _get_agent_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import _list_agent_action_groups
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agent_action_groups
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -148,14 +148,15 @@ def main():
 
     try:
         # Find the agent ID from the provided name
-        agent: Optional[Dict[str, Any]] = find_agent(client, module)
+        agents_list: List[Dict[str, Any]] = find_agent(client, module)
+        agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
         if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
         agent_id: str = agent.get("agentId")
 
         if action_group_name:
             # Find a specific action group by name
-            action_groups_summaries: List[Dict[str, Any]] = _list_agent_action_groups(
+            action_groups_summaries: List[Dict[str, Any]] = list_agent_action_groups(
                 client, agentId=agent_id, agentVersion=agent_version
             )
             found_id: Optional[str] = None
@@ -165,15 +166,15 @@ def main():
                     break
 
             if found_id:
-                details: Dict[str, Any] = _get_agent_action_group(client, agent_id, agent_version, found_id)
+                details: Dict[str, Any] = get_agent_action_group(client, agent_id, agent_version, found_id)
                 result.append(details)
         else:
             # List all action groups and get full details for each
-            action_groups_summaries: List[Dict[str, Any]] = _list_agent_action_groups(
+            action_groups_summaries: List[Dict[str, Any]] = list_agent_action_groups(
                 client, agentId=agent_id, agentVersion=agent_version
             )
             for summary in action_groups_summaries:
-                details: Dict[str, Any] = _get_agent_action_group(
+                details: Dict[str, Any] = get_agent_action_group(
                     client, agent_id, agent_version, summary.get("actionGroupId")
                 )
                 action_groups_details.append(details)
