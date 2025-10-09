@@ -112,6 +112,7 @@ def wait_for_agent_status(client, module, agent_id: str, status: str, sleep_time
     for attempt in range(max_attempts):
         try:
             current_status = client.get_agent(agentId=agent_id)["agent"]["agentStatus"]
+
             if current_status == status:
                 return
 

@@ -121,20 +121,20 @@ EXAMPLES = r"""
 - name: Gather information about DevOpsGuru Resource Insights
   amazon.ai.devopsguru_insight_info:
     status_filter:
-      Any:
-        Type: 'REACTIVE'
-        StartTimeRange:
-          FromTime: "2025-02-10"
-          ToTime: "2025-02-12"
+      any:
+        type: 'REACTIVE'
+        start_time_range:
+          from_time: "2025-02-10"
+          to_time: "2025-02-12"
 
 - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
   amazon.ai.devopsguru_insight_info:
     status_filter:
-      Closed:
-        Type: 'REACTIVE'
-        EndTimeRange:
-          FromTime: "2025-03-04"
-          ToTime: "2025-03-06"
+      closed:
+        type: 'REACTIVE'
+        end_time_range:
+          from_time: "2025-03-04"
+          to_time: "2025-03-06"
     include_recommendations:
       locale: EN_US
     include_anomalies:
@@ -347,6 +347,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_tim
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
@@ -380,13 +381,17 @@ def main() -> None:
     include_recommendations = module.params.get("include_recommendations")
 
     if status_filter:
-        convert_time_ranges(status_filter)
+        status_filter = convert_time_ranges(snake_dict_to_camel_dict(status_filter, capitalize_first=True))
 
     try:
         insight_info = (
             describe_insight(client, insight_id, account_id)
             if insight_id
-            else fetch_data(client, "list_insights", StatusFilter=status_filter)
+            else fetch_data(
+                client,
+                "list_insights",
+                StatusFilter=status_filter,
+            )
         )
         insight_type = get_insight_type(insight_info)
         if insight_type:

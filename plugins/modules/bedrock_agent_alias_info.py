@@ -12,11 +12,7 @@ version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)
 description:
-<<<<<<< HEAD
     - This module can retrieve details for a specific alias or lists all aliases for a given Bedrock Agent, identified by its name.
-=======
-    - This module lists all aliases for a given Bedrock Agent, identified by its name.
->>>>>>> 3a8cf8e (Add modules for bedrock agent)
 options:
     agent_name:
         description:

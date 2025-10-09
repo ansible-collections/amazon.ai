@@ -9,5 +9,5 @@ action_groups:
     - bedrock_foundation_models_info
     - bedrock_invoke_model
     - devopsguru_insight_info
-    - devopsguru_resource_colletion
-    - devopsguru_resource_colletion_info
+    - devopsguru_resource_collection
+    - devopsguru_resource_collection_info

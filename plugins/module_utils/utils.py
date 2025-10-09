@@ -3,7 +3,8 @@
 
 
 import json
-import datetime
+from datetime import date
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
@@ -68,25 +69,62 @@ def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict
             item.update(source)
 
 
-def convert_time_ranges(status_filter):
-    """Convert FromTime and ToTime to datetime objects for time ranges."""
+def convert_time_ranges(status_filter: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Convert FromTime/ToTime fields in nested AWS DevOps Guru time range filters into datetime objects.
 
-    def convert_time(date_str, set_midnight=False):
-        """Helper function to convert date string to datetime, optionally set to midnight."""
-        dt = datetime.strptime(date_str, "%Y-%m-%d")
+    Supports both CamelCase-style (`StartTimeRange`, `EndTimeRange`) and snake_case-style
+    (`start_time_range`, `end_time_range`) keys, as well as `FromTime` / `from_time`
+    and `ToTime` / `to_time` variants.
+
+    Args:
+        status_filter: A dictionary representing status filters for DevOps Guru insights.
+
+    Returns:
+        The same dictionary, but with all recognized date strings replaced by datetime objects.
+
+    Raises:
+        ValueError: If a date string is in an invalid format or unsupported type.
+    """
+
+    def convert_time(date_input: Any, set_midnight: bool = False) -> datetime:
+        """Convert a date string or date/datetime object to a datetime object, optionally setting midnight."""
+        if isinstance(date_input, datetime):
+            dt = date_input
+        elif isinstance(date_input, date):
+            dt = datetime.combine(date_input, datetime.min.time())
+        elif isinstance(date_input, str):
+            try:
+                dt = datetime.strptime(date_input, "%Y-%m-%d")
+            except Exception as e:
+                raise ValueError(f"Invalid date format for '{date_input}': {e}")
+        else:
+            raise ValueError(f"Unsupported type for date conversion: {type(date_input)}")
+
         if set_midnight:
             dt = dt.replace(hour=0, minute=0, second=0)
         return dt
 
-    for key in status_filter:
-        if isinstance(status_filter[key], dict):
-            for time_range_key in ["EndTimeRange", "start_time_range"]:
-                if time_range_key in status_filter[key]:
-                    for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
-                        if time_key in status_filter[key][time_range_key]:
-                            # Determine if "ToTime"/"to_time" should have midnight set
-                            set_midnight = time_key.lower() == "to_time" or time_key.lower() == "to_time"
-                            status_filter[key][time_range_key][time_key] = convert_time(
-                                status_filter[key][time_range_key][time_key],
-                                set_midnight,
-                            )
+    # Iterate through all top-level keys
+    for key, subdict in status_filter.items():
+        if not isinstance(subdict, dict):
+            continue
+
+        # Check for all possible time range keys
+        for time_range_key in ["StartTimeRange", "EndTimeRange", "start_time_range", "end_time_range"]:
+            if time_range_key not in subdict:
+                continue
+
+            time_range_dict = subdict[time_range_key]
+            if not isinstance(time_range_dict, dict):
+                continue
+
+            for time_key in ["FromTime", "ToTime", "from_time", "to_time"]:
+                if time_key not in time_range_dict:
+                    continue
+
+                # "ToTime"/"to_time" should set midnight
+                set_midnight = "to_time" in time_key.lower()
+                time_range_dict[time_key] = convert_time(time_range_dict[time_key], set_midnight)
+
+    return status_filter

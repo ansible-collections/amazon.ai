@@ -81,7 +81,7 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection_specified_type
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -109,8 +109,8 @@ def main() -> None:
     resource_collection_type = module.params["resource_collection_type"]
 
     try:
-        resource_collection = get_resource_collection(client, resource_collection_type)
-        module.exit_json(**camel_dict_to_snake_dict(resource_collection))
+        resource_collection = get_resource_collection_specified_type(client, resource_collection_type)
+        module.exit_json(resource_collection=camel_dict_to_snake_dict(resource_collection))
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
