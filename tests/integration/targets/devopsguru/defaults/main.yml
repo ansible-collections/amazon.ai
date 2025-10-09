@@ -1,4 +1,8 @@
 ---
-s3_bucket_name: "devops-guru-bucket"
-kms_key_name: "DevOpsGuruKey"
-iam_role_name: "devops-guru-aws-ssm-iam-role"
+test_id: "{{ tiny_prefix }}"
+s3_bucket_name: "devops-guru-bucket-{{ test_id }}"
+kms_key_name: "DevOpsGuruKey-{{ test_id }}"
+iam_role_name: "devops-guru-aws-ssm-iam-role-{{ test_id }}"
+stack_name: "DevOps-Guru-Stack-{{ test_id }}"
+sns_topic_name: "DevOpsGuruNotifications-{{ test_id }}"
+sqs_queue_name: "DevOpsGuruNotifications-queue-{{ test_id }}"

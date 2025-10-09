@@ -54,20 +54,20 @@ options:
             - The one supported notification channel is Amazon Simple Notification Service (Amazon SNS).
         type: dict
         suboptions:
-            Sns:
+            sns:
                 description:
                     - Information about a notification channel configured in DevOps Guru to send notifications when insights are created.
                 type: dict
                 suboptions:
-                    TopicArn:
+                    topic_arn:
                         description:
                             - The Amazon Resource Name (ARN) of an Amazon Simple Notification Service topic.
                         type: str
-            Filters:
+            filters:
                 description:
                     - The filter configurations for the Amazon SNS notification topic you use with DevOps Guru.
                 suboptions:
-                    Severities:
+                    severities:
                         description:
                             - The severity levels that you want to receive notifications for.
                         type: list
@@ -76,7 +76,7 @@ options:
                             - 'LOW'
                             - 'MEDIUM'
                             - 'HIGH'
-                    MessageTypes:
+                    message_types:
                         description:
                             - The events that you want to receive notifications for.
                         type: list
@@ -146,17 +146,16 @@ resource_collection:
                     description: List of tag values for the given tag key.
                     type: list
                     elements: str
-changed:
-    description: Whether any changes were made by the module.
+notification_channel:
+    description: The ID of the added notification channel.
+    type: str
+    returned: when configured
+msg:
+    description: Informative message about the action.
+    type: str
     returned: always
-    type: bool
 """
 
-
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Tuple
 
 try:
     import botocore
@@ -164,91 +163,113 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
+from typing import Any
+from typing import Dict
+
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import ensure_notification_channel
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_tags
+
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def update_tags(
-    current_tags: List[Dict[str, Any]],
-    new_tags: List[Dict[str, Any]],
-    state: str = "present",
-) -> Tuple[bool, List[Dict[str, Any]]]:
+def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, Any]:
     """
-    Updates the tags list by adding, updating, or removing tags and TagValues based on the state.
+    Processes adding or removing CloudFormation stacks and tags in a DevOps Guru resource collection.
 
-    :param current_tags: The existing list of tags to update.
-    :param new_tags: The list of new tags to process.
-    :param state: Determines whether to add ("present") or remove ("absent") tags.
-    :return: A dictionary with 'update' (bool) and 'tags' (new updated list of tags).
+    This function handles:
+        - Initial creation of a resource collection if none exists.
+        - Adding new CloudFormation stacks.
+        - Removing specified CloudFormation stacks.
+        - Adding or removing tags.
+        - Ensuring idempotency: `update_resource_collection` is only called when changes are needed.
+
+    Args:
+        client (Any): Boto3 client for AWS DevOps Guru.
+        module (AnsibleAWSModule): Ansible module instance with access to parameters and check mode.
+
+    Returns:
+        Dict[str, Any]: Dictionary containing at least:
+            - "changed" (bool): Whether the resource collection was modified.
+            - "msg" (str): Informational message about the operation.
     """
-    updated_tags = current_tags[:]
-    update = False
+    state = module.params.get("state")
 
-    for new_tag in new_tags:
-        app_boundary_key = new_tag.get("app_boundary_key")
-        new_tag_values = new_tag.get("tag_values", [])
+    resource_collection = get_resource_collection(client, module)
 
-        # Find the tag with the same AppBoundaryKey
-        matching_tag = next(
-            (tag for tag in updated_tags if tag.get("AppBoundaryKey") == app_boundary_key),
-            None,
-        )
-
-        if state == "present":
-            if matching_tag:
-                # Add missing TagValues
-                if matching_tag["TagValues"] != new_tag_values:
-                    matching_tag["TagValues"] = new_tag_values
-                    update = True
-            else:
-                # If no matching AppBoundaryKey, add the new tag
-                updated_tags.append({"AppBoundaryKey": app_boundary_key, "TagValues": new_tag_values})
-                update = True
-
-        elif state == "absent" and matching_tag:
-            # If TagValues match and we want to remove them, remove the tag
-            if matching_tag["TagValues"] == new_tag_values:
-                updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
-                update = True
-            else:
-                # If TagValues don't match, just update the tag with remaining values
-                matching_tag["TagValues"] = [
-                    value for value in matching_tag["TagValues"] if value not in new_tag_values
-                ]
-                if not matching_tag["TagValues"]:
-                    updated_tags = [tag for tag in updated_tags if tag.get("AppBoundaryKey") != app_boundary_key]
-                update = True
-
-    return update, updated_tags
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _get_resource_collection(client, module) -> Dict[str, Any]:
+    existing_cloud_stacks = resource_collection.get("CloudFormation", {}).get("StackNames", [])
+    existing_tags = resource_collection.get("Tags", [])
     stack_names = module.params.get("cloudformation_stack_names")
     tags = module.params.get("tags")
-    params = {}
-    if stack_names is not None:
-        params["ResourceCollectionType"] = "AWS_CLOUD_FORMATION"
-    elif tags is not None:
-        params["ResourceCollectionType"] = "AWS_TAGS"
+    result: Dict[str, Any] = {"changed": False}
 
-    try:
-        paginator = client.get_paginator("get_resource_collection")
-        return paginator.paginate(**params).build_full_result()["ResourceCollection"]
-    except is_boto3_error_code("ResourceNotFoundException"):
-        return {}
+    # If no resource collection exists at all, treat as initial creation
+    if not existing_cloud_stacks and not existing_tags and (stack_names or tags):
+        changed = True
+        if stack_names:
+            params = {
+                "Action": "ADD",
+                "ResourceCollection": {"CloudFormation": {"StackNames": stack_names}},
+            }
+        elif tags:
+            params = {"Action": "ADD", "ResourceCollection": {"Tags": tags}}
+        result["msg"] = update_resource_collection(client, module, **params)
+        result["changed"] = True
+    else:
+        # Process CloudFormation stacks
+        if stack_names is not None:
+            if state == "present" and stack_names:
+                new_stacks = [s for s in stack_names if s not in existing_cloud_stacks]
+                if new_stacks:
+                    changed = True
+                    params = {
+                        "Action": "ADD",
+                        "ResourceCollection": {"CloudFormation": {"StackNames": new_stacks}},
+                    }
+                    result["msg"] = update_resource_collection(client, module, **params)
+                    result["changed"] = True
+                else:
+                    result["msg"] = "All specified stacks already exist. Nothing changed."
+            elif state == "absent":
+                if stack_names:
+                    if set(stack_names).issubset(set(existing_cloud_stacks)):
+                        changed = True
+                        params = {
+                            "Action": "REMOVE",
+                            "ResourceCollection": {"CloudFormation": {"StackNames": stack_names}},
+                        }
+                        result["msg"] = update_resource_collection(client, module, **params)
+                        result["changed"] = True
+                    else:
+                        result["msg"] = "Some specified stacks do not exist. Nothing changed."
+                elif stack_names == [] and existing_cloud_stacks:
+                    changed = True
+                    params = {
+                        "Action": "REMOVE",
+                        "ResourceCollection": {"CloudFormation": {"StackNames": existing_cloud_stacks}},
+                    }
+                    result["msg"] = update_resource_collection(client, module, **params)
+                    result["changed"] = True
+                else:
+                    result["msg"] = "No CloudFormation stacks exist to remove. Nothing changed."
 
-
-def update_resource_collection(client, **params) -> Dict[str, Any]:
-    return client.update_resource_collection(**params)
-
-
-def add_notification_channel(client, config: Dict[str, Any]):
-    client.add_notification_channel(**{"Config": config})
+        # Process tags
+        if tags is not None:
+            update, updated_tags = update_tags(existing_tags, tags, state=state)
+            if update:
+                changed = True
+                action = "ADD" if state == "present" else "REMOVE"
+                params = {"Action": action, "ResourceCollection": {"Tags": updated_tags}}
+                result["msg"] = update_resource_collection(client, module, **params)
+                result["changed"] = True
+            elif not changed:
+                result["msg"] = "No changes to tags required. Nothing changed."
+    return result
 
 
 def main() -> None:
@@ -270,64 +291,27 @@ def main() -> None:
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
+    result = {"resource_collection": {}}
     changed = False
-    state = module.params.get("state")
-    stack_names = module.params.get("cloudformation_stack_names")
-    tags = module.params.get("tags")
     notification_channel_config = module.params.get("notification_channel_config")
-    params = {"ResourceCollection": {}}
 
     try:
-        resource_collection = _get_resource_collection(client, module)
-        if resource_collection and (
-            resource_collection.get("CloudFormation", {}).get("StackNames", []) or resource_collection.get("Tags", [])
-        ):
-            if stack_names is not None and resource_collection.get("CloudFormation", {}).get("StackNames", []):
-                if set(stack_names).issubset(set(resource_collection["CloudFormation"]["StackNames"])):
-                    if state == "absent":
-                        changed = True
-                        params["Action"] = "REMOVE"
-                        params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
-                        update_resource_collection(client, **params)
-                    if stack_names == [] and state == "absent":
-                        changed = True
-                        params["Action"] = "REMOVE"
-                        params["ResourceCollection"]["CloudFormation"] = {
-                            "StackNames": resource_collection["CloudFormation"]["StackNames"]
-                        }
-                        update_resource_collection(client, **params)
-                else:
-                    if state == "present":
-                        changed = True
-                        params["Action"] = "ADD"
-                        params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
-                        update_resource_collection(client, **params)
-            elif tags is not None and resource_collection.get("Tags", []):
-                update, updated_tags = update_tags(resource_collection["Tags"], tags, state="present")
-                if update:
-                    changed = True
-                    if state == "present":
-                        params["Action"] = "ADD"
-                    else:
-                        params["Action"] = "REMOVE"
-                    params["ResourceCollection"]["Tags"] = updated_tags
-                    update_resource_collection(client, **params)
-        else:
-            params["Action"] = "ADD"
-            if stack_names:
-                params["ResourceCollection"]["CloudFormation"] = {"StackNames": stack_names}
-            elif tags:
-                params["ResourceCollection"]["Tags"] = tags
-            changed = True
-            update_resource_collection(client, **params)
-
+        result = process_resource_collection(client, module)
+        # Notification channel setup
         if notification_channel_config:
-            add_notification_channel(client, notification_channel_config)
+            changed, notification_channel_id, msg = ensure_notification_channel(
+                client, module, notification_channel_config
+            )
+            result["msg"] = msg
+            if notification_channel_id:
+                result["notification_channel"] = notification_channel_id
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
-    module.exit_json(changed=changed, **camel_dict_to_snake_dict(_get_resource_collection(client, module)))
+    result["resource_collection"] = camel_dict_to_snake_dict(get_resource_collection(client, module))
+
+    module.exit_json(**result)
 
 
 if __name__ == "__main__":

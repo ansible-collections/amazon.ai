@@ -75,33 +75,18 @@ resource_collection:
 """
 
 
-from typing import Any
-from typing import Dict
-
 try:
     import botocore
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection_specified_type
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
-from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _get_resource_collection(client, resource_collection_type: str) -> Dict[str, Any]:
-    """Retrieves a resource collection"""
-    params = {"ResourceCollectionType": resource_collection_type}
-
-    try:
-        paginator = client.get_paginator("get_resource_collection")
-        return paginator.paginate(**params).build_full_result()["ResourceCollection"]
-    except is_boto3_error_code("ResourceNotFoundException"):
-        return {}
 
 
 def main() -> None:
@@ -123,8 +108,8 @@ def main() -> None:
     resource_collection_type = module.params["resource_collection_type"]
 
     try:
-        resource_collection = _get_resource_collection(client, resource_collection_type)
-        module.exit_json(**camel_dict_to_snake_dict(resource_collection))
+        resource_collection = get_resource_collection_specified_type(client, resource_collection_type)
+        module.exit_json(resource_collection=camel_dict_to_snake_dict(resource_collection))
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
