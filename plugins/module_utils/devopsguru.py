@@ -177,7 +177,6 @@ def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[st
     Returns:
         dict: Insight details returned from the AWS API.
     """
-    ...
     params: Dict[str, Any] = {"Id": insight_id}
     if account_id:
         params["AccountId"] = account_id

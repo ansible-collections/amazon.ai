@@ -121,7 +121,7 @@
         - RetireGrant
   register: cmk_setup
 
-- name: Ensure bucket is configured for encryption
+- name: Ensure S3 bucket is configured for encryption
   amazon.aws.s3_bucket:
     name: "{{ s3_bucket_name }}"
     encryption: "aws:kms"

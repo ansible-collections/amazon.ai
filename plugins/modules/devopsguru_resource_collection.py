@@ -199,6 +199,7 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
             - "msg" (str): Informational message about the operation.
     """
     state = module.params.get("state")
+    params: Dict[str, Any] = {}
 
     resource_collection = get_resource_collection(client, module)
 
