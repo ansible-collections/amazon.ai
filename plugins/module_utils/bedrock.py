@@ -7,6 +7,12 @@ import time
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 try:
+    import yaml
+except ImportError:
+    # Handled in module setup
+    pass
+
+try:
     from botocore.exceptions import ClientError
 except ImportError:
     pass
@@ -579,3 +585,164 @@ def list_agent_action_groups(client, **params: Any) -> List[Dict[str, Any]]:
     """
     paginator = client.get_paginator("list_agent_action_groups")
     return paginator.paginate(**params).build_full_result()["actionGroupSummaries"]
+
+
+def find_action_group(client, agent_id: str, action_group_name: str, agent_version: str) -> Optional[Dict[str, Any]]:
+    """
+    Find an existing action group by name.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_id: The unique ID of the agent.
+        action_group_name: The name of the action group to look for.
+        agent_version: The version of the agent (e.g., "DRAFT").
+
+    Returns:
+        The action group details as a dictionary if found, otherwise None.
+    """
+    action_groups = list_agent_action_groups(client, agentId=agent_id, agentVersion=agent_version)
+    for group in action_groups:
+        group_info = get_agent_action_group(client, agent_id, agent_version, group["actionGroupId"])
+        if group["actionGroupName"] == action_group_name:
+            return group_info
+    return None
+
+
+def create_action_group(client, module: AnsibleAWSModule, agent_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Create a new action group.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        module: The AnsibleAWSModule instance with user parameters.
+        agent_id: The unique ID of the agent.
+
+    Returns:
+        A tuple of:
+            - The created action group dictionary (or empty dict in check mode).
+            - A human-readable message about the operation.
+    """
+    if module.check_mode:
+        return {}, f"Check mode: would have created action group {module.params['action_group_name']}."
+
+    params: Dict[str, Any] = {
+        "agentId": agent_id,
+        "agentVersion": module.params["agent_version"],
+        "actionGroupName": module.params["action_group_name"],
+        "actionGroupExecutor": {"lambda": module.params["lambda_arn"]},
+        "apiSchema": {"payload": module.params["api_schema"]},
+        "actionGroupState": module.params["action_group_state"],
+    }
+
+    if module.params.get("description"):
+        params["description"] = module.params["description"]
+
+    response = client.create_agent_action_group(**params)
+    result = response.get("agentActionGroup", {})
+    return result, f"Action group '{module.params['action_group_name']}' created successfully."
+
+
+def update_action_group(
+    client, module: AnsibleAWSModule, existing_action_group: Dict[str, Any], agent_id: str
+) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Update an existing action group if any differences are found.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        module: The AnsibleAWSModule instance with user parameters.
+        existing_action_group: The current action group configuration from AWS.
+        agent_id: The unique ID of the agent.
+
+    Returns:
+        A tuple of:
+            - changed (bool): Whether any changes would be applied.
+            - response (dict): The updated action group (or original if unchanged).
+            - msg (str): Human-readable message about the operation.
+    """
+    response = existing_action_group
+    api_schema: str = module.params["api_schema"]
+    action_group_state: str = module.params["action_group_state"]
+    description: Optional[str] = module.params.get("description")
+    agent_version: Optional[str] = module.params.get("agent_version")
+
+    current_api_schema_obj: Dict[str, Any] = yaml.safe_load(existing_action_group["apiSchema"]["payload"])
+    api_schema_obj: Dict[str, Any] = yaml.safe_load(api_schema)
+
+    new_action_group_name: Optional[str] = module.params.get("new_action_group_name")
+
+    update_obj: Dict[str, Any] = {}
+    changed: bool = False
+
+    if current_api_schema_obj != api_schema_obj:
+        update_obj["apiSchema"] = {"payload": api_schema}
+
+    if action_group_state != existing_action_group.get("actionGroupState"):
+        update_obj["actionGroupState"] = action_group_state
+
+    if agent_version != existing_action_group.get("agentVersion"):
+        update_obj["agentVersion"] = agent_version
+
+    if description and existing_action_group.get("description") != description:
+        update_obj["description"] = description
+
+    if new_action_group_name and existing_action_group["actionGroupName"] != new_action_group_name:
+        update_obj["actionGroupName"] = new_action_group_name
+
+    if (
+        existing_action_group.get("actionGroupExecutor", {}).get("lambda")
+        and existing_action_group.get("actionGroupExecutor", {}).get("lambda") != module.params["lambda_arn"]
+    ):
+        update_obj["actionGroupExecutor"] = {"lambda": module.params["lambda_arn"]}
+
+    if update_obj:
+        update_obj.update(
+            {
+                "agentId": agent_id,
+                "actionGroupId": existing_action_group["actionGroupId"],
+            }
+        )
+        if update_obj.get("apiSchema") is None:
+            update_obj["apiSchema"] = existing_action_group["apiSchema"]
+
+        if update_obj.get("actionGroupName") is None:
+            update_obj["actionGroupName"] = existing_action_group["actionGroupName"]
+
+        if update_obj.get("actionGroupExecutor") is None:
+            update_obj["actionGroupExecutor"] = existing_action_group["actionGroupExecutor"]
+
+        if update_obj.get("agentVersion") is None:
+            update_obj["agentVersion"] = existing_action_group["agentVersion"]
+
+        changed = True
+        if module.check_mode:
+            return True, {}, f"Check mode: would have updated action group {existing_action_group['actionGroupName']}."
+        else:
+            result = client.update_agent_action_group(**update_obj)
+            response = result.get("agentActionGroup", {})
+    else:
+        return changed, existing_action_group, "No updates needed."
+
+    return changed, response, f"Action group '{response.get('actionGroupName')}' updated successfully."
+
+
+def delete_action_group(client, module, agent_id: str, existing: dict) -> str:
+    """
+    Delete an existing action group.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        module: The AnsibleAWSModule instance.
+        agent_id: The unique ID of the agent.
+        existing: The existing action group dictionary to delete.
+
+    Returns:
+        str: A message describing the outcome of the operation.
+    """
+    if module.check_mode:
+        return f"Check mode: would have deleted action group {existing['actionGroupName']}."
+
+    client.delete_agent_action_group(
+        agentId=agent_id, agentVersion=existing["agentVersion"], actionGroupId=existing["actionGroupId"]
+    )
+    return f"Action group {existing['actionGroupName']} deleted successfully."

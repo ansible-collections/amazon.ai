@@ -1,3 +1,4 @@
+---
 - name: Amazon DevOps Guru integration tests
   module_defaults:
     group/amazon.ai.aws:
