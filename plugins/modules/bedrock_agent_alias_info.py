@@ -40,10 +40,7 @@ EXAMPLES = r"""
     alias_name: "my-test-agent-alias"
 """
 
-<<<<<<< HEAD
 
-=======
->>>>>>> 4e6c0fa (Add bedrock_agent_alias and bedrock_agent_alias_info modules)
 RETURN = r"""
 agent_aliases:
     description: A list of dictionaries, where each dictionary contains the detailed configuration of an agent alias.

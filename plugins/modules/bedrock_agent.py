@@ -231,8 +231,8 @@ agent:
                             type: str
 msg:
     description: Informative message about the action.
-    returned: always
     type: str
+    returned: always
     sample: "Agent 'test-bedrock-agent-7a58c95cf105' created successfully."
 """
 
