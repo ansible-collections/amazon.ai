@@ -31,7 +31,6 @@ If you encounter abusive behavior, please refer to the [policy violations](https
 
 For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
 
-
 <!--start requires_ansible-->
 ## Ansible version compatibility
 
@@ -100,12 +99,6 @@ You can also include it in a `requirements.yml` file and install it with `ansibl
 ---
 collections:
   - name: amazon.ai
-```
-
-Note that if you install the collection from Ansible Galaxy, it will not be upgraded automatically when you upgrade the `ansible` package. To upgrade the collection to the latest available version, run the following command:
-
-```bash
-ansible-galaxy collection install amazon.ai --upgrade
 ```
 
 You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `1.0.0`:
@@ -187,11 +180,6 @@ ansible-test integration [target]
 ```
 
 This collection is tested using GitHub Actions.
-
-## Release notes
-
-See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
-
 
 ## More information
 
