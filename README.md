@@ -1,23 +1,15 @@
 # Ansible Collection for Amazon AI and ML Resources
-The `amazon.ai` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection supports only Amazon DevOps Guru — a service that uses machine learning to detect and remediate operational issues. Modules in this collection allow you to configure DevOps Guru monitoring, manage insights, and integrate with notification channels.
 
-The collection is designed with extensibility in mind and will grow to support additional Amazon AI/ML services such as:
-- Amazon SageMaker
-- Amazon Rekognition
-- Amazon Comprehend
-- Amazon Translate
-- Amazon Textract
-- Amazon Bedrock (foundation models)
+The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
+- **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
+- **Amazon Bedrock**: interact with foundation models for AI/ML applications.
 
-# amazon.ai Collection for Ansible
-<!-- Add CI and code coverage badges here. Samples included below. -->
-[![CI](https://github.com/ansible-collections/amazon.ai/workflows/CI/badge.svg?event=push)](https://github.com/ansible-collections/amazon.ai/actions) [![Codecov](https://img.shields.io/codecov/c/github/ansible-collections/amazon.ai)](https://codecov.io/gh/ansible-collections/amazon.ai)
+The collection is designed to be extensible and will grow to support additional services such as Amazon SageMaker, Rekognition, Comprehend, Translate, and Textract.
 
-<!-- Describe the collection and why a user would want to use it. What does the collection do? -->
+As a Red Hat Ansible [Certified Content](https://catalog.redhat.com/software/search?target_platforms=Red%20Hat%20Ansible%20Automation%20Platform), this collection is entitled to [support](https://access.redhat.com/support/) through [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible) (AAP) through the Red Hat Ansible team.
+
 
 ## Our mission
-
-<!-- Put your collection's mission statement in here. Example follows. -->
 
 At the `amazon.ai` collection, our mission is to empower users to deploy and manage AWS AI/ML services using simple, declarative automation workflows with Ansible.
 
@@ -32,100 +24,164 @@ If you encounter abusive behavior, please refer to the [policy violations](https
 
 ## Communication
 
-<!--
-If your collection is not present on the Ansible forum yet, please check out the existing [tags](https://forum.ansible.com/tags) and [groups](https://forum.ansible.com/g) - use what suits your collection. If there is no appropriate tag and group yet, please [request one](https://forum.ansible.com/t/requesting-a-forum-group/503/17).
--->
-
 * Join the Ansible forum:
-  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please add appropriate tags if you start new discussions, for example the `aws` tag.
-  * [Posts tagged with 'your tag'](https://forum.ansible.com/tag/aws): subscribe to participate in collection/technology-related conversations.
-  * [Refer to your forum group here if exists](https://forum.ansible.com/g/): by joining the team you will automatically get subscribed to the posts tagged with [your group forum tag here](https://forum.ansible.com/tags).
+  * [Get Help](https://forum.ansible.com/c/help/6): get help or help others. Please add appropriate tags if you start new discussions.
   * [Social Spaces](https://forum.ansible.com/c/chat/4): gather and interact with fellow enthusiasts.
   * [News & Announcements](https://forum.ansible.com/c/news/5): track project-wide announcements including social events. The [Bullhorn newsletter](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn), which is used to announce releases and important changes, can also be found here.
 
 For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
 
-## Contributing to this collection
+<!--start requires_ansible-->
+## Ansible version compatibility
 
-<!--Describe how the community can contribute to your collection. At a minimum, fill up and include the CONTRIBUTING.md file containing how and where users can create issues to report problems or request features for this collection. List contribution requirements, including preferred workflows and necessary testing, so you can benefit from community PRs. If you are following general Ansible contributor guidelines, you can link to - [Ansible Community Guide](https://docs.ansible.com/ansible/devel/community/index.html). List the current maintainers (contributors with write or higher access to the repository). The following can be included:-->
+This collection has been tested against the following Ansible versions: **>=2.17.0**.
 
-The content of this collection is made by people like you, a community of individuals collaborating on making the world better through developing automation software.
-
-We are actively accepting new contributors and all types of contributions are very welcome.
-
-Don't know how to start? Refer to the [Ansible community guide](https://docs.ansible.com/ansible/devel/community/index.html)!
-
-Want to submit code changes? Take a look at the [Quick-start development guide](https://docs.ansible.com/ansible/devel/community/create_pr_quick_start.html).
-
-We also use the following guidelines:
-
-* [Collection review checklist](https://docs.ansible.com/ansible/devel/community/collection_contributors/collection_reviewing.html)
-* [Ansible development guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
-* [Ansible collection development guide](https://docs.ansible.com/ansible/devel/dev_guide/developing_collections.html#contributing-to-collections)
-
-
-## Tested with Ansible
-
-<!-- List the versions of Ansible the collection has been tested with. Must match what is in galaxy.yml. -->
-This collection has been tested against following Ansible versions: >=2.17.0.
+Plugins and modules within a collection may be tested with only specific Ansible versions.
+A collection may contain metadata that identifies these versions.
+PEP440 is the schema used to describe the versions of Ansible.
+<!--end requires_ansible-->
 
 ## Python version compatibility
 
-<!-- List any external resources the collection depends on, for example minimum versions of an OS, libraries, or utilities. Do not list other Ansible collections here. -->
-This collection depends on the AWS SDK for Python (Boto3 and Botocore).  Due to the
+This collection depends on the AWS SDK for Python (Boto3 and Botocore). Due to the
 [AWS SDK Python Support Policy](https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/)
 this collection requires Python 3.9 or greater.
 
 ## AWS SDK version compatibility
 
-Version 1.0.0 of this collection supports `boto3 >= 1.34.0` and `botocore >= 1.34.0`
-
+Version 1.0.0 of this collection supports ``boto3 >= 1.34.0`` and ``botocore >= 1.34.0``.
 
 ## Included content
 <!--start collection content-->
-See the complete list of collection content in the [Plugin Index](https://ansible-collections.github.io/community.aws/branch/main/collections/community/aws/index.html#plugin-index).
+### Modules
+Name | Description
+--- | ---
+[amazon.ai.bedrock_agent](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
+[amazon.ai.bedrock_agent_action_group](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
+[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
+[amazon.ai.bedrock_agent_alias](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
+[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
+[amazon.ai.bedrock_agent_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
+[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_model](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
+[amazon.ai.devopsguru_insight_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
+[amazon.ai.devopsguru_resource_collection](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
+[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
 
 <!--end collection content-->
 
 ## Using this collection
 
-<!--Include some quick examples that cover the most common use cases for your collection content. It can include the following examples of installation and upgrade (change NAMESPACE.COLLECTION_NAME correspondingly):-->
-
 ### Installing the Collection from Ansible Galaxy
 
-Before using this collection, you need to install it with the Ansible Galaxy command-line tool:
+To consume this Collection from Automation Hub, please ensure that you add the following lines to your ``ansible.cfg`` file.
+
+```
+[galaxy]
+server_list = automation_hub
+
+[galaxy_server.automation_hub]
+url=https://cloud.redhat.com/api/automation-hub/
+auth_url=https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token
+token=<SecretToken>
+```
+The token can be obtained from the [Automation Hub Web UI](https://console.redhat.com/ansible/automation-hub/token).
+
+Once the above steps are done, you can run the following command to install the collection.
+
 ```bash
 ansible-galaxy collection install amazon.ai
 ```
 
 You can also include it in a `requirements.yml` file and install it with `ansible-galaxy collection install -r requirements.yml`, using the format:
+
 ```yaml
 ---
 collections:
   - name: amazon.ai
 ```
 
-Note that if you install the collection from Ansible Galaxy, it will not be upgraded automatically when you upgrade the `ansible` package. To upgrade the collection to the latest available version, run the following command:
-```bash
-ansible-galaxy collection install amazon.ai --upgrade
-```
-
-You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `0.1.0`:
+You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `1.0.0`:
 
 ```bash
-ansible-galaxy collection install amazon.ai:==0.1.0
+ansible-galaxy collection install amazon.ai:==1.0.0
 ```
 
 See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
 
-## Release notes
+The Python module dependencies are not installed by `ansible-galaxy`.  They can
+be manually installed using pip:
 
-See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
+```shell
+pip install -r requirements.txt
+```
 
+or:
+
+```shell
+pip install boto3 botocore
+```
+
+Refer to the following resources for more details:
+
+* [Amazon Web Services Guide](https://docs.ansible.com/ansible/latest/collections/amazon/aws/docsite/guide_aws.html)
+* [using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html) for more details.
+
+## Using this collection
+
+You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.bedrock_agent``, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
+
+```yaml
+---
+- name: Create Bedrock Agent
+  amazon.ai.bedrock_agent:
+    state: present
+    agent_name: "{{ agent_name }}"
+    foundation_model: "{{ foundation_model }}"
+    instruction: "{{ instruction }}"
+    agent_resource_role_arn: "{{ agent_role_arn }}"
+
+- name: Create Bedrock Agent Alias
+  amazon.ai.bedrock_agent_alias:
+    state: present
+    agent_name: "{{ agent_name }}"
+    alias_name: "{{ alias_name }}"
+```
+
+## Testing
+
+The project uses ``ansible-lint`` and ``black``. Assuming this repository is checked out in the proper structure, e.g. ``collections_root/ansible_collections/amazon/ai/``, run:
+
+```shell
+tox -e ansible-lint
+```
+
+or
+
+```shell
+tox -e black
+```
+
+Sanity and unit tests are run as normal:
+
+```shell
+ansible-test sanity
+```
+
+If you want to run cloud integration tests, ensure you log in to the cloud:
+
+```shell
+# using the "default" profile on AWS
+aws configure set aws_access_key_id     my-access-key
+aws configure set aws_secret_access_key my-secret-key
+aws configure set region                eu-north-1
+
+ansible-test integration [target]
+```
+
+This collection is tested using GitHub Actions.
 
 ## More information
-
-<!-- List out where the user can find additional information, such as working group meeting times, slack/IRC channels, or documentation for the product this collection automates. At a minimum, link to: -->
 
 - [Ansible user guide](https://docs.ansible.com/ansible/devel/user_guide/index.html)
 - [Ansible developer guide](https://docs.ansible.com/ansible/devel/dev_guide/index.html)
@@ -136,8 +192,8 @@ See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/C
 
 ## Licensing
 
-<!-- Include the appropriate license information here and a pointer to the full licensing details. If the collection contains modules migrated from the ansible/ansible repo, you must use the same license that existed in the ansible/ansible repo. See the GNU license example below. -->
 
 GNU General Public License v3.0 or later.
 
 See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
+
