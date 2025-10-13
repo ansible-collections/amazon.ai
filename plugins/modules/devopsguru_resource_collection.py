@@ -211,7 +211,6 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
 
     # If no resource collection exists at all, treat as initial creation
     if not existing_cloud_stacks and not existing_tags and (stack_names or tags):
-        changed = True
         if stack_names:
             params = {
                 "Action": "ADD",
@@ -238,11 +237,13 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
                     result["msg"] = "All specified stacks already exist. Nothing changed."
             elif state == "absent":
                 if stack_names:
-                    if set(stack_names).issubset(set(existing_cloud_stacks)):
+                    # Remove only stacks that actually exist
+                    stacks_to_remove = [s for s in stack_names if s in existing_cloud_stacks]
+                    if stacks_to_remove:
                         changed = True
                         params = {
                             "Action": "REMOVE",
-                            "ResourceCollection": {"CloudFormation": {"StackNames": stack_names}},
+                            "ResourceCollection": {"CloudFormation": {"StackNames": stacks_to_remove}},
                         }
                         result["msg"] = update_resource_collection(client, module, **params)
                         result["changed"] = True
@@ -293,7 +294,6 @@ def main() -> None:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     result = {"resource_collection": {}}
-    changed = False
     notification_channel_config = module.params.get("notification_channel_config")
 
     try:
@@ -303,7 +303,8 @@ def main() -> None:
             changed, notification_channel_id, msg = ensure_notification_channel(
                 client, module, notification_channel_config
             )
-            result["msg"] = msg
+            result["msg"] = result.get("msg", "") + str(msg)
+            result["changed"] = changed
             if notification_channel_id:
                 result["notification_channel"] = notification_channel_id
 

@@ -157,7 +157,7 @@ EXAMPLES = r"""
 
 RETURN = r"""
 proactive_insight:
-    description: Details about a proactive insight (predictive alerts) returned by Amazon DevOps Guru.
+    description: List containing details about proactive insights (predictive alerts) returned by Amazon DevOps Guru.
     returned: when the specified or filtered insight is proactive
     type: dict
     contains:
@@ -260,10 +260,10 @@ proactive_insight:
                     type: str
                     sample: "https://docs.aws.amazon.com/devops-guru/latest/advice/rds-connection-optimization.html"
 
-reactive_insight:
-    description: Details about a reactive insight (detected after an operational issue occurs).
+reactive_insights:
+    description: List containing details about reactive insights (detected after an operational issue occurs).
     returned: when the specified or filtered insight is reactive
-    type: dict
+    type: list
     contains:
         id:
             description: The unique identifier of the reactive insight.
@@ -378,6 +378,7 @@ def main() -> None:
     insight_id = module.params.get("insight_id")
     include_anomalies = module.params.get("include_anomalies")
     include_recommendations = module.params.get("include_recommendations")
+    result = {"changed": False}
 
     if status_filter:
         status_filter = convert_time_ranges(snake_dict_to_camel_dict(status_filter, capitalize_first=True))
@@ -426,17 +427,29 @@ def main() -> None:
                     if data_type == "recommendations":
                         params["Locale"] = include_flag["locale"]
 
-                    if isinstance(insight_info[insight_type], dict):
-                        params["InsightId"] = insight_info[insight_type]["Id"]
-                        fetched_data = globals()[fetch_func](client, api_call, **params)
-                        merge_data(insight_info[insight_type], fetched_data)
-                    elif isinstance(insight_info[insight_type], list):
-                        for insight in insight_info[insight_type]:
-                            params["InsightId"] = insight["Id"]
-                            fetched_data = globals()[fetch_func](client, api_call, **params)
-                            merge_data(insight, fetched_data)
+                    # Handle both single and list insight cases
+                    insights = (
+                        [insight_info[insight_type]]
+                        if isinstance(insight_info[insight_type], dict)
+                        else insight_info[insight_type]
+                    )
 
-        module.exit_json(**camel_dict_to_snake_dict(insight_info))
+                    for insight in insights:
+                        params["InsightId"] = insight["Id"]
+                        fetched_data = globals()[fetch_func](client, api_call, **params)
+                        merge_data(insight, fetched_data)
+
+        if "ProactiveInsights" in insight_info:
+            result["proactive_insights"] = insight_info["ProactiveInsights"]
+        elif insight_type == "ProactiveInsight" and "ProactiveInsight" in insight_info:
+            result["proactive_insights"] = [insight_info["ProactiveInsight"]]
+
+        if "ReactiveInsights" in insight_info:
+            result["reactive_insights"] = insight_info["ReactiveInsights"]
+        elif insight_type == "ReactiveInsight" and "ReactiveInsight" in insight_info:
+            result["reactive_insights"] = [insight_info["ReactiveInsight"]]
+
+        module.exit_json(**camel_dict_to_snake_dict(result))
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)

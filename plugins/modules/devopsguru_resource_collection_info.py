@@ -109,7 +109,7 @@ def main() -> None:
 
     try:
         resource_collection = get_resource_collection_specified_type(client, resource_collection_type)
-        module.exit_json(resource_collection=camel_dict_to_snake_dict(resource_collection))
+        module.exit_json(changed=False, resource_collection=camel_dict_to_snake_dict(resource_collection))
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

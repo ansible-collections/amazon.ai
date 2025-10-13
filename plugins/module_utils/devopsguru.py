@@ -213,7 +213,7 @@ def list_notification_channels(client) -> List[Dict[str, Any]]:
     Args:
         client: The boto3 DevOpsGuru client.
     Returns:
-        A dictionary of insights.
+        A list of notification channels.
     """
     paginator = client.get_paginator("list_notification_channels")
     return paginator.paginate().build_full_result()["Channels"]
@@ -242,18 +242,19 @@ def ensure_notification_channel(
         }
 
     desired_normalized = normalize_channel({"Config": desired})
-    existing_normalized = [normalize_channel(ch) for ch in existing_channels]
 
-    # Check if the desired channel already exists
-    if desired_normalized in existing_normalized:
-        msg = "Notification channel already exists. No changes made."
-        return changed, None, msg
+    # Find if the desired channel already exists
+    for ch in existing_channels:
+        if normalize_channel(ch) == desired_normalized:
+            channel_id = ch.get("Id")
+            msg = f"Notification channel {channel_id} already exists. No changes made."
+            return changed, channel_id, msg
 
     # Otherwise, add a new one
     if not module.check_mode:
         response = client.add_notification_channel(Config=desired)
         channel_id = response["Id"]
-        msg = "Notification channel added successfully."
+        msg = f"Notification channel {channel_id} added successfully."
     else:
         channel_id = None
         msg = "Check mode: would have added notification channel."
