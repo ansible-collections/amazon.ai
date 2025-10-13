@@ -56,17 +56,17 @@ Version 1.0.0 of this collection supports ``boto3 >= 1.34.0`` and ``botocore >= 
 ### Modules
 Name | Description
 --- | ---
-[amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
-[amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
-[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
-[amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
-[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
-[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
-[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
-[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
-[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
-[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
-[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
+[amazon.ai.bedrock_agent](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
+[amazon.ai.bedrock_agent_action_group](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
+[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
+[amazon.ai.bedrock_agent_alias](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
+[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
+[amazon.ai.bedrock_agent_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
+[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_model](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
+[amazon.ai.devopsguru_insight_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
+[amazon.ai.devopsguru_resource_collection](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
+[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
 
 <!--end collection content-->
 
@@ -109,7 +109,7 @@ ansible-galaxy collection install amazon.ai:==1.0.0
 
 See [using Ansible collections](https://docs.ansible.com/ansible/devel/user_guide/collections_using.html) for more details.
 
-The python module dependencies are not installed by `ansible-galaxy`.  They can
+The Python module dependencies are not installed by `ansible-galaxy`.  They can
 be manually installed using pip:
 
 ```shell
@@ -122,14 +122,14 @@ or:
 pip install boto3 botocore
 ```
 
-Refer the following for more details:
+Refer to the following resources for more details:
 
 * [Amazon Web Services Guide](https://docs.ansible.com/ansible/latest/collections/amazon/aws/docsite/guide_aws.html)
 * [using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html) for more details.
 
 ## Using this collection
 
-You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as `amazon.ai.bedrock_agent`, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's collections keyword:
+You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.bedrock_agent``, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
 
 ```yaml
 ---
@@ -150,7 +150,7 @@ You can either call modules, rulebooks and playbooks by their Fully Qualified Co
 
 ## Testing
 
-The project uses ``ansible-lint`` and ``black``. Assuming this repository is checked out in the proper structure, e.g. collections_root/ansible_collections/amazon/ai/, run:
+The project uses ``ansible-lint`` and ``black``. Assuming this repository is checked out in the proper structure, e.g. ``collections_root/ansible_collections/amazon/ai/``, run:
 
 ```shell
 tox -e ansible-lint

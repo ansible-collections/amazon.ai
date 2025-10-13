@@ -16,7 +16,7 @@ description:
 options:
     agent_name:
         description:
-            - The Name of the agent.
+            - The name of the agent.
         type: str
         required: true
     agent_version:

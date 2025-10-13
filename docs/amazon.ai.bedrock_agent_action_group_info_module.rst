@@ -89,7 +89,7 @@ Parameters
                 <td>
                 </td>
                 <td>
-                        <div>The Name of the agent.</div>
+                        <div>The name of the agent.</div>
                 </td>
             </tr>
             <tr>
