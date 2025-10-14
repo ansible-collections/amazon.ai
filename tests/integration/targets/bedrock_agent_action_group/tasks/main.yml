@@ -65,7 +65,7 @@
         creates: "/tmp/lambda_package/requests"
 
     - name: Create deployment zip archive
-      ansible.builtin.archive:
+      community.general.archive:
         path: /tmp/lambda_package
         dest: /tmp/lambda.zip
         format: zip
