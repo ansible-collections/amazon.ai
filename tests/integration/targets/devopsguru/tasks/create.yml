@@ -22,36 +22,69 @@
 
 - name: Deploy RDS CloudFormation stack
   amazon.aws.cloudformation:
-    stack_name: "DevOps-Guru-Stack"
+    stack_name: "{{ stack_name }}"
     state: present
-    template_body: "{{ lookup('template', 'cloudformation.yml.j2') }}"
+    template_body: "{{ lookup('template', 'cloudformation.yaml.j2') }}"
     template_parameters:
       AmiId: "{{ ami_id.image_id }}"
       InstanceType: "t2.medium"
     capabilities:
       - CAPABILITY_NAMED_IAM
-
-- name: Wait for CloudFormation stack to complete
-  amazon.aws.cloudformation_info:
-    stack_name: "DevOps-Guru-Stack"
   register: stack_info
-  until: stack_info.output == "Stack CREATE complete"
-  retries: 10
-  delay: 30
 
-- name: Output RDS Endpoint
-  debug:
-    msg: "RDS Endpoint: {{ stack_info.stack_outputs | selectattr('OutputKey', 'equalto', 'DBInstanceEndpoint') | map(attribute='OutputValue') | first }}"
+- name: Assert DevOpsGuru Resource Collection result is defined
+  ansible.builtin.assert:
+    that:
+      - '"Stack CREATE complete" in stack_info.output'
+
+- name: Enable DevOpsGuru on Stack (check_mode)
+  amazon.ai.devopsguru_resource_collection:
+    state: present
+    cloudformation_stack_names:
+        - "{{ stack_name }}"
+  check_mode: true
+  register: enable_devopsguru
+
+- name: Assert that DevOpsGuru has been enabled on Stack (check_mode)
+  ansible.builtin.assert:
+    that:
+      - enable_devopsguru.changed
+      - '"Check mode: would have updated resource collection." in enable_devopsguru.msg'
 
 - name: Enable DevOpsGuru on Stack
   amazon.ai.devopsguru_resource_collection:
     state: present
     cloudformation_stack_names:
-        - "DevOps-Guru-Stack"
+        - "{{ stack_name }}"
+  register: enable_devopsguru
+
+- name: Assert that DevOpsGuru has been enabled on Stack
+  ansible.builtin.assert:
+    that:
+      - enable_devopsguru.changed
+      - '"Resource collection updated successfully." in enable_devopsguru.msg'
+
+- name: Enable DevOpsGuru on Stack (idempotency)
+  amazon.ai.devopsguru_resource_collection:
+    state: present
+    cloudformation_stack_names:
+        - "{{ stack_name }}"
+  register: enable_devopsguru
+
+- name: Assert that DevOpsGuru has been enabled on Stack
+  ansible.builtin.assert:
+    that:
+      - not enable_devopsguru.changed
 
 - name: Gather information about DevOpsGuru Resource Collections - "AWS_CLOUD_FORMATION"
-  amazon.aws.devopsguru_resource_collection_info:
+  amazon.ai.devopsguru_resource_collection_info:
     resource_collection_type: "AWS_CLOUD_FORMATION"
+  register: resource_collection_info
+
+- name: Assert DevOpsGuru Resource Collection result is defined
+  ansible.builtin.assert:
+    that:
+      - resource_collection_info.resource_collection is defined
 
 - name: Get ARN of the IAM Role
   amazon.aws.iam_role_info:
@@ -88,7 +121,7 @@
         - RetireGrant
   register: cmk_setup
 
-- name: Ensure bucket is configured for encryption
+- name: Ensure S3 bucket is configured for encryption
   amazon.aws.s3_bucket:
     name: "{{ s3_bucket_name }}"
     encryption: "aws:kms"
@@ -98,28 +131,47 @@
 - name: Gather information about DevOpsGuru Resource Collections - "AWS_SERVICE"
   amazon.ai.devopsguru_resource_collection_info:
     resource_collection_type: "AWS_SERVICE"
+  check_mode: true
+  register: resource_collection_info
 
-- name: Gather information about DevOpsGuru Resource Collections -  "AWS_TAGS"
+- name: Assert DevOpsGuru Resource Collection result is defined
+  ansible.builtin.assert:
+    that:
+      - resource_collection_info.resource_collection is defined
+
+- name: Gather information about DevOpsGuru Resource Collections - "AWS_TAGS"
   amazon.ai.devopsguru_resource_collection_info:
     resource_collection_type: "AWS_TAGS"
+  register: resource_collection_info
+
+- name: Assert DevOpsGuru Resource Collection result is defined
+  ansible.builtin.assert:
+    that:
+      - resource_collection_info.resource_collection is defined
 
 - name: Gather information about DevOpsGuru Resource Insights
   amazon.ai.devopsguru_insight_info:
     status_filter:
-      Any:
-        Type: 'REACTIVE'
-        StartTimeRange:
-          FromTime: "2025-02-10"
-          ToTime: "2025-02-12"
+      any:
+        type: 'REACTIVE'
+        start_time_range:
+          from_time: "2025-02-10"
+          to_time: "2025-02-12"
+  register: insight_info
+
+- name: Assert DevOpsGuru Insight result is defined
+  ansible.builtin.assert:
+    that:
+      - insight_info.reactive_insights == []
 
 - name: Gather information about DevOpsGuru Resource Insights with recommendations and anomalies
   amazon.ai.devopsguru_insight_info:
     status_filter:
-      Any:
-        Type: 'REACTIVE'
-        StartTimeRange:
-          FromTime: "2025-02-10"
-          ToTime: "2025-02-12"
+      any:
+        type: 'REACTIVE'
+        start_time_range:
+          from_time: "2025-02-10"
+          to_time: "2025-02-12"
     include_recommendations:
       locale: 'EN_US'
     include_anomalies:
@@ -127,7 +179,42 @@
         from_time: "2025-02-10"
         to_time: "2025-02-12"
 
-- name: Remove Stack from DevOpsGuru
-  amazon.aws.devopsguru_resource_collection:
+- name: Assert DevOpsGuru Insight result is defined
+  ansible.builtin.assert:
+    that:
+      - insight_info.reactive_insights == []
+
+- name: Remove Stack from DevOpsGuru (check_mode)
+  amazon.ai.devopsguru_resource_collection:
     state: absent
     cloudformation_stack_names: []
+  check_mode: true
+  register: remove_stacks
+
+- name: Assert that Stacks have been removed from DevOpsGuru (check_mode)
+  ansible.builtin.assert:
+    that:
+      - remove_stacks.changed
+      - '"Check mode: would have updated resource collection." in remove_stacks.msg'
+
+- name: Remove Stack from DevOpsGuru
+  amazon.ai.devopsguru_resource_collection:
+    state: absent
+    cloudformation_stack_names: []
+  register: remove_stacks
+
+- name: Assert that Stacks have been removed from DevOpsGuru
+  ansible.builtin.assert:
+    that:
+      - remove_stacks.changed
+
+- name: Remove Stack from DevOpsGuru (idempotency)
+  amazon.ai.devopsguru_resource_collection:
+    state: absent
+    cloudformation_stack_names: []
+  register: remove_stacks
+
+- name: Assert that Stacks have been removed from DevOpsGuru (idempotency)
+  ansible.builtin.assert:
+    that:
+      - not remove_stacks.changed

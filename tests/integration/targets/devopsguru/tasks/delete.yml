@@ -1,19 +1,21 @@
 ---
 - name: Delete SQS queue
-  community.aws.sns_topic:
-    name: DevOpsGuruNotifications
+  community.aws.sqs_queue:
+    name: "{{ sqs_queue_name }}"
     state: absent
+  ignore_errors: true
 
 - name: Delete SNS Topic
   community.aws.sns_topic:
-    name: DevOpsGuruNotifications
+    name: "{{ sns_topic_name }}"
     state: absent
-  register: sns_topic
+  ignore_errors: true
 
 - name: Delete CloudFormation stack
   amazon.aws.cloudformation:
-    stack_name: "DevOps-Guru-Stack"
+    stack_name: "{{ stack_name }}"
     state: absent
+  ignore_errors: true
 
 - name: List bucket object
   amazon.aws.s3_object:
@@ -43,3 +45,4 @@
   amazon.aws.kms_key:
     state: absent
     alias: '{{ kms_key_name }}'
+  ignore_errors: true
