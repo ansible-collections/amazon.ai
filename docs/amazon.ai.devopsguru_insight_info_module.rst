@@ -490,20 +490,20 @@ Examples
     - name: Gather information about DevOpsGuru Resource Insights
       amazon.ai.devopsguru_insight_info:
         status_filter:
-          Any:
-            Type: 'REACTIVE'
-            StartTimeRange:
-              FromTime: "2025-02-10"
-              ToTime: "2025-02-12"
+          any:
+            type: 'REACTIVE'
+            start_time_range:
+              from_time: "2025-02-10"
+              to_time: "2025-02-12"
 
     - name: Gather information about DevOpsGuru Resource Insights including recommendations and anomalies
       amazon.ai.devopsguru_insight_info:
         status_filter:
-          Closed:
-            Type: 'REACTIVE'
-            EndTimeRange:
-              FromTime: "2025-03-04"
-              ToTime: "2025-03-06"
+          closed:
+            type: 'REACTIVE'
+            end_time_range:
+              from_time: "2025-03-04"
+              to_time: "2025-03-06"
         include_recommendations:
           locale: EN_US
         include_anomalies:
@@ -548,7 +548,7 @@ Common return values are documented `here <https://docs.ansible.com/ansible/late
                 </td>
                 <td>when the specified or filtered insight is proactive</td>
                 <td>
-                            <div>Details about a proactive insight (predictive alerts) returned by Amazon DevOps Guru.</div>
+                            <div>List containing details about proactive insights (predictive alerts) returned by Amazon DevOps Guru.</div>
                     <br/>
                 </td>
             </tr>
@@ -980,15 +980,15 @@ Common return values are documented `here <https://docs.ansible.com/ansible/late
             <tr>
                 <td colspan="4">
                     <div class="ansibleOptionAnchor" id="return-"></div>
-                    <b>reactive_insight</b>
+                    <b>reactive_insights</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
                     <div style="font-size: small">
-                      <span style="color: purple">dictionary</span>
+                      <span style="color: purple">list</span>
                     </div>
                 </td>
                 <td>when the specified or filtered insight is reactive</td>
                 <td>
-                            <div>Details about a reactive insight (detected after an operational issue occurs).</div>
+                            <div>List containing details about reactive insights (detected after an operational issue occurs).</div>
                     <br/>
                 </td>
             </tr>

@@ -63,6 +63,7 @@ Name | Description
 [amazon.ai.bedrock_agent_alias_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
 [amazon.ai.bedrock_agent_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
 [amazon.ai.bedrock_foundation_models_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_agent](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invokes an Amazon Bedrock agent with a prompt
 [amazon.ai.bedrock_invoke_model](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
 [amazon.ai.devopsguru_insight_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
 [amazon.ai.devopsguru_resource_collection](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections

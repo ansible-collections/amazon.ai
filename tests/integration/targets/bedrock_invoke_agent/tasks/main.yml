@@ -1,5 +1,5 @@
 ---
-- name: Amazon Bedrock Agent Alias integration tests
+- name: Amazon Bedrock Invoke Agent integration tests
   module_defaults:
     group/amazon.ai.aws:
       access_key: "{{ aws_access_key }}"

@@ -1,5 +1,5 @@
 ---
-- name: Amazon Bedrock integration tests
+- name: Amazon Bedrock Agent Action Group integration tests
   module_defaults:
     group/amazon.ai.aws:
       access_key: "{{ aws_access_key }}"
