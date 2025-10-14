@@ -226,7 +226,6 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
             if state == "present" and stack_names:
                 new_stacks = [s for s in stack_names if s not in existing_cloud_stacks]
                 if new_stacks:
-                    changed = True
                     params = {
                         "Action": "ADD",
                         "ResourceCollection": {"CloudFormation": {"StackNames": new_stacks}},
@@ -240,7 +239,6 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
                     # Remove only stacks that actually exist
                     stacks_to_remove = [s for s in stack_names if s in existing_cloud_stacks]
                     if stacks_to_remove:
-                        changed = True
                         params = {
                             "Action": "REMOVE",
                             "ResourceCollection": {"CloudFormation": {"StackNames": stacks_to_remove}},
@@ -250,7 +248,6 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
                     else:
                         result["msg"] = "Some specified stacks do not exist. Nothing changed."
                 elif stack_names == [] and existing_cloud_stacks:
-                    changed = True
                     params = {
                         "Action": "REMOVE",
                         "ResourceCollection": {"CloudFormation": {"StackNames": existing_cloud_stacks}},
@@ -264,12 +261,11 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
         if tags is not None:
             update, updated_tags = update_tags(existing_tags, tags, state=state)
             if update:
-                changed = True
                 action = "ADD" if state == "present" else "REMOVE"
                 params = {"Action": action, "ResourceCollection": {"Tags": updated_tags}}
                 result["msg"] = update_resource_collection(client, module, **params)
                 result["changed"] = True
-            elif not changed:
+            else:
                 result["msg"] = "No changes to tags required. Nothing changed."
     return result
 
@@ -304,7 +300,7 @@ def main() -> None:
                 client, module, notification_channel_config
             )
             result["msg"] = result.get("msg", "") + str(msg)
-            result["changed"] = changed
+            result["changed"] |= changed
             if notification_channel_id:
                 result["notification_channel"] = notification_channel_id
 
