@@ -102,7 +102,7 @@
       amazon.aws.iam_policy:
         iam_type: role
         iam_name: "{{ agent_role_name }}"
-        policy_name: "BedrockInvokeLambdaPolicy"
+        policy_name: "{{ policy_name }}"
         state: present
         policy_json: >
           {
