@@ -47,19 +47,28 @@
         seconds: 15
         prompt: "Waiting for IAM role to be fully propagated."
     
-    - name: Create a dummy Lambda function deployment package
+    - name: Ensure lambda_package directory exists
+      ansible.builtin.file:
+        path: /tmp/lambda_package
+        state: directory
+        mode: '0755'
+    
+    - name: Create dummy Lambda function deployment package using archive
+      ansible.builtin.copy:
+        dest: /tmp/lambda_package/lambda_function.py
+        content: "{{ lookup('file', 'files/script.py') }}"
+
+    - name: Install dependencies into package dir
       ansible.builtin.shell: |
-        # Create a temporary directory for the deployment package
-        mkdir /tmp/lambda_package
-        cd /tmp/lambda_package
-        # Copy the script from the local files directory
-        cp "{{ lookup('file', 'files/script.py') }}" lambda_function.py
-        # Install Python dependencies into the package directory
-        pip install requests -t .
-        # Create the zip file containing the script and dependencies
-        zip -r /tmp/lambda.zip .
+        pip install requests -t /tmp/lambda_package
       args:
-        creates: "/tmp/lambda.zip"
+        creates: "/tmp/lambda_package/requests"
+
+    - name: Create deployment zip archive
+      ansible.builtin.archive:
+        path: /tmp/lambda_package
+        dest: /tmp/lambda.zip
+        format: zip
 
     - name: Create Lambda function
       amazon.aws.lambda:

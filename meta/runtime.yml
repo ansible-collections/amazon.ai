@@ -9,6 +9,7 @@ action_groups:
     - bedrock_agent_action_group_info
     - bedrock_agent_info
     - bedrock_foundation_models_info
+    - bedrock_invoke_agent
     - bedrock_invoke_model
     - devopsguru_insight_info
     - devopsguru_resource_collection
