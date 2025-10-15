@@ -2,6 +2,6 @@
 test_id: "{{ tiny_prefix }}"
 agent_name: "test-bedrock-agent-{{ test_id }}"
 alias_name: "test-bedrock-agent-alias-{{ test_id }}"
-agent_role_name: "test-bedrock-agent-role-{{ test_id }}"
+agent_role_name: "ansible-test-bedrock-agent-role-{{ test_id }}"
 foundation_model: "amazon.nova-micro-v1:0"
 instruction: "You are a friendly chat bot that provides helpful information and assistance to users."
