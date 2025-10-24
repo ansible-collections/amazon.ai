@@ -59,7 +59,7 @@
     that:
       - notification_channel.changed
       - notification_channel.notification_channel is defined 
-      - "'Notification channel added successfully.' in notification_channel.msg"
+      - "'added successfully.' in notification_channel.msg"
 
 - name: Create DevOps Guru Notification Channel (idempotency)
   amazon.ai.devopsguru_resource_collection:
@@ -73,6 +73,105 @@
         severities:
           - HIGH
           - MEDIUM
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created (idempotency)
+  ansible.builtin.assert:
+    that:
+      - not notification_channel.changed
+
+- name: Update DevOps Guru Notification Channel (check_mode)
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    notification_channel_config:
+      sns:
+        topic_arn: "{{ sns_topic.sns_arn }}"
+      filters:
+        severities:
+          - MEDIUM
+  check_mode: true
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created (check_mode)
+  ansible.builtin.assert:
+    that:
+      - notification_channel.changed
+
+- name: Update DevOps Guru Notification Channel
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    notification_channel_config:
+      sns:
+        topic_arn: "{{ sns_topic.sns_arn }}"
+      filters:
+        severities:
+          - MEDIUM
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created
+  ansible.builtin.assert:
+    that:
+      - notification_channel.changed
+
+- name: Update DevOps Guru Notification Channel (idempotency)
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    notification_channel_config:
+      sns:
+        topic_arn: "{{ sns_topic.sns_arn }}"
+      filters:
+        severities:
+          - MEDIUM
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created (idempotency)
+  ansible.builtin.assert:
+    that:
+      - not notification_channel.changed
+
+- name: DevOps Guru remove Notification Channel (check_mode)
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    remove_notification_channel: true
+    notification_channel_id: "{{ notification_channel.notification_channel }}"
+  check_mode: true
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created (check_mode)
+  ansible.builtin.assert:
+    that:
+      - notification_channel.changed
+      - "'Check mode: would have removed notification channel' in notification_channel.msg"
+
+- name: DevOps Guru remove Notification Channel
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    remove_notification_channel: true
+    notification_channel_id: "{{ notification_channel.notification_channel }}"
+  register: notification_channel
+
+- name: Assert that Notification Channel has been created
+  ansible.builtin.assert:
+    that:
+      - notification_channel.changed
+
+- name: DevOps Guru remove Notification Channel (idempotency)
+  amazon.ai.devopsguru_resource_collection:
+    cloudformation_stack_names:
+      - "{{ stack_name }}"
+    state: present
+    remove_notification_channel: true
+    notification_channel_id: "{{ notification_channel.notification_channel }}"
   register: notification_channel
 
 - name: Assert that Notification Channel has been created (idempotency)

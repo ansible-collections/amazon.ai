@@ -5,14 +5,11 @@
 import json
 from datetime import date
 from datetime import datetime
-from typing import Any
-from typing import Dict
 from typing import Union
 
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
-from ansible_collections.amazon.ai.plugins.module_utils.utils import extract_completion
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 
 
@@ -34,40 +31,6 @@ def test_encode_body_valid(input_value: Union[dict, list, str], expected_bytes: 
 def test_encode_body_invalid_type():
     with pytest.raises(TypeError, match="body must be a dict, list, or string"):
         encode_body(123)  # Invalid type
-
-
-# ----------------------------
-# Tests for extract_completion
-# ----------------------------
-@pytest.mark.parametrize(
-    "response_body, expected",
-    [
-        # Anthropic-style
-        ({"completion": "Hello world"}, "Hello world"),
-        # Nova / Amazon-style
-        (
-            {"output": {"message": {"content": [{"text": "Nova answer"}]}}},
-            "Nova answer",
-        ),
-        # Cohere-style
-        ({"generations": [{"text": "Cohere response"}]}, "Cohere response"),
-        # Malformed Nova / Amazon
-        ({"output": {"message": {"content": []}}}, None),
-        ({"output": {}}, None),
-        # Malformed Cohere
-        ({"generations": []}, None),
-        ({"generations": [{}]}, None),
-        # Raw string
-        ("Just a string", "Just a string"),
-        # Other types
-        (12345, None),
-        (None, None),
-        ([], None),
-    ],
-)
-def test_extract_completion(response_body: Union[Dict[str, Any], str], expected: Union[str, None]):
-    result = extract_completion(response_body)
-    assert result == expected
 
 
 # --------------------

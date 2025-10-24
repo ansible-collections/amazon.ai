@@ -364,7 +364,7 @@
           action_group_name: "{{ action_group_name }}"
         register: list_action_groups_output
         ignore_errors: true
-        until: list_action_groups_output.action_group.action_group_state == 'DISABLED'
+        until: list_action_groups_output.action_groups[0].action_group_state == 'DISABLED'
         retries: 20
         delay: 10
       when: get_action_group.action_groups != [] and get_action_group.action_groups[0].action_group_state != 'DISABLED'
@@ -374,12 +374,6 @@
         agent_name: "{{ agent_name }}"
         action_group_name: "{{ action_group_name }}"
         state: absent
-      ignore_errors: true
-  
-    - name: Delete Bedrock Agent
-      amazon.ai.bedrock_agent:
-        state: absent
-        agent_name: "{{ agent_name }}"
       ignore_errors: true
     
     - name: Remove Bedrock access from Lambda for agent action groups
@@ -391,6 +385,12 @@
         principal: "bedrock.amazonaws.com"
         source_account: "{{ aws_account_id }}"
         source_arn: "arn:aws:bedrock:{{ aws_region }}:{{ aws_account_id }}:agent/{{ agent_id }}"
+      ignore_errors: true
+  
+    - name: Delete Bedrock Agent
+      amazon.ai.bedrock_agent:
+        state: absent
+        agent_name: "{{ agent_name }}"
       ignore_errors: true
 
     - name: Delete Lambda function

@@ -267,6 +267,21 @@ Parameters
             <tr>
                 <td colspan="3">
                     <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>notification_channel_id</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td>
+                </td>
+                <td>
+                        <div>The ID of the notification channnel to remove when O(state=absent).</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
                     <b>profile</b>
                     <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
                     <div style="font-size: small">
@@ -300,6 +315,26 @@ Parameters
                         <div>The <code>AWS_REGION</code> environment variable may also be used.</div>
                         <div>See the Amazon AWS documentation for more information <a href='http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region'>http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region</a>.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: aws_region</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>remove_notification_channel</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">boolean</span>
+                    </div>
+                </td>
+                <td>
+                        <ul style="margin: 0; padding: 0"><b>Choices:</b>
+                                    <li>no</li>
+                                    <li><div style="color: blue"><b>yes</b>&nbsp;&larr;</div></li>
+                        </ul>
+                </td>
+                <td>
+                        <div>Wether to remove or not the O(notification_channel_id).</div>
+                        <div>O(remove_notification_channel) and O(notification_channel_id) are required together.</div>
                 </td>
             </tr>
             <tr>
@@ -393,6 +428,7 @@ Parameters
                 <td>
                         <div>An Amazon Web Services tag key that is used to identify the Amazon Web Services resources that DevOps Guru analyzes.</div>
                         <div>All Amazon Web Services resources in your account and Region tagged with this key make up your DevOps Guru application and analysis boundary.</div>
+                        <div>The key must begin with the prefix V(DevOps-Guru-). Any casing can be used for the prefix, but the associated tags must use the same casing in their tag key.</div>
                 </td>
             </tr>
             <tr>
@@ -441,6 +477,8 @@ Notes
 -----
 
 .. note::
+   - DevOps Guru only supports one AppBoundaryKey per resource collection.
+   - Only one type of resource collection (All Account Resources, CloudFormation, or Tags) can be enabled in an account at a time.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 

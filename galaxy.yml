@@ -13,11 +13,10 @@ tags:
 dependencies:
   amazon.aws: '>=10.0.0'
   community.aws: '>=10.0.0'
-repository: https://github.com/ansible
-homepage: https://github.com/ansible
-issues: https://access.redhat.com/support/
+repository: https://github.com/ansible-collections/amazon.ai
+homepage: https://github.com/ansible-collections/amazon.ai
+issues: https://github.com/ansible-collections/amazon.ai/issues
 build_ignore:
-  - .gitignore
   - changelogs/.plugin-cache.yaml
   - '*cloud-config-aws.ini'
   - '*cloud-config-aws.yml'

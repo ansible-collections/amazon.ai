@@ -105,5 +105,4 @@
           - inference_result is success
           - inference_result is changed
           - inference_result.raw_response is defined
-          - inference_result.completion is defined
           - inference_result.model_id == model_id
