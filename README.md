@@ -49,25 +49,25 @@ this collection requires Python 3.9 or greater.
 
 ## AWS SDK version compatibility
 
-Version 1.0.0 of this collection supports ``boto3 >= 1.34.0`` and ``botocore >= 1.34.0``.
+Version 1.0.0 of this collection supports ``boto3 >= 1.35.0`` and ``botocore >= 1.35.0``.
 
 ## Included content
 <!--start collection content-->
 ### Modules
 Name | Description
 --- | ---
-[amazon.ai.bedrock_agent](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
-[amazon.ai.bedrock_agent_action_group](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
-[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
-[amazon.ai.bedrock_agent_alias](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
-[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
-[amazon.ai.bedrock_agent_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
-[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
-[amazon.ai.bedrock_invoke_agent](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invokes an Amazon Bedrock agent with a prompt
-[amazon.ai.bedrock_invoke_model](https://github.com/ansible/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
-[amazon.ai.devopsguru_insight_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
-[amazon.ai.devopsguru_resource_collection](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
-[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
+[amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
+[amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
+[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
+[amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
+[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
+[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
+[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invokes an Amazon Bedrock agent with a prompt
+[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
+[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
+[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
+[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
 
 <!--end collection content-->
 
@@ -182,6 +182,14 @@ ansible-test integration [target]
 
 This collection is tested using GitHub Actions.
 
+## Contributing to this collection
+
+The content of this collection is made by people like you, a community of individuals collaborating on making the world better through developing automation software.
+
+We are actively accepting new contributors and all types of contributions are very welcome.
+
+Don't know how to start? Refer to the [Ansible community guide](https://docs.ansible.com/ansible/devel/community/index.html)!
+
 ## More information
 
 - [Ansible user guide](https://docs.ansible.com/ansible/devel/user_guide/index.html)
@@ -191,8 +199,19 @@ This collection is tested using GitHub Actions.
 - [The Bullhorn (the Ansible contributor newsletter)](https://docs.ansible.com/ansible/devel/community/communication.html#the-bullhorn)
 - [Important announcements for maintainers](https://github.com/ansible-collections/news-for-maintainers)
 
-## Licensing
+## Support
 
+As Red Hat Ansible Certified Content, this collection is entitled to support through the Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, there may community help available on the [Ansible Forum](https://forum.ansible.com/).
+
+You can also join us on:
+
+- Libera.Chat IRC - the ``#ansible-aws`` [irc.libera.chat](https://libera.chat/) channel
+
+## Release notes
+
+See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
+
+## Licensing
 
 GNU General Public License v3.0 or later.
 

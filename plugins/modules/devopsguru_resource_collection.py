@@ -41,6 +41,8 @@ options:
                       Guru analyzes.
                     - All Amazon Web Services resources in your account and Region tagged with this key make up your DevOps
                       Guru application and analysis boundary.
+                    - The key must begin with the prefix V(DevOps-Guru-). Any casing can be used for the prefix, but the
+                      associated tags must use the same casing in their tag key.
                 type: str
                 required: true
             tag_values:
@@ -87,6 +89,19 @@ options:
                             - 'NEW_ASSOCIATION'
                             - 'SEVERITY_UPGRADED'
                             - 'NEW_RECOMMENDATION'
+    notification_channel_id:
+        description:
+            - The ID of the notification channnel to remove when O(state=absent).
+        type: str
+    remove_notification_channel:
+        description:
+            - Wether to remove or not the O(notification_channel_id).
+            - O(remove_notification_channel) and O(notification_channel_id) are required together.
+        type: bool
+        default: true
+notes:
+    - DevOps Guru only supports one AppBoundaryKey per resource collection.
+    - Only one type of resource collection (All Account Resources, CloudFormation, or Tags) can be enabled in an account at a time.
 extends_documentation_fragment:
     - amazon.aws.common.modules
     - amazon.aws.region.modules
@@ -168,10 +183,12 @@ from typing import Dict
 
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import ensure_notification_channel
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import remove_notification_channel
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_resource_collection
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_tags
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
@@ -217,7 +234,10 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
                 "ResourceCollection": {"CloudFormation": {"StackNames": stack_names}},
             }
         elif tags:
-            params = {"Action": "ADD", "ResourceCollection": {"Tags": tags}}
+            params = {
+                "Action": "ADD",
+                "ResourceCollection": {"Tags": [snake_dict_to_camel_dict(tag, capitalize_first=True) for tag in tags]},
+            }
         result["msg"] = update_resource_collection(client, module, **params)
         result["changed"] = True
     else:
@@ -276,6 +296,8 @@ def main() -> None:
         cloudformation_stack_names=dict(type="list", elements="str", aliases=["stack_names"]),
         tags=dict(type="list", elements="dict"),
         notification_channel_config=dict(type="dict"),
+        notification_channel_id=dict(type="str"),
+        remove_notification_channel=dict(type="bool", default=True),
     )
 
     module = AnsibleAWSModule(
@@ -290,16 +312,27 @@ def main() -> None:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     result = {"resource_collection": {}}
-    notification_channel_config = module.params.get("notification_channel_config")
 
     try:
         result = process_resource_collection(client, module)
+
+        # Remove notification channel
+        if not module.params.get("notification_channel_id"):
+            if not module.params.get("remove_notification_channel"):
+                module.warn(
+                    "remove_notification_channel and notification_channel_id are required together, otherwise this operation will be ignored."
+                )
+            else:
+                changed, notification_channel_id, msg = remove_notification_channel(client, module)
+                result["msg"] = result.get("msg", "") + " " + str(msg)
+                result["changed"] |= changed
+                if notification_channel_id:
+                    result["notification_channel"] = notification_channel_id
+
         # Notification channel setup
-        if notification_channel_config:
-            changed, notification_channel_id, msg = ensure_notification_channel(
-                client, module, notification_channel_config
-            )
-            result["msg"] = result.get("msg", "") + str(msg)
+        if module.params.get("notification_channel_config"):
+            changed, notification_channel_id, msg = ensure_notification_channel(client, module)
+            result["msg"] = result.get("msg", "") + " " + str(msg)
             result["changed"] |= changed
             if notification_channel_id:
                 result["notification_channel"] = notification_channel_id

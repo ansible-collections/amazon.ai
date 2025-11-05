@@ -36,6 +36,10 @@ def update_tags(
     updated_tags = current_tags[:]
     update = False
 
+    # Remove tags
+    if new_tags == [] and state == "absent":
+        return True, updated_tags
+
     for new_tag in new_tags:
         app_boundary_key = new_tag.get("app_boundary_key")
         new_tag_values = new_tag.get("tag_values", [])
@@ -219,9 +223,25 @@ def list_notification_channels(client) -> List[Dict[str, Any]]:
     return paginator.paginate().build_full_result()["Channels"]
 
 
-def ensure_notification_channel(
-    client, module: AnsibleAWSModule, desired_config: Dict[str, Any]
-) -> Tuple[bool, Optional[str], str]:
+def remove_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool, Optional[str], str]:
+    notification_channel_id = module.params.get("notification_channel_id")
+    existing_channels = list_notification_channels(client)
+
+    # Remove notification channel
+    if any(channel["Id"] == notification_channel_id for channel in existing_channels):
+        if module.check_mode:
+            msg = f"Check mode: would have removed notification channel {notification_channel_id}."
+            return True, notification_channel_id, msg
+
+        msg = f"Notification channel {notification_channel_id} removed."
+        client.remove_notification_channel(Id=notification_channel_id)
+        return True, None, msg
+    else:
+        msg = f"Notification channel {notification_channel_id} is not assiciated to DevOpsGuru ."
+        return False, None, msg
+
+
+def ensure_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool, Optional[str], str]:
     """
     Ensures the notification channel exists and matches the desired config (idempotent).
     Returns:
@@ -229,6 +249,7 @@ def ensure_notification_channel(
     """
     changed: bool = False
     existing_channels = list_notification_channels(client)
+    desired_config = module.params.get("notification_channel_config")
 
     # Normalize both sides for comparison
     desired = snake_dict_to_camel_dict(desired_config, capitalize_first=True)

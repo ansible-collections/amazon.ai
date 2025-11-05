@@ -37,7 +37,8 @@ options:
     routing_configuration:
         description:
             - Contains details about the routing configuration of the alias.
-        type: dict
+        type: list
+        elements: dict
         suboptions:
             agent_version:
                 description:
@@ -199,7 +200,8 @@ def main():
         tags=dict(type="dict", aliases=["resource_tags"]),
         description=dict(type="str"),
         routing_configuration=dict(
-            type="dict",
+            type="list",
+            elements="dict",
             options=dict(
                 agent_version=dict(type="str"),
                 provisioned_throughput=dict(type="str"),
