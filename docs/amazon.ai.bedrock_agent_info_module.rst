@@ -5,7 +5,7 @@
 amazon.ai.bedrock_agent_info
 ****************************
 
-**Gathers information about Bedrock Agents**
+**Gather information about Bedrock Agents**
 
 
 Version added: 1.0.0

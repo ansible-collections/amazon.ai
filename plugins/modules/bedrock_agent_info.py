@@ -7,7 +7,7 @@
 DOCUMENTATION = r"""
 ---
 module: bedrock_agent_info
-short_description: Gathers information about Bedrock Agents
+short_description: Gather information about Bedrock Agents
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)

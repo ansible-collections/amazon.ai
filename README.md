@@ -58,16 +58,16 @@ Name | Description
 --- | ---
 [amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
 [amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
-[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gathers information about a Bedrock Agent's Action Groups
+[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gather information about a Bedrock Agent's Action Groups
 [amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
-[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gathers information about a Bedrock Agent's Aliases
-[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gathers information about Bedrock Agents
-[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|Lists or gets details for Amazon Bedrock foundation models
-[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invokes an Amazon Bedrock agent with a prompt
-[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Runs inference using Amazon Bedrock models
-[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetches information about Amazon DevOps Guru insights
-[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manages DevOps Guru resource collections
-[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetches information about Amazon DevOps Guru resource collection
+[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
+[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
+[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
+[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models
+[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
+[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
+[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
 
 <!--end collection content-->
 

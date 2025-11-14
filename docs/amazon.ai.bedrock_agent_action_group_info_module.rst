@@ -5,7 +5,7 @@
 amazon.ai.bedrock_agent_action_group_info
 *****************************************
 
-**Gathers information about a Bedrock Agent's Action Groups**
+**Gather information about a Bedrock Agent's Action Groups**
 
 
 Version added: 1.0.0

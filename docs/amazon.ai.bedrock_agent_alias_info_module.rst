@@ -5,7 +5,7 @@
 amazon.ai.bedrock_agent_alias_info
 **********************************
 
-**Gathers information about a Bedrock Agent's Aliases**
+**Gather information about a Bedrock Agent's Aliases**
 
 
 Version added: 1.0.0

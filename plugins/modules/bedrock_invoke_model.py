@@ -8,7 +8,7 @@
 DOCUMENTATION = r"""
 ---
 module: bedrock_invoke_model
-short_description: Runs inference using Amazon Bedrock models
+short_description: Run inference using Amazon Bedrock models
 version_added: "1.0.0"
 description:
     - This module invokes a specified model on Amazon Bedrock with a user-provided request body.
