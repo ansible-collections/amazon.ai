@@ -1,1 +1,47 @@
-releases: {}
+ancestor: null
+releases:
+  1.0.0:
+    changes:
+      release_summary: This is the first release of the ``amazon.ai`` collection,
+        featuring several modules designed for Amazon DevOps Guru and Amazon Bedrock
+        integration.
+    fragments:
+    - release_summary.yml
+    modules:
+    - description: Manage Amazon Bedrock Agents
+      name: bedrock_agent
+      namespace: ''
+    - description: Manage Amazon Bedrock Agent Action Groups
+      name: bedrock_agent_action_group
+      namespace: ''
+    - description: Gather information about a Bedrock Agent's Action Groups
+      name: bedrock_agent_action_group_info
+      namespace: ''
+    - description: Manage Amazon Bedrock Agent Aliases
+      name: bedrock_agent_alias
+      namespace: ''
+    - description: Gather information about a Bedrock Agent's Aliases
+      name: bedrock_agent_alias_info
+      namespace: ''
+    - description: Gather information about Bedrock Agents
+      name: bedrock_agent_info
+      namespace: ''
+    - description: List or get details for Amazon Bedrock foundation models
+      name: bedrock_foundation_models_info
+      namespace: ''
+    - description: Invoke an Amazon Bedrock agent with a prompt
+      name: bedrock_invoke_agent
+      namespace: ''
+    - description: Run inference using Amazon Bedrock models
+      name: bedrock_invoke_model
+      namespace: ''
+    - description: Fetch information about Amazon DevOps Guru insights
+      name: devopsguru_insight_info
+      namespace: ''
+    - description: Manage DevOps Guru resource collections
+      name: devopsguru_resource_collection
+      namespace: ''
+    - description: Fetch information about Amazon DevOps Guru resource collection
+      name: devopsguru_resource_collection_info
+      namespace: ''
+    release_date: '2025-11-18'

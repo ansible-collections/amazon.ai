@@ -5,7 +5,7 @@
 amazon.ai.devopsguru_resource_collection
 ****************************************
 
-**Manages DevOps Guru resource collections**
+**Manage DevOps Guru resource collections**
 
 
 Version added: 1.0.0
@@ -17,7 +17,7 @@ Version added: 1.0.0
 
 Synopsis
 --------
-- Manages DevOps Guru resource collections.
+- Manage DevOps Guru resource collections.
 
 
 

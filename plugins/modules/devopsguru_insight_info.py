@@ -6,10 +6,10 @@
 
 DOCUMENTATION = r"""
 module: devopsguru_insight_info
-short_description: Fetches information about Amazon DevOps Guru insights
+short_description: Fetch information about Amazon DevOps Guru insights
 version_added: 1.0.0
 description:
-    - Fetches information about Amazon DevOps Guru insights.
+    - Fetch information about Amazon DevOps Guru insights.
 options:
     status_filter:
         description:

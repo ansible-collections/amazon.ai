@@ -6,10 +6,10 @@
 
 DOCUMENTATION = r"""
 module: devopsguru_resource_collection_info
-short_description: Fetches information about Amazon DevOps Guru resource collection
+short_description: Fetch information about Amazon DevOps Guru resource collection
 version_added: 1.0.0
 description:
-    - Fetches information about Amazon DevOps Guru resource collections.
+    - Fetch information about Amazon DevOps Guru resource collections.
 options:
     resource_collection_type:
         description:

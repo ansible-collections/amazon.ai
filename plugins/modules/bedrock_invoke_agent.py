@@ -7,7 +7,7 @@
 DOCUMENTATION = r"""
 ---
 module: bedrock_invoke_agent
-short_description: Invokes an Amazon Bedrock agent with a prompt
+short_description: Invoke an Amazon Bedrock agent with a prompt
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)

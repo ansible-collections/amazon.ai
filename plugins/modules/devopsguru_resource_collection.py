@@ -6,10 +6,10 @@
 
 DOCUMENTATION = r"""
 module: devopsguru_resource_collection
-short_description: Manages DevOps Guru resource collections
+short_description: Manage DevOps Guru resource collections
 version_added: 1.0.0
 description:
-    - Manages DevOps Guru resource collections.
+    - Manage DevOps Guru resource collections.
 options:
     state:
         description:

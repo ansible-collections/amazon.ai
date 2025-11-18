@@ -5,7 +5,7 @@
 amazon.ai.devopsguru_insight_info
 *********************************
 
-**Fetches information about Amazon DevOps Guru insights**
+**Fetch information about Amazon DevOps Guru insights**
 
 
 Version added: 1.0.0
@@ -17,7 +17,7 @@ Version added: 1.0.0
 
 Synopsis
 --------
-- Fetches information about Amazon DevOps Guru insights.
+- Fetch information about Amazon DevOps Guru insights.
 
 
 

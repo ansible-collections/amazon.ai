@@ -5,7 +5,7 @@
 amazon.ai.devopsguru_resource_collection_info
 *********************************************
 
-**Fetches information about Amazon DevOps Guru resource collection**
+**Fetch information about Amazon DevOps Guru resource collection**
 
 
 Version added: 1.0.0
@@ -17,7 +17,7 @@ Version added: 1.0.0
 
 Synopsis
 --------
-- Fetches information about Amazon DevOps Guru resource collections.
+- Fetch information about Amazon DevOps Guru resource collections.
 
 
 

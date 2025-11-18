@@ -5,7 +5,7 @@
 amazon.ai.bedrock_invoke_agent
 ******************************
 
-**Invokes an Amazon Bedrock agent with a prompt**
+**Invoke an Amazon Bedrock agent with a prompt**
 
 
 Version added: 1.0.0

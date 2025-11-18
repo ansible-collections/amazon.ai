@@ -5,7 +5,7 @@
 amazon.ai.bedrock_invoke_model
 ******************************
 
-**Runs inference using Amazon Bedrock models**
+**Run inference using Amazon Bedrock models**
 
 
 Version added: 1.0.0

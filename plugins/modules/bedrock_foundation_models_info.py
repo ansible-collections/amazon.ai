@@ -7,7 +7,7 @@
 DOCUMENTATION = r"""
 ---
 module: bedrock_foundation_models_info
-short_description: Lists or gets details for Amazon Bedrock foundation models
+short_description: List or get details for Amazon Bedrock foundation models
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)

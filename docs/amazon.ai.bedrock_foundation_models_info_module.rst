@@ -5,7 +5,7 @@
 amazon.ai.bedrock_foundation_models_info
 ****************************************
 
-**Lists or gets details for Amazon Bedrock foundation models**
+**List or get details for Amazon Bedrock foundation models**
 
 
 Version added: 1.0.0
