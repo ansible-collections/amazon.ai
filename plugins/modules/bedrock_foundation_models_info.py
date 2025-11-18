@@ -40,9 +40,9 @@ options:
         type: str
         choices: ['ON_DEMAND', 'PROVISIONED']
 extends_documentation_fragment:
-    - amazon.aws.common.modules
-    - amazon.aws.region.modules
-    - amazon.aws.boto3
+    - amazon.ai.common.modules
+    - amazon.ai.region.modules
+    - amazon.ai.boto3
 """
 
 
