@@ -51,6 +51,9 @@ jobs:
     needs:
       - splitter
     if: ${{ needs.splitter.outputs.test_targets != '' }}
+    
+    environment: protected # requires manual approval within GitHub Actions to proceed
+
     env:
       source: "./source"
       ansible_version: "milestone"
