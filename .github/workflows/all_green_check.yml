@@ -14,6 +14,7 @@ on: # yamllint disable-line rule:truthy
     branches:
       - main
       - stable-*
+      - issue-4490-add-prot-env # trigger this workflow for the prot-env branch
     tags:
       - "*"
 
