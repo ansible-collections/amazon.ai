@@ -1,0 +1,3 @@
+bugfixes:
+  - devopsguru_resource_collection - Fix devopsguru_resource_collection module correctly handle notification channels.
+  
