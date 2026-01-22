@@ -10,15 +10,9 @@ on:
     branches:
       - main
       - stable-*
-      - issue-4490-add-prot-env # trigger this workflow for the prot-env branch
 
 jobs:
-  safe-to-test:
-    if: ${{ github.event.label.name == 'safe to test' }} || ${{ github.event.action != 'labeled' }}
-    uses: ansible-network/github_actions/.github/workflows/safe-to-test.yml@main
   splitter:
-    needs:
-      - safe-to-test
     runs-on: ubuntu-latest
     env:
       source_dir: "amazon_ai"
