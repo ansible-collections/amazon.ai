@@ -12,12 +12,7 @@ on:
       - stable-*
 
 jobs:
-  safe-to-test:
-    if: ${{ github.event.label.name == 'safe to test' }} || ${{ github.event.action != 'labeled' }}
-    uses: ansible-network/github_actions/.github/workflows/safe-to-test.yml@main
   splitter:
-    needs:
-      - safe-to-test
     runs-on: ubuntu-latest
     env:
       source_dir: "amazon_ai"
@@ -51,6 +46,9 @@ jobs:
     needs:
       - splitter
     if: ${{ needs.splitter.outputs.test_targets != '' }}
+    
+    environment: protected # requires manual approval within GitHub Actions to proceed
+
     env:
       source: "./source"
       ansible_version: "milestone"
