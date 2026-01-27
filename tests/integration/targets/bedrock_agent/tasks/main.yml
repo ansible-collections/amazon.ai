@@ -12,6 +12,7 @@
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
   block:
+    # JUST A TEST
     - name: Create IAM role for Bedrock Agent
       amazon.aws.iam_role:
         name: "{{ agent_role_name }}"
