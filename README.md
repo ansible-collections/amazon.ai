@@ -1,12 +1,32 @@
 # Ansible Collection for Amazon AI and ML Resources
 
+## Contents
+
+- [Our mission](#our-mission)
+- [Code of Conduct](#code-of-conduct)
+- [Communication](#communication)
+- [Requirements](#requirements)
+  - [Ansible version compatibility](#ansible-version-compatibility)
+  - [Python version compatibility](#python-version-compatibility)
+  - [AWS SDK version compatibility](#aws-sdk-version-compatibility)
+- [Included content](#included-content)
+- [Using this collection](#using-this-collection)
+  - [Installing the Collection](#installing-the-collection)
+- [Use Cases](#use-cases)
+- [Testing](#testing)
+- [Contributing to this collection](#contributing-to-this-collection)
+- [More information](#more-information)
+- [Support](#support)
+- [Release notes](#release-notes)
+- [License Information](#license-information)
+
 The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
-- **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
-- **Amazon Bedrock**: interact with foundation models for AI/ML applications.
+- **Amazon DevOps Guru**: Configure monitoring, manage insights, and integrate notification channels.
+- **Amazon Bedrock**: Interact with foundation models for AI/ML applications.
 
 The collection is designed to be extensible and will grow to support additional services such as Amazon SageMaker, Rekognition, Comprehend, Translate, and Textract.
 
-As a Red Hat Ansible [Certified Content](https://catalog.redhat.com/software/search?target_platforms=Red%20Hat%20Ansible%20Automation%20Platform), this collection is entitled to [support](https://access.redhat.com/support/) through [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible) (AAP) through the Red Hat Ansible team.
+As Red Hat Ansible [Certified Content](https://catalog.redhat.com/software/search?target_platforms=Red%20Hat%20Ansible%20Automation%20Platform), this collection is entitled to [support](https://access.redhat.com/support/) through [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible) (AAP).
 
 
 ## Our mission
@@ -31,8 +51,10 @@ If you encounter abusive behavior, please refer to the [policy violations](https
 
 For more information about communication, see the [Ansible communication guide](https://docs.ansible.com/ansible/devel/community/communication.html).
 
+## Requirements
+
 <!--start requires_ansible-->
-## Ansible version compatibility
+### Ansible version compatibility
 
 This collection has been tested against the following Ansible versions: **>=2.17.0**.
 
@@ -41,13 +63,13 @@ A collection may contain metadata that identifies these versions.
 PEP440 is the schema used to describe the versions of Ansible.
 <!--end requires_ansible-->
 
-## Python version compatibility
+### Python version compatibility
 
 This collection depends on the AWS SDK for Python (Boto3 and Botocore). Due to the
 [AWS SDK Python Support Policy](https://aws.amazon.com/blogs/developer/python-support-policy-updates-for-aws-sdks-and-tools/)
 this collection requires Python 3.9 or greater.
 
-## AWS SDK version compatibility
+### AWS SDK version compatibility
 
 Version 1.0.0 of this collection supports ``boto3 >= 1.35.0`` and ``botocore >= 1.35.0``.
 
@@ -73,9 +95,9 @@ Name | Description
 
 ## Using this collection
 
-### Installing the Collection from Ansible Galaxy
+### Installing the Collection
 
-To consume this Collection from Automation Hub, please ensure that you add the following lines to your ``ansible.cfg`` file.
+To consume this collection from Automation Hub, add the following lines to your ``ansible.cfg`` file.
 
 ```
 [galaxy]
@@ -102,7 +124,7 @@ collections:
   - name: amazon.ai
 ```
 
-You can also install a specific version of the collection, for example, if you need to downgrade when something is broken in the latest version (please report an issue in this repository). Use the following syntax to install version `1.0.0`:
+A specific version of the collection can be installed by specifying the version. For example, to install version `1.0.0`:
 
 ```bash
 ansible-galaxy collection install amazon.ai:==1.0.0
@@ -123,14 +145,14 @@ or:
 pip install boto3 botocore
 ```
 
-Refer to the following resources for more details:
+Refer to the following for more details:
 
 * [Amazon Web Services Guide](https://docs.ansible.com/ansible/latest/collections/amazon/aws/docsite/guide_aws.html)
-* [using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html) for more details.
+* [Using Ansible collections](https://docs.ansible.com/ansible/latest/user_guide/collections_using.html)
 
-## Using this collection
+## Use Cases
 
-You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.bedrock_agent``, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
+You can call modules by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.bedrock_agent``, or by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
 
 ```yaml
 ---
@@ -151,36 +173,7 @@ You can either call modules, rulebooks and playbooks by their Fully Qualified Co
 
 ## Testing
 
-The project uses ``ansible-lint`` and ``black``. Assuming this repository is checked out in the proper structure, e.g. ``collections_root/ansible_collections/amazon/ai/``, run:
-
-```shell
-tox -e ansible-lint
-```
-
-or
-
-```shell
-tox -e black
-```
-
-Sanity and unit tests are run as normal:
-
-```shell
-ansible-test sanity
-```
-
-If you want to run cloud integration tests, ensure you log in to the cloud:
-
-```shell
-# using the "default" profile on AWS
-aws configure set aws_access_key_id     my-access-key
-aws configure set aws_secret_access_key my-secret-key
-aws configure set region                eu-north-1
-
-ansible-test integration [target]
-```
-
-This collection is tested using GitHub Actions.
+This collection is tested using GitHub Actions. To learn more about testing, refer to [CI.md](https://github.com/ansible-collections/amazon.ai/blob/main/CI.md).
 
 ## Contributing to this collection
 
@@ -201,17 +194,17 @@ Don't know how to start? Refer to the [Ansible community guide](https://docs.ans
 
 ## Support
 
-As Red Hat Ansible Certified Content, this collection is entitled to support through the Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner. If a support case cannot be opened with Red Hat and the collection has been obtained either from Galaxy or GitHub, there may community help available on the [Ansible Forum](https://forum.ansible.com/).
+As Red Hat Ansible Certified Content, this collection is entitled to support through Ansible Automation Platform (AAP) using the **Create issue** button on the top right corner. If a support case cannot be opened with Red Hat and the collection has been obtained from Galaxy or GitHub, community help may be available on the [Ansible Forum](https://forum.ansible.com/).
 
 You can also join us on:
 
-- Libera.Chat IRC - the ``#ansible-aws`` [irc.libera.chat](https://libera.chat/) channel
+- The ``#ansible-aws`` channel on [Libera.Chat](https://libera.chat/) (IRC)
 
 ## Release notes
 
 See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
 
-## Licensing
+## License Information
 
 GNU General Public License v3.0 or later.
 
