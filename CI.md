@@ -20,7 +20,7 @@ The following tests run on every pull request to `main` or `stable-*` branches:
 
 ### Python Version Compatibility by ansible-core Version
 
-These are outlined in the GitHub Actions workflow exclusions in [sanity.yml](.github/workflows/sanity.yml) and [units.yml](.github/workflows/units.yml).
+These are outlined in the GitHub Actions matrix exclusions in [sanity.yml](.github/workflows/sanity.yml) and [units.yml](.github/workflows/units.yml).
 
 | ansible-core Version | Sanity Tests | Unit Tests |
 | -------------------- | ------------ | ---------- |
