@@ -322,12 +322,12 @@ def main() -> None:
                 module.warn(
                     "remove_notification_channel and notification_channel_id are required together, otherwise this operation will be ignored."
                 )
-            else:
-                changed, notification_channel_id, msg = remove_notification_channel(client, module)
-                result["msg"] = result.get("msg", "") + " " + str(msg)
-                result["changed"] |= changed
-                if notification_channel_id:
-                    result["notification_channel"] = notification_channel_id
+        if module.params.get("notification_channel_id") and module.params.get("remove_notification_channel"):
+            changed, notification_channel_id, msg = remove_notification_channel(client, module)
+            result["msg"] = result.get("msg", "") + " " + str(msg)
+            result["changed"] |= changed
+            if notification_channel_id:
+                result["notification_channel"] = notification_channel_id
 
         # Notification channel setup
         if module.params.get("notification_channel_config"):
