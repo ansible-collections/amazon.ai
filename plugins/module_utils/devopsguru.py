@@ -237,7 +237,7 @@ def remove_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool,
         client.remove_notification_channel(Id=notification_channel_id)
         return True, None, msg
     else:
-        msg = f"Notification channel {notification_channel_id} is not assiciated to DevOpsGuru ."
+        msg = f"Notification channel {notification_channel_id} is not associated to DevOpsGuru ."
         return False, None, msg
 
 
