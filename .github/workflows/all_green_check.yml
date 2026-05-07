@@ -20,21 +20,22 @@ on: # yamllint disable-line rule:truthy
 jobs:
   linters:
     uses: ./.github/workflows/linters.yml # use the callable linters job to run tests
-  sanity:
-    uses: ./.github/workflows/sanity.yml # use the callable sanity job to run tests
-  units:
-    uses: ./.github/workflows/units.yml # use the callable units job to run tests
+  ansible-test:
+    uses: ./.github/workflows/ansible-test.yml # use the callable sanity job to run tests
   all_green:
     if: ${{ always() }}
     needs:
       - linters
-      - sanity
-      - units
+      - ansible-test
     runs-on: ubuntu-latest
     steps:
-      - run: >-
-          python -c "assert set([
-          '${{ needs.linters.result }}',
-          '${{ needs.sanity.result }}',
-          '${{ needs.units.result }}'
-          ]) == {'success'}"
+      - run: |
+          python -c "
+          required = ['ansible-test']
+          if '${{ github.event_name }}' == 'pull_request':
+            required = ['linters', 'ansible-test']
+          results = {'linters': '${{ needs.linters.result }}', 'ansible-test': '${{ needs.ansible-test.result }}'}
+          ok = all(results[j] == 'success' for j in required)
+          skipped_ok = all(results[j] in ('success', 'skipped') for j in results)
+          assert ok and skipped_ok, f'required={required} results={results}'
+          "
