@@ -6,42 +6,53 @@ releases:
         featuring several modules designed for Amazon DevOps Guru and Amazon Bedrock
         integration.
     fragments:
-    - release_summary.yml
+      - release_summary.yml
     modules:
-    - description: Manage Amazon Bedrock Agents
-      name: bedrock_agent
-      namespace: ''
-    - description: Manage Amazon Bedrock Agent Action Groups
-      name: bedrock_agent_action_group
-      namespace: ''
-    - description: Gather information about a Bedrock Agent's Action Groups
-      name: bedrock_agent_action_group_info
-      namespace: ''
-    - description: Manage Amazon Bedrock Agent Aliases
-      name: bedrock_agent_alias
-      namespace: ''
-    - description: Gather information about a Bedrock Agent's Aliases
-      name: bedrock_agent_alias_info
-      namespace: ''
-    - description: Gather information about Bedrock Agents
-      name: bedrock_agent_info
-      namespace: ''
-    - description: List or get details for Amazon Bedrock foundation models
-      name: bedrock_foundation_models_info
-      namespace: ''
-    - description: Invoke an Amazon Bedrock agent with a prompt
-      name: bedrock_invoke_agent
-      namespace: ''
-    - description: Run inference using Amazon Bedrock models
-      name: bedrock_invoke_model
-      namespace: ''
-    - description: Fetch information about Amazon DevOps Guru insights
-      name: devopsguru_insight_info
-      namespace: ''
-    - description: Manage DevOps Guru resource collections
-      name: devopsguru_resource_collection
-      namespace: ''
-    - description: Fetch information about Amazon DevOps Guru resource collection
-      name: devopsguru_resource_collection_info
-      namespace: ''
+      - description: Manage Amazon Bedrock Agents
+        name: bedrock_agent
+        namespace: ''
+      - description: Manage Amazon Bedrock Agent Action Groups
+        name: bedrock_agent_action_group
+        namespace: ''
+      - description: Gather information about a Bedrock Agent's Action Groups
+        name: bedrock_agent_action_group_info
+        namespace: ''
+      - description: Manage Amazon Bedrock Agent Aliases
+        name: bedrock_agent_alias
+        namespace: ''
+      - description: Gather information about a Bedrock Agent's Aliases
+        name: bedrock_agent_alias_info
+        namespace: ''
+      - description: Gather information about Bedrock Agents
+        name: bedrock_agent_info
+        namespace: ''
+      - description: List or get details for Amazon Bedrock foundation models
+        name: bedrock_foundation_models_info
+        namespace: ''
+      - description: Invoke an Amazon Bedrock agent with a prompt
+        name: bedrock_invoke_agent
+        namespace: ''
+      - description: Run inference using Amazon Bedrock models
+        name: bedrock_invoke_model
+        namespace: ''
+      - description: Fetch information about Amazon DevOps Guru insights
+        name: devopsguru_insight_info
+        namespace: ''
+      - description: Manage DevOps Guru resource collections
+        name: devopsguru_resource_collection
+        namespace: ''
+      - description: Fetch information about Amazon DevOps Guru resource collection
+        name: devopsguru_resource_collection_info
+        namespace: ''
     release_date: '2025-11-18'
+  1.0.1:
+    changes:
+      bugfixes:
+        - devopsguru_resource_collection - Fix devopsguru_resource_collection module
+          correctly handle notification channels.
+      release_summary: This patch release includes bugfixes for the ``devopsguru_resource_collection``
+        module(s).
+    fragments:
+      - 1.0.1.yml
+      - 20260122-devopsguru-notification_channel.yml
+    release_date: '2026-05-07'
