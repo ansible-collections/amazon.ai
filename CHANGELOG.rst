@@ -4,6 +4,18 @@ amazon.ai Release Notes
 
 .. contents:: Topics
 
+v1.0.1
+======
+
+Release Summary
+---------------
+
+This patch release includes bugfixes for the ``devopsguru_resource_collection`` module(s).
+
+Bugfixes
+--------
+
+- devopsguru_resource_collection - Fix devopsguru_resource_collection module correctly handle notification channels.
 
 v1.0.0
 ======
