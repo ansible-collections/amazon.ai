@@ -3,8 +3,9 @@
 The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
 - **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
 - **Amazon Bedrock**: interact with foundation models for AI/ML applications.
+- **Amazon SageMaker**: manage SageMaker Code Repositories.
 
-The collection is designed to be extensible and will grow to support additional services such as Amazon SageMaker, Rekognition, Comprehend, Translate, and Textract.
+The collection is designed to be extensible and will grow to support additional services such as Rekognition, Comprehend, Translate, and Textract.
 
 As a Red Hat Ansible [Certified Content](https://catalog.redhat.com/software/search?target_platforms=Red%20Hat%20Ansible%20Automation%20Platform), this collection is entitled to [support](https://access.redhat.com/support/) through [Ansible Automation Platform](https://www.redhat.com/en/technologies/management/ansible) (AAP) through the Red Hat Ansible team.
 
@@ -68,6 +69,8 @@ Name | Description
 [amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
 [amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
 [amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
+[amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
+[amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
 
 <!--end collection content-->
 

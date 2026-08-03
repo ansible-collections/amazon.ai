@@ -14,3 +14,5 @@ action_groups:
     - devopsguru_insight_info
     - devopsguru_resource_collection
     - devopsguru_resource_collection_info
+    - sagemaker_code_repository
+    - sagemaker_code_repository_info

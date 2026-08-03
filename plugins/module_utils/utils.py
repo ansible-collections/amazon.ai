@@ -9,6 +9,8 @@ from typing import Any
 from typing import Dict
 from typing import List
 from typing import Union
+from urllib.parse import urlparse
+from urllib.parse import urlunparse
 
 
 def encode_body(body: Union[dict, list, str]) -> bytes:
@@ -36,6 +38,18 @@ def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict
     elif isinstance(target, list):
         for item in target:
             item.update(source)
+
+
+def normalize_url(url: str) -> str:
+    """Normalize a URL by lowercasing the scheme and host, and stripping trailing slashes from the path."""
+    parsed = urlparse(url)
+    return urlunparse(
+        parsed._replace(
+            scheme=parsed.scheme.lower(),
+            netloc=parsed.netloc.lower(),
+            path=parsed.path.rstrip("/"),
+        )
+    )
 
 
 def convert_time_ranges(status_filter: Dict[str, Any]) -> Dict[str, Any]:

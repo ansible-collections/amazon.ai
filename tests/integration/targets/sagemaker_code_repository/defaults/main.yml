@@ -1,0 +1,6 @@
+---
+test_id: "{{ tiny_prefix }}"
+repo_name: "test-sagemaker-code-repo-{{ test_id }}"
+git_repo_url: "https://github.com/ansible-collections/amazon.ai.git"
+git_branch: "main"
+secret_name: "ansible-test-sagemaker-code-repo-secret-{{ test_id }}"
