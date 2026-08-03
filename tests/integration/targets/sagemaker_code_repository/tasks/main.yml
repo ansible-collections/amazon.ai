@@ -1,0 +1,269 @@
+---
+- name: SageMaker Code Repository integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    # -------------------------------------------------------
+    # CREATE — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker Code Repository (check_mode)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          branch: "{{ git_branch }}"
+      check_mode: true
+      register: repo_create_check
+
+    - name: Assert check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - repo_create_check.changed
+          - "'Check mode' in repo_create_check.msg"
+
+    # -------------------------------------------------------
+    # CREATE — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker Code Repository (First Run)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          branch: "{{ git_branch }}"
+      register: repo_create_first
+
+    - name: Assert repository was created
+      ansible.builtin.assert:
+        that:
+          - repo_create_first.changed
+          - "'created successfully' in repo_create_first.msg"
+          - repo_create_first.code_repository.code_repository_name == repo_name
+
+    # -------------------------------------------------------
+    # INFO — get specific repository
+    # -------------------------------------------------------
+    - name: Get info about the created repository
+      amazon.ai.sagemaker_code_repository_info:
+        name: "{{ repo_name }}"
+      register: repo_info
+
+    - name: Assert info module returns the repository
+      ansible.builtin.assert:
+        that:
+          - repo_info.code_repositories | length == 1
+          - repo_info.code_repositories[0].code_repository_name == repo_name
+          - repo_info.code_repositories[0].git_config.repository_url == git_repo_url
+
+    # -------------------------------------------------------
+    # INFO — list all repositories
+    # -------------------------------------------------------
+    - name: List all SageMaker Code Repositories
+      amazon.ai.sagemaker_code_repository_info:
+      register: repo_info_all
+
+    - name: Assert all repositories list contains our repository
+      ansible.builtin.assert:
+        that:
+          - repo_info_all.code_repositories | length >= 1
+          - repo_name in (repo_info_all.code_repositories | map(attribute='code_repository_name') | list)
+
+    # -------------------------------------------------------
+    # INFO — list with name_contains filter
+    # -------------------------------------------------------
+    - name: List code repositories filtered by name
+      amazon.ai.sagemaker_code_repository_info:
+        name_contains: "{{ test_id }}"
+      register: repo_info_filtered
+
+    - name: Assert filtered results contain our repository
+      ansible.builtin.assert:
+        that:
+          - repo_info_filtered.code_repositories | length >= 1
+          - repo_name in (repo_info_filtered.code_repositories | map(attribute='code_repository_name') | list)
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker Code Repository (Second Run - Idempotency - check_mode)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          branch: "{{ git_branch }}"
+      check_mode: true
+      register: repo_create_second_check
+
+    - name: Assert idempotency in check_mode
+      ansible.builtin.assert:
+        that:
+          - not repo_create_second_check.changed
+          - "'No updates needed' in repo_create_second_check.msg"
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker Code Repository (Second Run - Idempotency)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          branch: "{{ git_branch }}"
+      register: repo_create_second
+
+    - name: Assert idempotency
+      ansible.builtin.assert:
+        that:
+          - not repo_create_second.changed
+          - "'No updates needed' in repo_create_second.msg"
+
+    # -------------------------------------------------------
+    # UPDATE — create a secret for update tests
+    # -------------------------------------------------------
+    - name: Create a Secrets Manager secret for update tests
+      community.aws.secretsmanager_secret:
+        name: "{{ secret_name }}"
+        secret: '{"username": "testuser", "password": "testpass"}'
+        state: present
+      register: secret_create
+
+    # -------------------------------------------------------
+    # UPDATE — check_mode (only secret_arn is updatable)
+    # -------------------------------------------------------
+    - name: Update SageMaker Code Repository secret_arn (check_mode)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          secret_arn: "{{ secret_create.secret.arn }}"
+      check_mode: true
+      register: repo_update_check
+
+    - name: Assert update check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - repo_update_check.changed
+          - "'Check mode' in repo_update_check.msg"
+
+    # -------------------------------------------------------
+    # UPDATE — actual
+    # -------------------------------------------------------
+    - name: Update SageMaker Code Repository secret_arn
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          secret_arn: "{{ secret_create.secret.arn }}"
+      register: repo_update
+
+    - name: Assert repository was updated
+      ansible.builtin.assert:
+        that:
+          - repo_update.changed
+          - "'updated successfully' in repo_update.msg"
+          - repo_update.code_repository.git_config.secret_arn == secret_create.secret.arn
+
+    # -------------------------------------------------------
+    # UPDATE — idempotency
+    # -------------------------------------------------------
+    - name: Update SageMaker Code Repository secret_arn (idempotency)
+      amazon.ai.sagemaker_code_repository:
+        state: present
+        name: "{{ repo_name }}"
+        git_config:
+          repository_url: "{{ git_repo_url }}"
+          secret_arn: "{{ secret_create.secret.arn }}"
+      register: repo_update_idempotent
+
+    - name: Assert update idempotency
+      ansible.builtin.assert:
+        that:
+          - not repo_update_idempotent.changed
+          - "'No updates needed' in repo_update_idempotent.msg"
+
+    # -------------------------------------------------------
+    # DELETE — check_mode
+    # -------------------------------------------------------
+    - name: Delete SageMaker Code Repository (check_mode)
+      amazon.ai.sagemaker_code_repository:
+        state: absent
+        name: "{{ repo_name }}"
+      check_mode: true
+      register: repo_delete_check
+
+    - name: Assert delete check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - repo_delete_check.changed
+          - "'Check mode' in repo_delete_check.msg"
+
+    # -------------------------------------------------------
+    # DELETE — actual
+    # -------------------------------------------------------
+    - name: Delete SageMaker Code Repository (First Run)
+      amazon.ai.sagemaker_code_repository:
+        state: absent
+        name: "{{ repo_name }}"
+      register: repo_delete_first
+
+    - name: Assert repository was deleted
+      ansible.builtin.assert:
+        that:
+          - repo_delete_first.changed
+          - "'deleted successfully' in repo_delete_first.msg"
+
+    # -------------------------------------------------------
+    # DELETE — idempotency
+    # -------------------------------------------------------
+    - name: Delete SageMaker Code Repository (Second Run - Idempotency)
+      amazon.ai.sagemaker_code_repository:
+        state: absent
+        name: "{{ repo_name }}"
+      register: repo_delete_second
+
+    - name: Assert delete idempotency
+      ansible.builtin.assert:
+        that:
+          - not repo_delete_second.changed
+          - "'does not exist' in repo_delete_second.msg"
+
+    # -------------------------------------------------------
+    # INFO — verify deleted
+    # -------------------------------------------------------
+    - name: Get info about deleted repository
+      amazon.ai.sagemaker_code_repository_info:
+        name: "{{ repo_name }}"
+      register: repo_info_deleted
+
+    - name: Assert info returns empty after deletion
+      ansible.builtin.assert:
+        that:
+          - repo_info_deleted.code_repositories | length == 0
+
+  always:
+    - name: Cleanup - Delete SageMaker Code Repository
+      amazon.ai.sagemaker_code_repository:
+        state: absent
+        name: "{{ repo_name }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete Secrets Manager secret
+      community.aws.secretsmanager_secret:
+        name: "{{ secret_name }}"
+        state: absent
+        recovery_window: 0
+      ignore_errors: true

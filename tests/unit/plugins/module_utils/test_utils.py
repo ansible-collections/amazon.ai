@@ -11,6 +11,7 @@ import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
+from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 
 
 # -----------------------
@@ -48,6 +49,60 @@ def test_encode_body_invalid_type():
 def test_merge_data(target, source, expected):
     merge_data(target, source)
     assert target == expected
+
+
+# -----------------------
+# Tests for normalize_url
+# -----------------------
+@pytest.mark.parametrize(
+    "url,expected",
+    [
+        (
+            "https://github.com/ansible/repo.git",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "https://github.com/ansible/repo.git/",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "https://github.com/ansible/repo.git///",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "https://GITHUB.com/ansible/repo.git",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "HTTPS://github.com/ansible/repo.git",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "HTTPS://GITHUB.COM/ansible/repo.git/",
+            "https://github.com/ansible/repo.git",
+        ),
+        (
+            "https://github.com/Ansible/Repo.git",
+            "https://github.com/Ansible/Repo.git",
+        ),
+        (
+            "ssh://git@github.com/ansible/repo.git",
+            "ssh://git@github.com/ansible/repo.git",
+        ),
+    ],
+    ids=[
+        "no-change",
+        "trailing-slash",
+        "multiple-trailing-slashes",
+        "mixed-case-host",
+        "mixed-case-scheme",
+        "all-normalizations",
+        "path-case-preserved",
+        "ssh-scheme",
+    ],
+)
+def test_normalize_url(url, expected):
+    assert normalize_url(url) == expected
 
 
 # -----------------------------
