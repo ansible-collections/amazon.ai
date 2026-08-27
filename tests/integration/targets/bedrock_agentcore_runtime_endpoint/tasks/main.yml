@@ -1,0 +1,308 @@
+---
+- name: Amazon Bedrock AgentCore Runtime Endpoint integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for Bedrock AgentCore runtime
+      amazon.aws.iam_role:
+        name: "{{ agent_runtime_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agentcore.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/BedrockAgentCoreFullAccess"
+      register: runtime_role
+
+    - name: Save runtime role ARN
+      ansible.builtin.set_fact:
+        runtime_role_arn: "{{ runtime_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Create parent runtime
+      amazon.ai.bedrock_agentcore_runtime:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        container_configuration:
+          container_uri: "{{ container_uri }}"
+        role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
+      register: runtime_create
+
+    - name: Assert parent runtime is ready
+      ansible.builtin.assert:
+        that:
+          - runtime_create.changed
+          - runtime_create.agent_runtime.status == "READY"
+
+    - name: Create endpoint in check mode
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      check_mode: true
+      register: endpoint_create_check
+
+    - name: Assert endpoint creation check mode
+      ansible.builtin.assert:
+        that:
+          - endpoint_create_check.changed
+          - "'Check mode: would have created agent runtime endpoint' in endpoint_create_check.msg"
+
+    - name: Create endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      register: endpoint_create
+
+    - name: Assert endpoint creation
+      ansible.builtin.assert:
+        that:
+          - endpoint_create.changed
+          - endpoint_create.agent_runtime_endpoint.status == "READY"
+          - endpoint_create.agent_runtime_endpoint.name == endpoint_name
+
+    - name: Create endpoint again
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      register: endpoint_create_rerun
+
+    - name: Assert endpoint creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not endpoint_create_rerun.changed
+
+    - name: Get endpoint info
+      amazon.ai.bedrock_agentcore_runtime_endpoint_info:
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      register: endpoint_info
+
+    - name: Assert endpoint info
+      ansible.builtin.assert:
+        that:
+          - endpoint_info.agent_runtime_endpoints | length == 1
+          - endpoint_info.agent_runtime_endpoints[0].name == endpoint_name
+          - endpoint_info.agent_runtime_endpoints[0].status == "READY"
+
+    - name: Update endpoint in check mode
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+        description: "Updated endpoint description"
+      check_mode: true
+      register: endpoint_update_check
+
+    - name: Assert endpoint update check mode
+      ansible.builtin.assert:
+        that:
+          - endpoint_update_check.changed
+          - "'Check mode: would have updated agent runtime endpoint' in endpoint_update_check.msg"
+
+    - name: Update endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+        description: "Updated endpoint description"
+      register: endpoint_update
+
+    - name: Assert endpoint update
+      ansible.builtin.assert:
+        that:
+          - endpoint_update.changed
+          - endpoint_update.agent_runtime_endpoint.description == "Updated endpoint description"
+          - endpoint_update.agent_runtime_endpoint.status == "READY"
+
+    - name: Update endpoint again
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+        description: "Updated endpoint description"
+      register: endpoint_update_rerun
+
+    - name: Assert endpoint update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not endpoint_update_rerun.changed
+
+    - name: Update parent runtime to create a new runtime version
+      amazon.ai.bedrock_agentcore_runtime:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        container_configuration:
+          container_uri: "{{ container_uri }}"
+        role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
+        protocol: "MCP"
+      register: runtime_update
+
+    - name: Assert parent runtime was updated
+      ansible.builtin.assert:
+        that:
+          - runtime_update.changed
+          - runtime_update.agent_runtime.status == "READY"
+
+    - name: Get parent runtime info
+      amazon.ai.bedrock_agentcore_runtime_info:
+        agent_runtime_name: "{{ agent_runtime_name }}"
+      register: runtime_info
+
+    - name: Assert parent runtime info reports the new version
+      ansible.builtin.assert:
+        that:
+          - runtime_info.agent_runtimes | length == 1
+          - runtime_info.agent_runtimes[0].agent_runtime_version | int > 1
+          - runtime_info.agent_runtimes[0].protocol_configuration.server_protocol == "MCP"
+
+    - name: Save latest runtime version
+      ansible.builtin.set_fact:
+        latest_runtime_version: "{{ runtime_info.agent_runtimes[0].agent_runtime_version }}"
+
+    - name: Create endpoint pointing at the latest runtime version
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ versioned_endpoint_name }}"
+        agent_runtime_version: "{{ latest_runtime_version }}"
+      register: versioned_endpoint_create
+
+    - name: Assert versioned endpoint creation
+      ansible.builtin.assert:
+        that:
+          - versioned_endpoint_create.changed
+          - versioned_endpoint_create.agent_runtime_endpoint.name == versioned_endpoint_name
+          - versioned_endpoint_create.agent_runtime_endpoint.status == "READY"
+          - versioned_endpoint_create.agent_runtime_endpoint.live_version == latest_runtime_version
+
+    - name: Get versioned endpoint info
+      amazon.ai.bedrock_agentcore_runtime_endpoint_info:
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ versioned_endpoint_name }}"
+      register: versioned_endpoint_info
+
+    - name: Assert versioned endpoint points at the latest runtime version
+      ansible.builtin.assert:
+        that:
+          - versioned_endpoint_info.agent_runtime_endpoints | length == 1
+          - versioned_endpoint_info.agent_runtime_endpoints[0].name == versioned_endpoint_name
+          - versioned_endpoint_info.agent_runtime_endpoints[0].status == "READY"
+          - versioned_endpoint_info.agent_runtime_endpoints[0].live_version == latest_runtime_version
+
+    - name: Create endpoint pointing at the latest runtime version again
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ versioned_endpoint_name }}"
+        agent_runtime_version: "{{ latest_runtime_version }}"
+      register: versioned_endpoint_create_rerun
+
+    - name: Assert versioned endpoint creation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not versioned_endpoint_create_rerun.changed
+
+    - name: Delete versioned endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ versioned_endpoint_name }}"
+      register: versioned_endpoint_delete
+
+    - name: Assert versioned endpoint deletion
+      ansible.builtin.assert:
+        that:
+          - versioned_endpoint_delete.changed
+
+    - name: Create endpoint under a missing runtime
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: present
+        agent_runtime_name: "missing_agentcore_runtime_{{ test_id }}"
+        endpoint_name: "test-endpoint"
+      register: missing_runtime_result
+      ignore_errors: true
+
+    - name: Assert missing runtime failure
+      ansible.builtin.assert:
+        that:
+          - missing_runtime_result is failed
+
+    - name: Delete endpoint in check mode
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      check_mode: true
+      register: endpoint_delete_check
+
+    - name: Assert endpoint deletion check mode
+      ansible.builtin.assert:
+        that:
+          - endpoint_delete_check.changed
+          - "'Check mode: would have deleted agent runtime endpoint' in endpoint_delete_check.msg"
+
+    - name: Delete endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      register: endpoint_delete
+
+    - name: Assert endpoint deletion
+      ansible.builtin.assert:
+        that:
+          - endpoint_delete.changed
+
+    - name: Delete endpoint again
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      register: endpoint_delete_rerun
+
+    - name: Assert endpoint deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not endpoint_delete_rerun.changed
+
+  always:
+    - name: Teardown endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ endpoint_name }}"
+      ignore_errors: true
+
+    - name: Teardown versioned endpoint
+      amazon.ai.bedrock_agentcore_runtime_endpoint:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+        endpoint_name: "{{ versioned_endpoint_name }}"
+      ignore_errors: true
+
+    - name: Teardown parent runtime
+      amazon.ai.bedrock_agentcore_runtime:
+        state: absent
+        agent_runtime_name: "{{ agent_runtime_name }}"
+      ignore_errors: true
+
+    - name: Teardown IAM role
+      amazon.aws.iam_role:
+        name: "{{ agent_runtime_role_name }}"
+        state: absent
+      ignore_errors: true
