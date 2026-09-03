@@ -1,0 +1,223 @@
+---
+- name: SageMaker endpoint configuration integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Get AWS caller info
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Save account ID
+      ansible.builtin.set_fact:
+        aws_account_id: "{{ caller_info.account }}"
+
+    - name: Save model image URI
+      ansible.builtin.set_fact:
+        model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
+
+    - name: Create IAM role for SageMaker Model
+      amazon.aws.iam_role:
+        name: "{{ model_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_model.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      register: model_role
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Ensure ECR repository exists
+      community.aws.ecs_ecr:
+        name: "{{ model_ecr_repository_name }}"
+        state: present
+
+    - name: Install skopeo
+      ansible.builtin.apt:
+        name: skopeo
+        state: present
+
+    - name: Install awscli
+      ansible.builtin.pip:
+        name: awscli
+        state: present
+
+    - name: Get ECR login password
+      ansible.builtin.command: aws ecr get-login-password --region {{ aws_region }}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default('') }}"
+      register: ecr_token
+      no_log: true
+
+    - name: Push Docker V2 image to ECR
+      ansible.builtin.command: >-
+        skopeo copy --format v2s2
+        --dest-creds AWS:{{ ecr_token.stdout }}
+        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ model_image }}
+      no_log: true
+
+    - name: Create S3 bucket for model artifacts
+      amazon.aws.s3_bucket:
+        name: "{{ model_bucket_name }}"
+        state: present
+
+    - name: Upload model artifact to S3
+      amazon.aws.s3_object:
+        bucket: "{{ model_bucket_name }}"
+        object: model.tar.gz
+        content: placeholder
+        mode: put
+
+    - name: Create SageMaker model
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_role.iam_role.arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+      register: model_create
+
+    - name: Create endpoint configuration in check mode
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+      check_mode: true
+      register: endpoint_config_check
+
+    - name: Assert endpoint configuration check mode
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_check.changed
+          - "endpoint_config_check.msg.startswith('Check mode: would have ')"
+
+    - name: Create endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+        tags:
+          Environment: integration
+      register: endpoint_config_create
+
+    - name: Assert endpoint configuration was created
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_create.changed
+          - endpoint_config_create.endpoint_config.endpoint_config_arn is defined
+
+    - name: Re-run endpoint configuration creation
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+        tags:
+          Environment: integration
+      register: endpoint_config_rerun
+
+    - name: Assert endpoint configuration idempotency
+      ansible.builtin.assert:
+        that:
+          - not endpoint_config_rerun.changed
+
+    - name: Query endpoint configuration
+      amazon.ai.sagemaker_endpoint_config_info:
+        endpoint_config_name: "{{ endpoint_config_name }}"
+      register: endpoint_config_info
+
+    - name: Assert endpoint configuration info
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_info.endpoint_configs | length == 1
+          - endpoint_config_info.endpoint_configs[0].endpoint_config_name == endpoint_config_name
+
+    - name: Delete endpoint configuration in check mode
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ endpoint_config_name }}"
+      check_mode: true
+      register: endpoint_config_delete_check
+
+    - name: Assert endpoint configuration delete check mode
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_delete_check.changed
+          - "endpoint_config_delete_check.msg.startswith('Check mode: would have ')"
+
+    - name: Delete endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ endpoint_config_name }}"
+      register: endpoint_config_delete
+
+    - name: Assert endpoint configuration was deleted
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_delete.changed
+
+    - name: Re-run endpoint configuration deletion
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ endpoint_config_name }}"
+      register: endpoint_config_delete_rerun
+
+    - name: Assert endpoint configuration deletion idempotency
+      ansible.builtin.assert:
+        that:
+          - not endpoint_config_delete_rerun.changed
+  always:
+    - name: Cleanup endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ endpoint_config_name }}"
+      ignore_errors: true
+
+    - name: Cleanup SageMaker model
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ model_name }}"
+      ignore_errors: true
+
+    - name: Cleanup S3 bucket
+      amazon.aws.s3_bucket:
+        name: "{{ model_bucket_name }}"
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Cleanup IAM role
+      amazon.aws.iam_role:
+        name: "{{ model_role_name }}"
+        state: absent
+        delete_instance_profile: true
+      ignore_errors: true
+
+    - name: Cleanup ECR repository
+      community.aws.ecs_ecr:
+        name: "{{ model_ecr_repository_name }}"
+        state: absent
+        force_absent: true
+      ignore_errors: true

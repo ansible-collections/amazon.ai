@@ -1,0 +1,8 @@
+test_id: "{{ tiny_prefix }}"
+endpoint_config_name: "test-sm-endpoint-config-{{ test_id }}"
+model_name: "test-sagemaker-model-{{ test_id }}"
+model_role_name: "ansible-test-sagemaker-model-role-{{ test_id }}"
+model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
+model_ecr_repository_name: "ansible-test-sagemaker-model-{{ test_id }}"
+model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
+model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
