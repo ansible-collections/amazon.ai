@@ -129,6 +129,8 @@ def _runtime_parameters(
         agent_runtime_artifact=_runtime_artifact(module, existing_runtime),
         role_arn=module.params.get("role_arn") or (existing_runtime or dict()).get("role_arn"),
     )
+    if module.params.get("tags"):
+        params["tags"] = module.params.get("tags")
     network_mode = module.params.get("network_mode")
     if network_mode:
         params["network_configuration"] = dict(network_mode=network_mode)
@@ -138,15 +140,19 @@ def _runtime_parameters(
                 subnets=module.params.get("network_subnets"),
             )
 
-    if module.params.get("description"):
+    if module.params.get("description") is not None:
         params["description"] = module.params["description"]
     if module.params.get("protocol"):
         params["protocol_configuration"] = dict(server_protocol=module.params["protocol"])
-    if module.params.get("idle_runtime_session_timeout") or module.params.get("max_lifetime"):
-        params["lifecycle_configuration"] = dict(
+    lifecycle_configuration = scrub_none_parameters(
+        dict(
             idle_runtime_session_timeout=module.params.get("idle_runtime_session_timeout"),
             max_lifetime=module.params.get("max_lifetime"),
         )
+    )
+    if lifecycle_configuration:
+        params["lifecycle_configuration"] = lifecycle_configuration
+
     if module.params.get("environment_variables"):
         params["environment_variables"] = module.params["environment_variables"]
     if module.params.get("authorizer_discovery_url"):
@@ -161,13 +167,13 @@ def _runtime_parameters(
     if module.params.get("capacity_provider_arn"):
         params["capacity_provider_configuration"] = dict(capacity_provider_arn=module.params["capacity_provider_arn"])
     if module.params.get("session_storage"):
-        params["file_system_configurations"] = [dict(session_storage=module.params["session_storage"])]
+        params["filesystem_configurations"] = [dict(session_storage=module.params["session_storage"])]
     elif module.params.get("s3_files_access_point"):
-        params["file_system_configurations"] = [dict(s3_files_access_point=module.params["s3_files_access_point"])]
+        params["filesystem_configurations"] = [dict(s3_files_access_point=module.params["s3_files_access_point"])]
     elif module.params.get("efs_access_point"):
-        params["file_system_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
+        params["filesystem_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
     elif module.params.get("capacity_provider_volume"):
-        params["file_system_configurations"] = [
+        params["filesystem_configurations"] = [
             dict(capacity_provider_volume=module.params["capacity_provider_volume"])
         ]
     return snake_dict_to_camel_dict(scrub_none_parameters(params))
@@ -206,7 +212,6 @@ def _runtime_update_needed(module: AnsibleAWSModule, existing_runtime: Dict[str,
     )
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def wait_for_agent_runtime_status(
     client,
     module: AnsibleAWSModule,
@@ -270,7 +275,6 @@ def wait_for_agent_runtime_status(
     )
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def create_agent_runtime(module: AnsibleAWSModule, client) -> Tuple[bool, Optional[str], str]:
     """
     Creates a new agent runtime if not in check_mode, otherwise simulates creation.
@@ -296,7 +300,6 @@ def create_agent_runtime(module: AnsibleAWSModule, client) -> Tuple[bool, Option
     return True, agent_runtime_id, f"Agent runtime {name} created successfully."
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def update_agent_runtime(
     module: AnsibleAWSModule,
     client,
@@ -333,7 +336,6 @@ def update_agent_runtime(
     return True, updated_id, f"Agent runtime {existing_runtime['agent_runtime_name']} updated successfully."
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def delete_agent_runtime(module: AnsibleAWSModule, client, existing_runtime: Dict[str, Any]) -> Tuple[bool, str]:
     name = existing_runtime["agent_runtime_name"]
     if module.check_mode:

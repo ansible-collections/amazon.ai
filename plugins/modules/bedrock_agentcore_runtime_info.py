@@ -269,7 +269,8 @@ def main():
 
         if agent_runtime_name:
             existing_runtime: Optional[Dict[str, Any]] = get_agent_runtime_by_name(client, agent_runtime_name)
-            result.append(existing_runtime if existing_runtime else dict())
+            if existing_runtime:
+                result.append(existing_runtime)
         else:
             runtime_summaries: List[Dict[str, Any]] = list_agent_runtimes(client)
             for runtime_summary in runtime_summaries:

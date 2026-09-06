@@ -103,13 +103,13 @@ options:
     idle_runtime_session_timeout:
         description:
             - The idle runtime session timeout in seconds.
+            - Default is 900 seconds (15 minutes) set by AWS.
         type: int
-        default: 900
     max_lifetime:
         description:
             - The maximum runtime lifetime in seconds.
+            - Default is 28800 seconds (8 hours) set by AWS.
         type: int
-        default: 28800
     environment_variables:
         description:
             - Environment variables supplied to the runtime.
@@ -252,32 +252,190 @@ agent_runtime:
     description: Details about the AgentCore runtime after the module operation.
     returned: always, on success
     type: dict
-    sample:
-        agent_runtime_arn: arn:aws:bedrock:us-east-1:123456789012:runtime/example
-        agent_runtime_id: example
-        agent_runtime_name: weather_runtime
-        status: READY
     contains:
         agent_runtime_arn:
-            description: The ARN of the AgentCore runtime.
-            returned: always
+            description: The Amazon Resource Name (ARN) of the runtime.
             type: str
-            sample: arn:aws:bedrock:us-east-1:123456789012:runtime/example
+            sample: "arn:aws:bedrock:us-east-1:123456789901:agent-runtime/RNKFFDOKFN"
         agent_runtime_id:
-            description: The unique identifier of the AgentCore runtime.
-            returned: always
+            description: The unique identifier of the runtime.
             type: str
-            sample: example
+            sample: "RNKFFDOKFN"
         agent_runtime_name:
-            description: The name of the AgentCore runtime.
-            returned: always
+            description: The name of the runtime.
             type: str
-            sample: weather_runtime
+            sample: "test-agentcore-runtime"
+        agent_runtime_version:
+            description: The version of the runtime.
+            type: str
+            sample: "1"
         status:
-            description: The current status of the AgentCore runtime.
-            returned: always
+            description: The current status of the runtime.
             type: str
-            sample: READY
+            sample: "READY"
+        role_arn:
+            description: The ARN of the IAM role assumed by the runtime.
+            type: str
+            sample: "arn:aws:iam::123456789901:role/test-agentcore-runtime-role"
+        agent_runtime_artifact:
+            description: The runtime artifact configuration.
+            type: dict
+            contains:
+                container_configuration:
+                    description: Container-based runtime configuration.
+                    type: dict
+                    contains:
+                        container_uri:
+                            description: The URI of the container image.
+                            type: str
+                code_configuration:
+                    description: Code-based runtime configuration.
+                    type: dict
+                    contains:
+                        s3_bucket:
+                            description: The S3 bucket containing the runtime code.
+                            type: str
+                        s3_prefix:
+                            description: The S3 prefix containing the runtime code.
+                            type: str
+                        s3_version_id:
+                            description: The S3 object version identifier.
+                            type: str
+                        runtime:
+                            description: The language runtime.
+                            type: str
+                        entry_point:
+                            description: The entry point for the runtime code.
+                            type: list
+                            elements: str
+        network_configuration:
+            description: The network configuration for the runtime.
+            type: dict
+            contains:
+                network_mode:
+                    description: The network mode (PUBLIC or VPC).
+                    type: str
+                network_mode_config:
+                    description: VPC configuration.
+                    type: dict
+                    contains:
+                        security_groups:
+                            description: Security group IDs for VPC mode.
+                            type: list
+                            elements: str
+                        subnets:
+                            description: Subnet IDs for VPC mode.
+                            type: list
+                            elements: str
+        description:
+            description: The description of the runtime.
+            type: str
+        protocol_configuration:
+            description: The protocol configuration for the runtime.
+            type: dict
+            contains:
+                server_protocol:
+                    description: The server protocol used (MCP, HTTP, A2A, or AGUI).
+                    type: str
+        lifecycle_configuration:
+            description: The lifecycle configuration for the runtime.
+            type: dict
+            contains:
+                idle_runtime_session_timeout:
+                    description: The idle session timeout in seconds.
+                    type: int
+                max_lifetime:
+                    description: The maximum lifetime in seconds.
+                    type: int
+        environment_variables:
+            description: Environment variables for the runtime.
+            type: dict
+        authorizer_configuration:
+            description: The authorizer configuration for the runtime.
+            type: dict
+            contains:
+                custom_jwt_authorizer:
+                    description: Custom JWT authorizer configuration.
+                    type: dict
+                    contains:
+                        discovery_url:
+                            description: The JWT discovery URL.
+                            type: str
+                        allowed_audience:
+                            description: Allowed audience values.
+                            type: list
+                            elements: str
+                        allowed_clients:
+                            description: Allowed client IDs.
+                            type: list
+                            elements: str
+                        allowed_scopes:
+                            description: Allowed OAuth scopes.
+                            type: list
+                            elements: str
+        filesystem_configurations:
+            description: The filesystem configurations for the runtime.
+            type: list
+            elements: dict
+            contains:
+                session_storage:
+                    description: The session storage configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the session storage access point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the session storage.
+                            type: str
+                s3_files_access_point:
+                    description: The S3 Files Access Point configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the S3 Files Access Point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the S3 Files Access Point.
+                            type: str
+                efs_access_point:
+                    description: The EFS Access Point configuration for the filesystem.
+                    type: dict
+                    contains:
+                        access_point_arn:
+                            description: The ARN of the EFS Access Point.
+                            type: str
+                        mount_path:
+                            description: The mount path for the EFS Access Point.
+                            type: str
+                capacity_provider_volume:
+                    description: The capacity provider volume configuration for the filesystem.
+                    type: dict
+                    contains:
+                        volume_name:
+                            description: The name of the capacity provider volume.
+                            type: str
+                        mount_path:
+                            description: The mount path for the capacity provider volume.
+                            type: str
+        capacity_provider_configuration:
+            description: The capacity provider configuration for the runtime.
+            type: dict
+            contains:
+                capacity_provider_arn:
+                    description: The ARN of the capacity provider.
+                    type: str
+        created_at:
+            description: The timestamp when the runtime was created.
+            type: str
+            sample: "2025-10-01T15:36:41.199376+00:00"
+        last_updated_at:
+            description: The timestamp when the runtime was last updated.
+            type: str
+            sample: "2025-10-01T15:36:42.201271+00:00"
+        failure_reason:
+            description: The reason for a failed runtime (if applicable).
+            type: str
 msg:
     description: Informative message about the action.
     returned: always
@@ -337,8 +495,8 @@ def main() -> None:
         network_subnets=dict(type="list", elements="str"),
         description=dict(type="str"),
         protocol=dict(type="str", choices=["MCP", "HTTP", "A2A", "AGUI"]),
-        idle_runtime_session_timeout=dict(type="int", default=900),
-        max_lifetime=dict(type="int", default=28800),
+        idle_runtime_session_timeout=dict(type="int"),
+        max_lifetime=dict(type="int"),
         environment_variables=dict(type="dict"),
         authorizer_discovery_url=dict(type="str"),
         authorizer_allowed_audience=dict(type="list", elements="str"),

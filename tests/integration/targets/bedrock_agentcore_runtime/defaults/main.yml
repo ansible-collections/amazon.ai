@@ -6,4 +6,3 @@ agent_runtime_role_name: "ansible-test-agentcore-runtime-role-{{ test_id }}"
 # This needs to be verified to be publicly pullable before enabling the target.
 # Example: public.ecr.aws/docker/library/hello-world:latest
 container_uri: "public.ecr.aws/lambda/python:3.12"
-endpoint_name: "test-endpoint-{{ test_id }}"

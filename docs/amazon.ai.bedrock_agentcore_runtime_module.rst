@@ -517,10 +517,10 @@ Parameters
                     </div>
                 </td>
                 <td>
-                        <b>Default:</b><br/><div style="color: blue">900</div>
                 </td>
                 <td>
                         <div>The idle runtime session timeout in seconds.</div>
+                        <div>Default is 900 seconds (15 minutes) set by AWS.</div>
                 </td>
             </tr>
             <tr>
@@ -533,10 +533,10 @@ Parameters
                     </div>
                 </td>
                 <td>
-                        <b>Default:</b><br/><div style="color: blue">28800</div>
                 </td>
                 <td>
                         <div>The maximum runtime lifetime in seconds.</div>
+                        <div>Default is 28800 seconds (8 hours) set by AWS.</div>
                 </td>
             </tr>
             <tr>
@@ -934,12 +934,12 @@ Common return values are documented in the `common return values section <https:
 
     <table border=0 cellpadding=0 class="documentation-table">
         <tr>
-            <th colspan="2">Key</th>
+            <th colspan="4">Key</th>
             <th>Returned</th>
             <th width="100%">Description</th>
         </tr>
             <tr>
-                <td colspan="2">
+                <td colspan="4">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>agent_runtime</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
@@ -951,13 +951,11 @@ Common return values are documented in the `common return values section <https:
                 <td>
                             <div>Details about the AgentCore runtime after the module operation.</div>
                     <br/>
-                        <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;agent_runtime_arn&#x27;: &#x27;arn:aws:bedrock:us-east-1:123456789012:runtime/example&#x27;, &#x27;agent_runtime_id&#x27;: &#x27;example&#x27;, &#x27;agent_runtime_name&#x27;: &#x27;weather_runtime&#x27;, &#x27;status&#x27;: &#x27;READY&#x27;}</div>
                 </td>
             </tr>
                                 <tr>
                     <td class="elbow-placeholder">&nbsp;</td>
-                <td colspan="1">
+                <td colspan="3">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>agent_runtime_arn</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
@@ -965,17 +963,179 @@ Common return values are documented in the `common return values section <https:
                       <span style="color: purple">string</span>
                     </div>
                 </td>
-                <td>always</td>
+                <td></td>
                 <td>
-                            <div>The ARN of the AgentCore runtime.</div>
+                            <div>The Amazon Resource Name (ARN) of the runtime.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">arn:aws:bedrock:us-east-1:123456789012:runtime/example</div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">arn:aws:bedrock:us-east-1:123456789901:agent-runtime/RNKFFDOKFN</div>
                 </td>
             </tr>
             <tr>
                     <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>agent_runtime_artifact</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The runtime artifact configuration.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>code_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Code-based runtime configuration.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
                 <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>entry_point</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The entry point for the runtime code.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>runtime</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The language runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>s3_bucket</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The S3 bucket containing the runtime code.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>s3_prefix</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The S3 prefix containing the runtime code.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>s3_version_id</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The S3 object version identifier.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>container_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Container-based runtime configuration.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>container_uri</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The URI of the container image.</div>
+                    <br/>
+                </td>
+            </tr>
+
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>agent_runtime_id</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
@@ -983,17 +1143,17 @@ Common return values are documented in the `common return values section <https:
                       <span style="color: purple">string</span>
                     </div>
                 </td>
-                <td>always</td>
+                <td></td>
                 <td>
-                            <div>The unique identifier of the AgentCore runtime.</div>
+                            <div>The unique identifier of the runtime.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">example</div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">RNKFFDOKFN</div>
                 </td>
             </tr>
             <tr>
                     <td class="elbow-placeholder">&nbsp;</td>
-                <td colspan="1">
+                <td colspan="3">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>agent_runtime_name</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
@@ -1001,17 +1161,690 @@ Common return values are documented in the `common return values section <https:
                       <span style="color: purple">string</span>
                     </div>
                 </td>
-                <td>always</td>
+                <td></td>
                 <td>
-                            <div>The name of the AgentCore runtime.</div>
+                            <div>The name of the runtime.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">weather_runtime</div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">test-agentcore-runtime</div>
                 </td>
             </tr>
             <tr>
                     <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>agent_runtime_version</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The version of the runtime.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">1</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>authorizer_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The authorizer configuration for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>custom_jwt_authorizer</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Custom JWT authorizer configuration.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
                 <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>allowed_audience</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Allowed audience values.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>allowed_clients</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Allowed client IDs.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>allowed_scopes</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Allowed OAuth scopes.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>discovery_url</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The JWT discovery URL.</div>
+                    <br/>
+                </td>
+            </tr>
+
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>capacity_provider_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The capacity provider configuration for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>capacity_provider_arn</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The ARN of the capacity provider.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>created_at</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The timestamp when the runtime was created.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">2025-10-01T15:36:41.199376+00:00</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>description</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The description of the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>environment_variables</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Environment variables for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>failure_reason</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The reason for a failed runtime (if applicable).</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>filesystem_configurations</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The filesystem configurations for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>capacity_provider_volume</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The capacity provider volume configuration for the filesystem.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>mount_path</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The mount path for the capacity provider volume.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>volume_name</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The name of the capacity provider volume.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>efs_access_point</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The EFS Access Point configuration for the filesystem.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>access_point_arn</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The ARN of the EFS Access Point.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>mount_path</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The mount path for the EFS Access Point.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>s3_files_access_point</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The S3 Files Access Point configuration for the filesystem.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>access_point_arn</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The ARN of the S3 Files Access Point.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>mount_path</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The mount path for the S3 Files Access Point.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>session_storage</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The session storage configuration for the filesystem.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>access_point_arn</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The ARN of the session storage access point.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>mount_path</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The mount path for the session storage.</div>
+                    <br/>
+                </td>
+            </tr>
+
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>last_updated_at</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The timestamp when the runtime was last updated.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">2025-10-01T15:36:42.201271+00:00</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>lifecycle_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The lifecycle configuration for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>idle_runtime_session_timeout</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">integer</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The idle session timeout in seconds.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>max_lifetime</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">integer</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The maximum lifetime in seconds.</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>network_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The network configuration for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>network_mode</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The network mode (PUBLIC or VPC).</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>network_mode_config</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>VPC configuration.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>security_groups</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Security group IDs for VPC mode.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>subnets</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">list</span>
+                       / <span style="color: purple">elements=string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>Subnet IDs for VPC mode.</div>
+                    <br/>
+                </td>
+            </tr>
+
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>protocol_configuration</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The protocol configuration for the runtime.</div>
+                    <br/>
+                </td>
+            </tr>
+                                <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>server_protocol</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The server protocol used (MCP, HTTP, A2A, or AGUI).</div>
+                    <br/>
+                </td>
+            </tr>
+
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>role_arn</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td></td>
+                <td>
+                            <div>The ARN of the IAM role assumed by the runtime.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">arn:aws:iam::123456789901:role/test-agentcore-runtime-role</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="3">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>status</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
@@ -1019,9 +1852,9 @@ Common return values are documented in the `common return values section <https:
                       <span style="color: purple">string</span>
                     </div>
                 </td>
-                <td>always</td>
+                <td></td>
                 <td>
-                            <div>The current status of the AgentCore runtime.</div>
+                            <div>The current status of the runtime.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">READY</div>
@@ -1029,7 +1862,7 @@ Common return values are documented in the `common return values section <https:
             </tr>
 
             <tr>
-                <td colspan="2">
+                <td colspan="4">
                     <div class="ansibleOptionAnchor" id="return-"></div>
                     <b>msg</b>
                     <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
