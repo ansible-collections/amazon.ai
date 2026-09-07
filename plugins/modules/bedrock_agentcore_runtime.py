@@ -83,6 +83,7 @@ options:
     network_mode:
         description:
             - The network mode for the runtime.
+            - Required when O(state=present).
         type: str
         choices: ['PUBLIC', 'VPC']
     network_security_groups:
@@ -561,7 +562,7 @@ def main() -> None:
         ],
         required_together=[["network_security_groups", "network_subnets"]],
         required_if=[
-            ("state", "present", ["role_arn"]),
+            ("state", "present", ["role_arn", "network_mode"]),
             ("network_mode", "VPC", ["network_security_groups", "network_subnets"]),
         ],
     )

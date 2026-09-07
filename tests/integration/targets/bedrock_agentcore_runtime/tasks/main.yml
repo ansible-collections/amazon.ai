@@ -39,6 +39,7 @@
         container_configuration:
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
       check_mode: true
       register: runtime_create_check
 
@@ -56,6 +57,7 @@
         container_configuration:
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
       register: runtime_create_real
 
     - name: "Scenario 2: Assert runtime creation real"
@@ -77,6 +79,7 @@
         container_configuration:
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
       check_mode: true
       register: runtime_create_rerun_check
 
@@ -92,6 +95,7 @@
         container_configuration:
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
       register: runtime_create_rerun_real
 
     - name: "Scenario 3: Assert runtime creation rerun real idempotency"
@@ -122,6 +126,7 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
+        network_mode: "{{ network_mode }}"
       check_mode: true
       register: runtime_update_check
 
@@ -140,6 +145,7 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
+        network_mode: "{{ network_mode }}"
       register: runtime_update_real
 
     - name: "Scenario 5: Assert runtime update real"
@@ -158,6 +164,7 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
+        network_mode: "{{ network_mode }}"
       register: runtime_update_rerun
 
     - name: "Scenario 5: Assert runtime update rerun idempotency"
@@ -178,6 +185,7 @@
           runtime: "PYTHON_3_11"
           entry_point: ["handler.py"]
         role_arn: "{{ runtime_role_arn }}"
+        network_mode: "{{ network_mode }}"
       register: both_artifacts_result
       ignore_errors: true
 

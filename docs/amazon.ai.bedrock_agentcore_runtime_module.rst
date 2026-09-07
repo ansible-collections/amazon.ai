@@ -572,6 +572,7 @@ Parameters
                 </td>
                 <td>
                         <div>The network mode for the runtime.</div>
+                        <div>Required when O(state=present).</div>
                 </td>
             </tr>
             <tr>
