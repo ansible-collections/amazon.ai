@@ -328,9 +328,10 @@ def main() -> None:
     try:
         existing: Optional[Dict[str, Any]] = describe_model(client, module.params["model_name"])
         changed: bool = False
-        result: Dict[str, Any] = {"model": {}, "tags": {}, "msg": ""}
+        result: Dict[str, Any] = dict(msg="")
 
         if module.params["state"] == "present":
+            result.update(dict(model=dict(), tags=dict()))
             if existing is None:
                 changed, result["msg"] = create_model(client, module)
                 if not module.check_mode:

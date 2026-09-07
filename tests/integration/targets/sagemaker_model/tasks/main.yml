@@ -373,6 +373,8 @@
         that:
           - model_delete_first.changed
           - "'deleted successfully' in model_delete_first.msg"
+          - model_delete_first.model is not defined
+          - model_delete_first.tags is not defined
 
     - name: Get info about the deleted model
       amazon.ai.sagemaker_model_info:
@@ -399,6 +401,8 @@
         that:
           - not model_delete_second.changed
           - "'does not exist' in model_delete_second.msg"
+          - model_delete_second.model is not defined
+          - model_delete_second.tags is not defined
 
   always:
     - name: Cleanup - Delete SageMaker Model

@@ -220,7 +220,10 @@ def model_needs_replacement(existing: Dict[str, Any], module) -> bool:
     for key, value in desired_container.items():
         if key in ("ModelDataUrl", "ModelDataSource"):
             continue
-        if existing_container.get(key) != value:
+        existing_value = existing_container.get(key)
+        if value == dict() and existing_value is None:
+            continue
+        if existing_value != value:
             return True
 
     desired_s3 = _model_data_s3_uri(desired_container)

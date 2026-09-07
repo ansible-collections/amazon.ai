@@ -24,12 +24,14 @@ class TestModelNeedsReplacement:
     ):
         """Create a mock module with test parameters."""
         module = MagicMock()
+        default_primary_container = {
+            "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
+            "environment": {},
+        }
+        primary_container = dict(default_primary_container, **(primary_container or {}))
         module.params = {
             "model_name": model_name,
-            "primary_container": primary_container
-            or {
-                "image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
-            },
+            "primary_container": primary_container,
             "execution_role_arn": execution_role_arn,
             "vpc_config": vpc_config,
             "enable_network_isolation": enable_network_isolation,
@@ -39,6 +41,19 @@ class TestModelNeedsReplacement:
 
     def test_same_container_no_replacement(self):
         """Model with identical container should not need replacement."""
+        existing = {
+            "ModelName": "test-model",
+            "PrimaryContainer": {
+                "Image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
+            },
+            "ExecutionRoleArn": "arn:role",
+        }
+        module = self._create_mock_module()
+
+        assert not model_needs_replacement(existing, module)
+
+    def test_default_empty_environment_missing_from_existing_no_replacement(self):
+        """Default empty environment is equivalent to an omitted AWS Environment."""
         existing = {
             "ModelName": "test-model",
             "PrimaryContainer": {
