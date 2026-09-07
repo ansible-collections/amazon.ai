@@ -183,9 +183,7 @@ def _runtime_parameters(
     elif module.params.get("efs_access_point"):
         params["filesystem_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
     elif module.params.get("capacity_provider_volume"):
-        params["filesystem_configurations"] = [
-            dict(capacity_provider_volume=module.params["capacity_provider_volume"])
-        ]
+        params["filesystem_configurations"] = [dict(capacity_provider_volume=module.params["capacity_provider_volume"])]
     return snake_dict_to_camel_dict(scrub_none_parameters(params))
 
 
@@ -351,7 +349,11 @@ def delete_agent_runtime(module: AnsibleAWSModule, client, existing_runtime: Dic
     if module.check_mode:
         return True, f"Check mode: would have deleted agent runtime '{name}'."
 
-    client.delete_agent_runtime(agentRuntimeId=existing_runtime["agent_runtime_id"])
+    params = {"agentRuntimeId": existing_runtime["agent_runtime_id"]}
+    if module.params.get("agent_runtime_version") is not None:
+        params["agentRuntimeVersion"] = module.params["agent_runtime_version"]
+    client.delete_agent_runtime(**params)
+
     # User has an option to wait for the runtime to be deleted, default is True
     if module.params.get("wait", True):
         wait_for_agent_runtime_status(client, module, existing_runtime["agent_runtime_id"], AgentRuntimeStatus.DELETED)

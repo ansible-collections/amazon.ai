@@ -27,6 +27,11 @@ options:
         type: str
         required: true
         aliases: ["name"]
+    agent_runtime_version:
+        description:
+            - The version of the AgentCore runtime.
+            - Can be used with O(state=absent) to specify the version of the runtime to delete.
+        type: str
     container_configuration:
         description:
             - Configuration for a container-based runtime.
@@ -467,6 +472,18 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
+def runtime_status_check(existing_runtime: Dict[str, Any], state: str, module: AnsibleAWSModule) -> None:
+    # Early exit if existing_runtime is deleting, creating or updating
+    if existing_runtime:
+        if existing_runtime.get("status") == AgentRuntimeStatus.DELETING:
+            module.exit_json(changed=False, msg=f"Agent runtime is currently being deleted.")
+        if state == "present" and existing_runtime.get("status") in {
+            AgentRuntimeStatus.UPDATING,
+            AgentRuntimeStatus.CREATING,
+        }:
+            module.exit_json(changed=False, msg=f"Agent runtime is currently in {existing_runtime.get('status')}.")
+
+
 def main() -> None:
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "absent"]),
@@ -570,13 +587,7 @@ def main() -> None:
         existing_runtime: Optional[Dict[str, Any]] = get_agent_runtime_by_name(
             client, module.params["agent_runtime_name"]
         )
-
-        # Early exit if existing_runtime is deleting, creating or updating
-        if existing_runtime:
-            if existing_runtime.get("status") == AgentRuntimeStatus.DELETING:
-                module.exit_json(changed=False, msg=f"Agent runtime is currently being deleted.")
-            if state == "present" and existing_runtime.get("status") in {AgentRuntimeStatus.UPDATING, AgentRuntimeStatus.CREATING}:
-                module.exit_json(changed=False, msg=f"Agent runtime is currently in {existing_runtime.get('status')}.")
+        runtime_status_check(existing_runtime, state, module)
 
         if state == "present":
             if existing_runtime:
