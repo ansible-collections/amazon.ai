@@ -131,10 +131,9 @@ def _runtime_storage(
     Args:
         module: The AnsibleAWSModule instance.
         params: The parameters dictionary for the AgentCore runtime.
-        existing_runtime: The existing runtime configuration, if any.
 
     Returns:
-        A dictionary of storage configuration for the AgentCore runtime.
+        An updated params dictionary with storage configuration for the AgentCore runtime.
     """
     if module.params.get("capacity_provider_arn"):
         params["capacity_provider_configuration"] = dict(capacity_provider_arn=module.params["capacity_provider_arn"])
