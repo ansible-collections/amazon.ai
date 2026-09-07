@@ -121,6 +121,34 @@ def _runtime_artifact(module: AnsibleAWSModule, existing_runtime: Optional[Dict[
     return artifact
 
 
+def _runtime_storage(
+    module: AnsibleAWSModule,
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Generates storage configuration for an AgentCore runtime based on the module inputs and existing runtime.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        params: The parameters dictionary for the AgentCore runtime.
+        existing_runtime: The existing runtime configuration, if any.
+
+    Returns:
+        A dictionary of storage configuration for the AgentCore runtime.
+    """
+    if module.params.get("capacity_provider_arn"):
+        params["capacity_provider_configuration"] = dict(capacity_provider_arn=module.params["capacity_provider_arn"])
+    if module.params.get("session_storage"):
+        params["filesystem_configurations"] = [dict(session_storage=module.params["session_storage"])]
+    elif module.params.get("s3_files_access_point"):
+        params["filesystem_configurations"] = [dict(s3_files_access_point=module.params["s3_files_access_point"])]
+    elif module.params.get("efs_access_point"):
+        params["filesystem_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
+    elif module.params.get("capacity_provider_volume"):
+        params["filesystem_configurations"] = [dict(capacity_provider_volume=module.params["capacity_provider_volume"])]
+    return params
+
+
 def _runtime_parameters(
     module: AnsibleAWSModule,
     existing_runtime: Optional[Dict[str, Any]] = None,
@@ -174,16 +202,7 @@ def _runtime_parameters(
                 allowed_scopes=module.params.get("authorizer_allowed_scopes"),
             )
         )
-    if module.params.get("capacity_provider_arn"):
-        params["capacity_provider_configuration"] = dict(capacity_provider_arn=module.params["capacity_provider_arn"])
-    if module.params.get("session_storage"):
-        params["filesystem_configurations"] = [dict(session_storage=module.params["session_storage"])]
-    elif module.params.get("s3_files_access_point"):
-        params["filesystem_configurations"] = [dict(s3_files_access_point=module.params["s3_files_access_point"])]
-    elif module.params.get("efs_access_point"):
-        params["filesystem_configurations"] = [dict(efs_access_point=module.params["efs_access_point"])]
-    elif module.params.get("capacity_provider_volume"):
-        params["filesystem_configurations"] = [dict(capacity_provider_volume=module.params["capacity_provider_volume"])]
+    params = _runtime_storage(module, params)
     return snake_dict_to_camel_dict(scrub_none_parameters(params))
 
 
