@@ -80,7 +80,6 @@ options:
             - The network mode for the runtime.
         type: str
         choices: ['PUBLIC', 'VPC']
-        default: PUBLIC
     network_security_groups:
         description:
             - The security groups for a VPC runtime.
@@ -459,6 +458,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_id
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeStatus
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -490,7 +490,7 @@ def main() -> None:
             ),
         ),
         role_arn=dict(type="str"),
-        network_mode=dict(type="str", default="PUBLIC", choices=["PUBLIC", "VPC"]),
+        network_mode=dict(type="str", choices=["PUBLIC", "VPC"]),
         network_security_groups=dict(type="list", elements="str"),
         network_subnets=dict(type="list", elements="str"),
         description=dict(type="str"),
@@ -543,7 +543,10 @@ def main() -> None:
             ["session_storage", "s3_files_access_point", "efs_access_point", "capacity_provider_volume"],
         ],
         required_together=[["network_security_groups", "network_subnets"]],
-        required_if=[("state", "present", ["role_arn"])],
+        required_if=[
+            ("state", "present", ["role_arn"]),
+            ("network_mode", "VPC", ["network_security_groups", "network_subnets"]),
+        ],
     )
 
     if module.params["state"] == "present" and not (
@@ -567,6 +570,13 @@ def main() -> None:
         existing_runtime: Optional[Dict[str, Any]] = get_agent_runtime_by_name(
             client, module.params["agent_runtime_name"]
         )
+
+        # Early exit if existing_runtime is deleting, creating or updating
+        if existing_runtime:
+            if existing_runtime.get("status") == AgentRuntimeStatus.DELETING:
+                module.exit_json(changed=False, msg=f"Agent runtime is currently being deleted.")
+            if state == "present" and existing_runtime.get("status") in {AgentRuntimeStatus.UPDATING, AgentRuntimeStatus.CREATING}:
+                module.exit_json(changed=False, msg=f"Agent runtime is currently in {existing_runtime.get('status')}.")
 
         if state == "present":
             if existing_runtime:

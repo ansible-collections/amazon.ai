@@ -1,7 +1,7 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-
+from enum import Enum
 import time
 from typing import Any
 from typing import Dict
@@ -16,6 +16,16 @@ from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
+
+
+class AgentRuntimeStatus(str, Enum):
+    DELETING = "DELETING"
+    DELETED = "DELETED"
+    CREATING = "CREATING"
+    CREATE_FAILED = "CREATE_FAILED"
+    UPDATING = "UPDATING"
+    UPDATE_FAILED = "UPDATE_FAILED"
+    READY = "READY"
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -216,7 +226,7 @@ def wait_for_agent_runtime_status(
     client,
     module: AnsibleAWSModule,
     agent_runtime_id: str,
-    status: str,
+    status: AgentRuntimeStatus,
     sleep_time: int = 5,
 ) -> None:
     """
@@ -229,7 +239,7 @@ def wait_for_agent_runtime_status(
         - Uses `client.get_agent_runtime()` to retrieve the agent runtime's current status.
         - Waits `sleep_time` seconds between each polling attempt.
         - Stops early if the agent runtime reaches the desired status or is deleted
-          while waiting for the "DELETED" state.
+          while waiting for the AgentRuntimeStatus.DELETING state.
         - Fails the Ansible module gracefully if the timeout expires.
 
     Args:
@@ -237,8 +247,8 @@ def wait_for_agent_runtime_status(
         module: The current Ansible module object, used for error reporting
                 and accessing parameters (specifically `wait_timeout`).
         agent_runtime_id (str): The unique identifier of the Bedrock Agent runtime to monitor.
-        status (str): The target agent status to wait for
-                      (e.g., "PREPARED", "DELETED").
+        status (AgentRuntimeStatus): The target agent status to wait for
+                      (e.g., AgentRuntimeStatus.READY, AgentRuntimeStatus.DELETING).
         sleep_time (int, optional): Number of seconds to sleep between polling
                                     attempts. Defaults to 5 seconds.
 
@@ -254,14 +264,14 @@ def wait_for_agent_runtime_status(
     for attempt in range(max_attempts):
         runtime = get_agent_runtime_by_id(client, agent_runtime_id)
         if runtime is None:
-            if status == "DELETED":
+            if status == AgentRuntimeStatus.DELETED:
                 return
             module.fail_json(msg=f"Agent runtime {agent_runtime_id} was not found while waiting for status '{status}'.")
 
         current_status = runtime.get("status")
         if current_status == status:
             return
-        if current_status in {"CREATE_FAILED", "UPDATE_FAILED"}:
+        if current_status in {AgentRuntimeStatus.CREATE_FAILED, AgentRuntimeStatus.UPDATE_FAILED}:
             module.fail_json(
                 msg=f"Agent runtime {agent_runtime_id} failed with status '{current_status}': "
                 f"{runtime.get('failure_reason', 'Unknown failure reason')}."
@@ -296,7 +306,7 @@ def create_agent_runtime(module: AnsibleAWSModule, client) -> Tuple[bool, Option
     agent_runtime_id = response.get("agentRuntimeId")
     # User has an option to wait for the runtime to be ready, default is True
     if module.params.get("wait", True):
-        wait_for_agent_runtime_status(client, module, agent_runtime_id, "READY")
+        wait_for_agent_runtime_status(client, module, agent_runtime_id, AgentRuntimeStatus.READY)
     return True, agent_runtime_id, f"Agent runtime {name} created successfully."
 
 
@@ -332,7 +342,7 @@ def update_agent_runtime(
     updated_id = response.get("agentRuntimeId", agent_runtime_id)
     # User has an option to wait for the runtime to be ready, default is True
     if module.params.get("wait", True):
-        wait_for_agent_runtime_status(client, module, updated_id, "READY")
+        wait_for_agent_runtime_status(client, module, updated_id, AgentRuntimeStatus.READY)
     return True, updated_id, f"Agent runtime {existing_runtime['agent_runtime_name']} updated successfully."
 
 
@@ -344,5 +354,5 @@ def delete_agent_runtime(module: AnsibleAWSModule, client, existing_runtime: Dic
     client.delete_agent_runtime(agentRuntimeId=existing_runtime["agent_runtime_id"])
     # User has an option to wait for the runtime to be deleted, default is True
     if module.params.get("wait", True):
-        wait_for_agent_runtime_status(client, module, existing_runtime["agent_runtime_id"], "DELETED")
+        wait_for_agent_runtime_status(client, module, existing_runtime["agent_runtime_id"], AgentRuntimeStatus.DELETED)
     return True, f"Agent runtime {name} deleted successfully."

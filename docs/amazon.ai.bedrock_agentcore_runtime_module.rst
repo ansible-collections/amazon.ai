@@ -550,7 +550,7 @@ Parameters
                 </td>
                 <td>
                         <ul style="margin: 0; padding: 0"><b>Choices:</b>
-                                    <li><div style="color: blue"><b>PUBLIC</b>&nbsp;&larr;</div></li>
+                                    <li>PUBLIC</li>
                                     <li>VPC</li>
                         </ul>
                 </td>
