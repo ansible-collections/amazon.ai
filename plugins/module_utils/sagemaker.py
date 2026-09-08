@@ -16,6 +16,11 @@ from ansible_collections.amazon.aws.plugins.module_utils.tagging import ansible_
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
+try:
+    from botocore.exceptions import WaiterError
+except ImportError:
+    pass
+
 
 @AWSRetry.jittered_backoff(retries=10)
 def list_tags(client, resource_arn: str) -> Dict[str, str]:
@@ -424,4 +429,161 @@ def reconcile_endpoint_config_tags(client, module, existing: Dict[str, Any]) -> 
         client.add_tags(ResourceArn=existing["EndpointConfigArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
     if tags_to_remove:
         client.delete_tags(ResourceArn=existing["EndpointConfigArn"], TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_endpoint(client, endpoint_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific SageMaker endpoint.
+
+    Args:
+        client: The boto3 SageMaker client.
+        endpoint_name: The name of the endpoint.
+
+    Returns:
+        A dictionary with the endpoint details if found, otherwise None.
+    """
+    try:
+        return client.describe_endpoint(EndpointName=endpoint_name)
+    except is_boto3_error_message("Could not find endpoint"):
+        # DescribeEndpoint has no dedicated not-found error; AWS returns a generic
+        # ValidationException whose message reports the missing endpoint.
+        # UNVERIFIED: confirm the not-found message against live AWS.
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_endpoints(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve a list of SageMaker endpoints using pagination.
+
+    Args:
+        client: The boto3 SageMaker client.
+        **params: Filter, sort and pagination parameters for the list operation.
+
+    Returns:
+        A list of endpoint summary dictionaries.
+    """
+    paginator = client.get_paginator("list_endpoints")
+    max_results = params.pop("MaxResults", None)
+    if max_results is not None:
+        params["PaginationConfig"] = dict(MaxItems=max_results)
+    return paginator.paginate(**params).build_full_result()["Endpoints"]
+
+
+def endpoint_params(module) -> Dict[str, Any]:
+    """
+    Build the boto3 endpoint request parameters (EndpointName, EndpointConfigName) from module params.
+
+    Args:
+        module: The Ansible module instance.
+
+    Returns:
+        A dictionary with PascalCase keys.
+    """
+    values = {field: module.params.get(field) for field in ("endpoint_name", "endpoint_config_name")}
+    return snake_dict_to_camel_dict(scrub_none_parameters(values), capitalize_first=True)
+
+
+def wait_for_endpoint(client, module, deleted: bool = False) -> None:
+    """
+    Wait for a SageMaker endpoint to reach a terminal state using a botocore waiter.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance (provides endpoint_name and wait_timeout).
+        deleted: When True, wait for the endpoint to be deleted; otherwise wait for InService.
+    """
+    endpoint_name = module.params["endpoint_name"]
+    delay = 30
+    waiter = client.get_waiter("endpoint_deleted" if deleted else "endpoint_in_service")
+    try:
+        waiter.wait(
+            EndpointName=endpoint_name,
+            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, module.params["wait_timeout"] // delay)),
+        )
+    except WaiterError as e:
+        reason = ""
+        if not deleted:
+            endpoint = describe_endpoint(client, endpoint_name)
+            if endpoint:
+                reason = endpoint.get("FailureReason", "")
+        module.fail_json(msg=f"Error waiting for endpoint {endpoint_name} to reach the desired state: {reason or e}")
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def create_endpoint(client, module) -> None:
+    """
+    Create a SageMaker endpoint and, when requested, wait for it to become InService.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+    """
+    params = endpoint_params(module)
+    if module.params.get("tags") is not None:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+    client.create_endpoint(**params)
+    if module.params["wait"]:
+        wait_for_endpoint(client, module)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def update_endpoint(client, module) -> None:
+    """
+    Update a SageMaker endpoint in place by swapping its endpoint configuration.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+    """
+    client.update_endpoint(
+        EndpointName=module.params["endpoint_name"],
+        EndpointConfigName=module.params["endpoint_config_name"],
+    )
+    if module.params["wait"]:
+        wait_for_endpoint(client, module)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def delete_endpoint(client, module) -> None:
+    """
+    Delete a SageMaker endpoint and, when requested, wait for it to be removed.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+    """
+    client.delete_endpoint(EndpointName=module.params["endpoint_name"])
+    if module.params["wait"]:
+        wait_for_endpoint(client, module, deleted=True)
+
+
+def reconcile_endpoint_tags(client, module, existing: Dict[str, Any]) -> bool:
+    """
+    Reconcile SageMaker endpoint tags in place, honouring purge_tags.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The raw (camelCase) response from describe_endpoint().
+
+    Returns:
+        True if tags were (or would be, in check mode) changed.
+    """
+    if module.params.get("tags") is None:
+        return False
+    current_tags = list_tags(client, existing["EndpointArn"])
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(ResourceArn=existing["EndpointArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=existing["EndpointArn"], TagKeys=tags_to_remove)
     return bool(tags_to_add or tags_to_remove)

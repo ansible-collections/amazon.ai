@@ -1,0 +1,327 @@
+---
+# --- Failure paths (cheap, no live endpoint yet) ---
+- name: Create endpoint with missing endpoint_config_name
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+  register: missing_config
+  ignore_errors: true
+
+- name: Assert required_if failure
+  ansible.builtin.assert:
+    that:
+      - missing_config is failed
+      - "'endpoint_config_name' in missing_config.msg"
+
+- name: Create endpoint referencing a non-existent configuration
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "does-not-exist-{{ test_id }}"
+    wait: false
+  register: bad_config
+  ignore_errors: true
+
+- name: Assert AWS error is surfaced cleanly
+  ansible.builtin.assert:
+    that:
+      - bad_config is failed
+
+# --- Create ---
+- name: Create endpoint in check mode
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name }}"
+  check_mode: true
+  register: create_check
+
+- name: Assert create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check.changed
+      - "create_check.msg.startswith('Check mode: would have ')"
+
+- name: Assert endpoint does not exist yet
+  amazon.ai.sagemaker_endpoint_info:
+    endpoint_name: "{{ endpoint_name }}"
+  register: create_check_info
+
+- name: Assert no endpoint present after check mode
+  ansible.builtin.assert:
+    that:
+      - create_check_info.endpoints | length == 0
+
+- name: Create endpoint
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name }}"
+    tags:
+      Environment: integration
+  register: create_real
+
+- name: Assert endpoint was created and is in service
+  ansible.builtin.assert:
+    that:
+      - create_real.changed
+      - create_real.msg == 'Endpoint ' ~ endpoint_name ~ ' created successfully.'
+      - create_real.endpoint.endpoint_arn is defined
+      - create_real.endpoint.endpoint_status == 'InService'
+      - create_real.endpoint.endpoint_config_name == endpoint_config_name
+
+- name: Re-run endpoint creation
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name }}"
+    tags:
+      Environment: integration
+  register: create_rerun
+
+- name: Assert create idempotency
+  ansible.builtin.assert:
+    that:
+      - not create_rerun.changed
+      - create_rerun.msg == 'Endpoint ' ~ endpoint_name ~ ' is already up to date.'
+
+# --- Info assertions ---
+- name: Query the endpoint by name
+  amazon.ai.sagemaker_endpoint_info:
+    endpoint_name: "{{ endpoint_name }}"
+  register: endpoint_info
+
+- name: Assert single endpoint returned
+  ansible.builtin.assert:
+    that:
+      - endpoint_info.endpoints | length == 1
+      - endpoint_info.endpoints[0].endpoint_name == endpoint_name
+      - endpoint_info.endpoints[0].endpoint_config_name == endpoint_config_name
+      - endpoint_info.endpoints[0].endpoint_status == 'InService'
+
+- name: List in-service endpoints filtered by name
+  amazon.ai.sagemaker_endpoint_info:
+    status_equals: InService
+    name_contains: "{{ endpoint_name }}"
+  register: endpoint_list
+
+- name: Assert the endpoint is in the filtered list
+  ansible.builtin.assert:
+    that:
+      - endpoint_list.endpoints | selectattr('endpoint_name', 'equalto', endpoint_name) | list | length == 1
+
+- name: List endpoints with sort and max_results
+  amazon.ai.sagemaker_endpoint_info:
+    sort_by: Name
+    sort_order: Descending
+    max_results: 10
+  register: sorted_list
+
+- name: Assert sorted list result
+  ansible.builtin.assert:
+    that:
+      - sorted_list.endpoints | length <= 10
+      - >-
+        (sorted_list.endpoints | map(attribute='endpoint_name') | list)
+        == (sorted_list.endpoints | map(attribute='endpoint_name') | list | sort(reverse=true))
+
+# --- Update (swap endpoint configuration) ---
+- name: Update endpoint configuration in check mode
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+  check_mode: true
+  register: update_check
+
+- name: Assert update check mode
+  ansible.builtin.assert:
+    that:
+      - update_check.changed
+      - "update_check.msg.startswith('Check mode: would have ')"
+
+- name: Assert configuration unchanged after check mode
+  amazon.ai.sagemaker_endpoint_info:
+    endpoint_name: "{{ endpoint_name }}"
+  register: update_check_info
+
+- name: Assert endpoint still points at the original configuration
+  ansible.builtin.assert:
+    that:
+      - update_check_info.endpoints[0].endpoint_config_name == endpoint_config_name
+
+- name: Update endpoint configuration
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+  register: update_real
+
+- name: Assert endpoint was updated
+  ansible.builtin.assert:
+    that:
+      - update_real.changed
+      - update_real.msg == 'Endpoint ' ~ endpoint_name ~ ' updated successfully.'
+      - update_real.endpoint.endpoint_status == 'InService'
+
+- name: Re-query endpoint to prove in-place update
+  amazon.ai.sagemaker_endpoint_info:
+    endpoint_name: "{{ endpoint_name }}"
+  register: update_info
+
+- name: Assert endpoint now points at the new configuration
+  ansible.builtin.assert:
+    that:
+      - update_info.endpoints | length == 1
+      - update_info.endpoints[0].endpoint_config_name == endpoint_config_name_updated
+      - update_info.endpoints[0].endpoint_arn == create_real.endpoint.endpoint_arn
+
+- name: Re-run endpoint update
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+  register: update_rerun
+
+- name: Assert update idempotency
+  ansible.builtin.assert:
+    that:
+      - not update_rerun.changed
+      - update_rerun.msg == 'Endpoint ' ~ endpoint_name ~ ' is already up to date.'
+
+# --- Tag reconciliation ---
+- name: Check adding a tag with purge_tags disabled
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  check_mode: true
+  register: tags_add_check
+
+- name: Assert tag-add check mode
+  ansible.builtin.assert:
+    that:
+      - tags_add_check.changed
+      - "tags_add_check.msg == 'Check mode: would have updated endpoint ' ~ endpoint_name ~ ' tags.'"
+
+- name: Add a tag with purge_tags disabled
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  register: tags_add
+
+- name: Assert existing tags retained and new tag added
+  ansible.builtin.assert:
+    that:
+      - tags_add.changed
+      - "tags_add.msg == 'Endpoint ' ~ endpoint_name ~ ' tags updated successfully.'"
+      - tags_add.tags.Environment == 'integration'
+      - tags_add.tags.Team == 'ml'
+
+- name: Re-run tag addition
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  register: tags_add_rerun
+
+- name: Assert tag-add idempotency
+  ansible.builtin.assert:
+    that:
+      - not tags_add_rerun.changed
+      - tags_add_rerun.msg == 'Endpoint ' ~ endpoint_name ~ ' is already up to date.'
+
+- name: Check enforcing an exact tag set
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+  check_mode: true
+  register: tags_purge_check
+
+- name: Assert tag-purge check mode
+  ansible.builtin.assert:
+    that:
+      - tags_purge_check.changed
+      - "tags_purge_check.msg == 'Check mode: would have updated endpoint ' ~ endpoint_name ~ ' tags.'"
+
+- name: Enforce an exact tag set with purge_tags enabled
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+  register: tags_purge
+
+- name: Assert omitted tag removed
+  ansible.builtin.assert:
+    that:
+      - tags_purge.changed
+      - "tags_purge.msg == 'Endpoint ' ~ endpoint_name ~ ' tags updated successfully.'"
+      - tags_purge.tags.Environment == 'integration'
+      - "'Team' not in tags_purge.tags"
+
+- name: Re-run tag purge
+  amazon.ai.sagemaker_endpoint:
+    endpoint_name: "{{ endpoint_name }}"
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+  register: tags_purge_rerun
+
+- name: Assert tag-purge idempotency
+  ansible.builtin.assert:
+    that:
+      - not tags_purge_rerun.changed
+      - tags_purge_rerun.msg == 'Endpoint ' ~ endpoint_name ~ ' is already up to date.'
+
+# --- Delete ---
+- name: Delete endpoint in check mode
+  amazon.ai.sagemaker_endpoint:
+    state: absent
+    endpoint_name: "{{ endpoint_name }}"
+  check_mode: true
+  register: delete_check
+
+- name: Assert delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check.changed
+      - "delete_check.msg.startswith('Check mode: would have ')"
+
+- name: Delete endpoint
+  amazon.ai.sagemaker_endpoint:
+    state: absent
+    endpoint_name: "{{ endpoint_name }}"
+  register: delete_real
+
+- name: Assert endpoint was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_real.changed
+      - delete_real.msg == 'Endpoint ' ~ endpoint_name ~ ' deleted successfully.'
+
+- name: Assert endpoint is gone
+  amazon.ai.sagemaker_endpoint_info:
+    endpoint_name: "{{ endpoint_name }}"
+  register: delete_info
+
+- name: Assert no endpoint present after delete
+  ansible.builtin.assert:
+    that:
+      - delete_info.endpoints | length == 0
+
+- name: Re-run endpoint deletion
+  amazon.ai.sagemaker_endpoint:
+    state: absent
+    endpoint_name: "{{ endpoint_name }}"
+  register: delete_rerun
+
+- name: Assert delete idempotency
+  ansible.builtin.assert:
+    that:
+      - not delete_rerun.changed
+      - delete_rerun.msg == 'Endpoint ' ~ endpoint_name ~ ' does not exist.'

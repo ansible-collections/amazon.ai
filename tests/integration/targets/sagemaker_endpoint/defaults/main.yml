@@ -1,0 +1,21 @@
+test_id: "{{ tiny_prefix }}"
+endpoint_name: "test-sm-endpoint-{{ test_id }}"
+endpoint_config_name: "test-sm-endpoint-config-{{ test_id }}"
+endpoint_config_name_updated: "test-sm-endpoint-config-2-{{ test_id }}"
+model_name: "test-sagemaker-model-{{ test_id }}"
+model_role_name: "ansible-test-sagemaker-model-role-{{ test_id }}"
+model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
+model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
+
+# SageMaker built-in XGBoost serving image. The account owning the image is
+# region-specific; only regions the integration test is expected to run in are
+# mapped here. Add the region's account (see the AWS "Docker Registry Paths and
+# Example Code" docs) to run the target elsewhere.
+xgboost_version: "1.7-1"
+sagemaker_xgboost_accounts:
+  us-east-1: "683313688378"
+  us-east-2: "257758044811"
+  us-west-2: "246618743249"
+  eu-west-1: "141502667606"
+  eu-central-1: "492215442770"
+model_image: "{{ sagemaker_xgboost_accounts[aws_region] }}.dkr.ecr.{{ aws_region }}.amazonaws.com/sagemaker-xgboost:{{ xgboost_version }}"

@@ -1,0 +1,60 @@
+---
+- name: Fail early when the region has no mapped XGBoost image
+  ansible.builtin.assert:
+    that:
+      - aws_region in sagemaker_xgboost_accounts
+    fail_msg: >-
+      No SageMaker XGBoost image account mapped for region '{{ aws_region }}'.
+      Add it to sagemaker_xgboost_accounts in defaults/main.yml.
+
+- name: Create IAM role for SageMaker Model
+  amazon.aws.iam_role:
+    name: "{{ model_role_name }}"
+    assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_model.json') }}"
+    state: present
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+  register: model_role
+
+- name: Wait for IAM role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+
+- name: Create S3 bucket for model artifacts
+  amazon.aws.s3_bucket:
+    name: "{{ model_bucket_name }}"
+    state: present
+
+- name: Upload model artifact to S3
+  amazon.aws.s3_object:
+    bucket: "{{ model_bucket_name }}"
+    object: model.tar.gz
+    src: "{{ role_path }}/files/model.tar.gz"
+    mode: put
+
+- name: Create SageMaker model
+  amazon.ai.sagemaker_model:
+    state: present
+    model_name: "{{ model_name }}"
+    execution_role_arn: "{{ model_role.iam_role.arn }}"
+    primary_container:
+      image: "{{ model_image }}"
+      model_data_url: "{{ model_data_url }}"
+
+- name: Create first endpoint configuration
+  amazon.ai.sagemaker_endpoint_config:
+    endpoint_config_name: "{{ endpoint_config_name }}"
+    production_variants:
+      - variant_name: AllTraffic
+        model_name: "{{ model_name }}"
+        initial_instance_count: 1
+        instance_type: ml.m5.large
+
+- name: Create second endpoint configuration (for the update rung)
+  amazon.ai.sagemaker_endpoint_config:
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+    production_variants:
+      - variant_name: AllTraffic
+        model_name: "{{ model_name }}"
+        initial_instance_count: 1
+        instance_type: ml.m5.large

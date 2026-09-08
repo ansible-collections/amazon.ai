@@ -1,0 +1,22 @@
+---
+- name: SageMaker endpoint integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Set up prerequisites (role, image, model, endpoint configs)
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the endpoint module
+      ansible.builtin.include_tasks: endpoint.yml
+  always:
+    - name: Tear down all resources
+      ansible.builtin.include_tasks: teardown.yml
