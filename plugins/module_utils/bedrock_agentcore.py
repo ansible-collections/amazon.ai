@@ -1,8 +1,8 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-from enum import Enum
 import time
+from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
@@ -41,7 +41,8 @@ def list_agent_runtimes(client) -> List[Dict[str, Any]]:
     """
     paginator = client.get_paginator("list_agent_runtimes")
     response = paginator.paginate().build_full_result()
-    return [camel_dict_to_snake_dict(runtime) for runtime in response.get("agentRuntimes", [])]
+    ignore_list = ("tags", "environmentVariables", "environment_variables")
+    return [camel_dict_to_snake_dict(runtime, ignore_list=ignore_list) for runtime in response.get("agentRuntimes", [])]
 
 
 def get_agent_runtime_quick_summary_by_name(client, agent_runtime_name: str) -> Optional[Dict[str, Any]]:
@@ -97,7 +98,8 @@ def get_agent_runtime_by_id(client, agent_runtime_id: str) -> Optional[Dict[str,
         response = client.get_agent_runtime(agentRuntimeId=agent_runtime_id)
     except is_boto3_error_code("ResourceNotFoundException"):
         return None
-    return camel_dict_to_snake_dict(response)
+    ignore_list = ("tags", "environmentVariables", "environment_variables")
+    return camel_dict_to_snake_dict(response, ignore_list=ignore_list)
 
 
 def _runtime_artifact(module: AnsibleAWSModule, existing_runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -148,6 +150,38 @@ def _runtime_storage(
     return params
 
 
+def _runtime_case_sensitive_parameters(
+    module: AnsibleAWSModule,
+    params: Dict[str, Any],
+) -> Dict[str, Any]:
+    """
+    Adjusts parameters for an AgentCore runtime to account for case sensitivity content.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        params: The parameters dictionary for the AgentCore runtime.
+    Returns:
+        An updated params dictionary with added case-sensitive parameters.
+    """
+    if module.params.get("tags"):
+        params["tags"] = module.params.get("tags")
+    if module.params.get("description") is not None:
+        params["description"] = module.params["description"]
+    if module.params.get("environment_variables"):
+        params["environmentVariables"] = module.params["environment_variables"]
+
+    if module.params.get("authorizer_discovery_url"):
+        params["authorizerConfiguration"] = dict(
+            customJWTAuthorizer=dict(
+                discoveryUrl=module.params["authorizer_discovery_url"],
+                allowedAudience=module.params.get("authorizer_allowed_audience"),
+                allowedClients=module.params.get("authorizer_allowed_clients"),
+                allowedScopes=module.params.get("authorizer_allowed_scopes"),
+            )
+        )
+    return params
+
+
 def _runtime_parameters(
     module: AnsibleAWSModule,
     existing_runtime: Optional[Dict[str, Any]] = None,
@@ -166,8 +200,6 @@ def _runtime_parameters(
         agent_runtime_artifact=_runtime_artifact(module, existing_runtime),
         role_arn=module.params.get("role_arn") or (existing_runtime or dict()).get("role_arn"),
     )
-    if module.params.get("tags"):
-        params["tags"] = module.params.get("tags")
     network_mode = module.params.get("network_mode")
     if network_mode:
         params["network_configuration"] = dict(network_mode=network_mode)
@@ -177,8 +209,6 @@ def _runtime_parameters(
                 subnets=module.params.get("network_subnets"),
             )
 
-    if module.params.get("description") is not None:
-        params["description"] = module.params["description"]
     if module.params.get("protocol"):
         params["protocol_configuration"] = dict(server_protocol=module.params["protocol"])
     lifecycle_configuration = scrub_none_parameters(
@@ -190,19 +220,10 @@ def _runtime_parameters(
     if lifecycle_configuration:
         params["lifecycle_configuration"] = lifecycle_configuration
 
-    if module.params.get("environment_variables"):
-        params["environment_variables"] = module.params["environment_variables"]
-    if module.params.get("authorizer_discovery_url"):
-        params["authorizer_configuration"] = dict(
-            custom_jwt_authorizer=dict(
-                discovery_url=module.params["authorizer_discovery_url"],
-                allowed_audience=module.params.get("authorizer_allowed_audience"),
-                allowed_clients=module.params.get("authorizer_allowed_clients"),
-                allowed_scopes=module.params.get("authorizer_allowed_scopes"),
-            )
-        )
     params = _runtime_storage(module, params)
-    return snake_dict_to_camel_dict(scrub_none_parameters(params))
+    params = snake_dict_to_camel_dict(scrub_none_parameters(params))
+    params = _runtime_case_sensitive_parameters(module, params)
+    return scrub_none_parameters(params)
 
 
 def _runtime_update_needed(module: AnsibleAWSModule, existing_runtime: Dict[str, Any]) -> bool:
@@ -232,8 +253,10 @@ def _runtime_update_needed(module: AnsibleAWSModule, existing_runtime: Dict[str,
     desired_values: Dict[str, Any] = {
         key: value for key, value in desired.items() if key in current and value is not None
     }
+    ignore_list = ("tags", "environmentVariables", "environment_variables")
     return any(
-        camel_dict_to_snake_dict({key: value}) != camel_dict_to_snake_dict({key: current[key]})
+        camel_dict_to_snake_dict({key: value}, ignore_list=ignore_list)
+        != camel_dict_to_snake_dict({key: current[key]}, ignore_list=ignore_list)
         for key, value in desired_values.items()
     )
 

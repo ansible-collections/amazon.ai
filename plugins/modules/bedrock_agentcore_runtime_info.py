@@ -281,8 +281,8 @@ def main():
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
-
-    module.exit_json(agent_runtimes=[camel_dict_to_snake_dict(runtime, ignore_list=["tags"]) for runtime in result])
+    ignore_list = ("tags", "environmentVariables", "environment_variables")
+    module.exit_json(agent_runtimes=[camel_dict_to_snake_dict(runtime, ignore_list=ignore_list) for runtime in result])
 
 
 if __name__ == "__main__":

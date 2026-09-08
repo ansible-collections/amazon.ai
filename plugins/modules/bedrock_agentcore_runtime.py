@@ -459,36 +459,40 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeStatus
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import create_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import delete_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_id
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeStatus
-
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def runtime_status_check(existing_runtime: Dict[str, Any], state: str, module: AnsibleAWSModule) -> None:
+def runtime_status_check(existing_runtime: Optional[Dict[str, Any]], state: str, module: AnsibleAWSModule) -> None:
     # Early exit if existing_runtime is deleting, creating or updating
     if existing_runtime:
         if existing_runtime.get("status") == AgentRuntimeStatus.DELETING:
-            module.exit_json(changed=False, msg=f"Agent runtime is currently being deleted.")
+            module.exit_json(
+                changed=False, msg=f"Agent runtime {existing_runtime.get('name')} is currently being deleted."
+            )
         if state == "present" and existing_runtime.get("status") in {
             AgentRuntimeStatus.UPDATING,
             AgentRuntimeStatus.CREATING,
         }:
-            module.exit_json(changed=False, msg=f"Agent runtime is currently in {existing_runtime.get('status')}.")
+            module.exit_json(
+                changed=False,
+                msg=f"Agent runtime {existing_runtime.get('name')} is currently in {existing_runtime.get('status')}.",
+            )
 
 
 def main() -> None:
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "absent"]),
         agent_runtime_name=dict(type="str", required=True, aliases=["name"]),
+        agent_runtime_version=dict(type="str"),
         container_configuration=dict(
             type="dict",
             options=dict(container_uri=dict(type="str", required=True)),
@@ -603,7 +607,7 @@ def main() -> None:
                 msg = "Agent runtime does not exist."
 
         result["msg"] = msg
-        module.exit_json(changed=changed, **camel_dict_to_snake_dict(result))
+        module.exit_json(changed=changed, **result)
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

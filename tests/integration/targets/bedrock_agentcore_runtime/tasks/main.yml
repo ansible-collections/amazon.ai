@@ -40,6 +40,17 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         network_mode: "{{ network_mode }}"
+        protocol: HTTP
+        tags:
+          Environment: integration-test
+        environment_variables:
+          LOG_LEVEL: INFO
+        session_storage:
+          mount_path: "{{ create_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ authorizer_allowed_scopes }}"
       check_mode: true
       register: runtime_create_check
 
@@ -58,6 +69,17 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         network_mode: "{{ network_mode }}"
+        protocol: HTTP
+        tags:
+          Environment: integration-test
+        environment_variables:
+          LOG_LEVEL: INFO
+        session_storage:
+          mount_path: "{{ create_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ authorizer_allowed_scopes }}"
       register: runtime_create_real
 
     - name: "Scenario 2: Assert runtime creation real"
@@ -66,6 +88,13 @@
           - runtime_create_real.changed
           - runtime_create_real.agent_runtime.status == "READY"
           - runtime_create_real.agent_runtime.agent_runtime_arn is defined
+          - runtime_create_real.agent_runtime.protocol_configuration.server_protocol == "HTTP"
+          - runtime_create_real.agent_runtime.environment_variables.LOG_LEVEL == "INFO"
+          - runtime_create_real.agent_runtime.filesystem_configurations[0].session_storage.mount_path == create_session_storage_mount_path
+          - runtime_create_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.discovery_url == authorizer_discovery_url
+          - runtime_create_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_audience == authorizer_allowed_audience
+          - runtime_create_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_clients == authorizer_allowed_clients
+          - runtime_create_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_scopes == authorizer_allowed_scopes
 
     - name: "Scenario 2: Save runtime ID for later use"
       ansible.builtin.set_fact:
@@ -80,6 +109,17 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         network_mode: "{{ network_mode }}"
+        protocol: HTTP
+        tags:
+          Environment: integration-test
+        environment_variables:
+          LOG_LEVEL: INFO
+        session_storage:
+          mount_path: "{{ create_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ authorizer_allowed_scopes }}"
       check_mode: true
       register: runtime_create_rerun_check
 
@@ -96,6 +136,17 @@
           container_uri: "{{ container_uri }}"
         role_arn: "{{ runtime_role_arn }}"
         network_mode: "{{ network_mode }}"
+        protocol: HTTP
+        tags:
+          Environment: integration-test
+        environment_variables:
+          LOG_LEVEL: INFO
+        session_storage:
+          mount_path: "{{ create_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ authorizer_allowed_scopes }}"
       register: runtime_create_rerun_real
 
     - name: "Scenario 3: Assert runtime creation rerun real idempotency"
@@ -116,6 +167,12 @@
           - runtime_info.agent_runtimes | length == 1
           - runtime_info.agent_runtimes[0].status == "READY"
           - runtime_info.agent_runtimes[0].agent_runtime_name == agent_runtime_name
+          - runtime_info.agent_runtimes[0].protocol_configuration.server_protocol == "HTTP"
+          - runtime_info.agent_runtimes[0].environment_variables.LOG_LEVEL == "INFO"
+          - runtime_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.discovery_url == authorizer_discovery_url
+          - runtime_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_audience == authorizer_allowed_audience
+          - runtime_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_clients == authorizer_allowed_clients
+          - runtime_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_scopes == authorizer_allowed_scopes
 
     # Scenario 5: Update runtime - check mode
     - name: "Scenario 5: Update AgentCore runtime description (check mode)"
@@ -127,6 +184,15 @@
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
         network_mode: "{{ network_mode }}"
+        protocol: MCP
+        environment_variables:
+          LOG_LEVEL: DEBUG
+        session_storage:
+          mount_path: "{{ update_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ update_authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ update_authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ update_authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ update_authorizer_allowed_scopes }}"
       check_mode: true
       register: runtime_update_check
 
@@ -146,6 +212,15 @@
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
         network_mode: "{{ network_mode }}"
+        protocol: MCP
+        environment_variables:
+          LOG_LEVEL: DEBUG
+        session_storage:
+          mount_path: "{{ update_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ update_authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ update_authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ update_authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ update_authorizer_allowed_scopes }}"
       register: runtime_update_real
 
     - name: "Scenario 5: Assert runtime update real"
@@ -154,6 +229,13 @@
           - runtime_update_real.changed
           - runtime_update_real.agent_runtime.description == "Updated runtime description"
           - runtime_update_real.agent_runtime.status == "READY"
+          - runtime_update_real.agent_runtime.protocol_configuration.server_protocol == "MCP"
+          - runtime_update_real.agent_runtime.environment_variables.LOG_LEVEL == "DEBUG"
+          - runtime_update_real.agent_runtime.filesystem_configurations[0].session_storage.mount_path == update_session_storage_mount_path
+          - runtime_update_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.discovery_url == update_authorizer_discovery_url
+          - runtime_update_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_audience == update_authorizer_allowed_audience
+          - runtime_update_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_clients == update_authorizer_allowed_clients
+          - runtime_update_real.agent_runtime.authorizer_configuration.custom_jwt_authorizer.allowed_scopes == update_authorizer_allowed_scopes
 
     # Scenario 5: Update runtime - rerun (idempotency)
     - name: "Scenario 5: Update AgentCore runtime description (rerun)"
@@ -165,12 +247,39 @@
         role_arn: "{{ runtime_role_arn }}"
         description: "Updated runtime description"
         network_mode: "{{ network_mode }}"
+        protocol: MCP
+        environment_variables:
+          LOG_LEVEL: DEBUG
+        session_storage:
+          mount_path: "{{ update_session_storage_mount_path }}"
+        authorizer_discovery_url: "{{ update_authorizer_discovery_url }}"
+        authorizer_allowed_audience: "{{ update_authorizer_allowed_audience }}"
+        authorizer_allowed_clients: "{{ update_authorizer_allowed_clients }}"
+        authorizer_allowed_scopes: "{{ update_authorizer_allowed_scopes }}"
       register: runtime_update_rerun
 
     - name: "Scenario 5: Assert runtime update rerun idempotency"
       ansible.builtin.assert:
         that:
           - not runtime_update_rerun.changed
+
+    - name: "Scenario 5: Get updated AgentCore runtime info"
+      amazon.ai.bedrock_agentcore_runtime_info:
+        agent_runtime_name: "{{ agent_runtime_name }}"
+      register: runtime_updated_info
+
+    - name: "Scenario 5: Assert updated runtime info"
+      ansible.builtin.assert:
+        that:
+          - runtime_updated_info.agent_runtimes | length == 1
+          - runtime_updated_info.agent_runtimes[0].agent_runtime_arn == runtime_create_real.agent_runtime.agent_runtime_arn
+          - runtime_updated_info.agent_runtimes[0].protocol_configuration.server_protocol == "MCP"
+          - runtime_updated_info.agent_runtimes[0].environment_variables.LOG_LEVEL == "DEBUG"
+          - runtime_updated_info.agent_runtimes[0].filesystem_configurations[0].session_storage.mount_path == update_session_storage_mount_path
+          - runtime_updated_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.discovery_url == update_authorizer_discovery_url
+          - runtime_updated_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_audience == update_authorizer_allowed_audience
+          - runtime_updated_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_clients == update_authorizer_allowed_clients
+          - runtime_updated_info.agent_runtimes[0].authorizer_configuration.custom_jwt_authorizer.allowed_scopes == update_authorizer_allowed_scopes
 
     # Scenario 9: Failure - both artifact types set
     - name: "Scenario 9: Attempt to create runtime with both artifact types"
