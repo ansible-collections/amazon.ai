@@ -13,11 +13,6 @@ from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
-try:
-    from botocore.exceptions import ClientError
-except ImportError:
-    pass
-
 
 @AWSRetry.jittered_backoff(retries=10)
 def list_tags(client, resource_arn: str) -> Dict[str, str]:
@@ -46,8 +41,9 @@ def _build_model_params(module) -> Dict[str, Any]:
             "enable_network_isolation",
         )
     }
-    tags: Dict[str, str] = module.params.get("tags") or {}
-    params["tags"] = [{"key": key, "value": value} for key, value in tags.items()]
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if tags is not None:
+        params["tags"] = [{"key": key, "value": value} for key, value in tags.items()]
 
     model_params = snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
     return model_params
@@ -70,10 +66,8 @@ def describe_code_repository(client, repository_name: str) -> Optional[Dict[str,
     """
     try:
         return client.describe_code_repository(CodeRepositoryName=repository_name)
-    except ClientError as e:
-        if e.response["Error"]["Code"] == "ValidationException":
-            return None
-        raise
+    except is_boto3_error_code("ValidationException"):
+        return None
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -143,12 +137,10 @@ def describe_model(client, model_name: str) -> Optional[Dict[str, Any]]:
     """
     try:
         return client.describe_model(ModelName=model_name)
-    except ClientError as e:
+    except is_boto3_error_code("ValidationException") as e:
         # DescribeModel does not raise a dedicated not-found error; AWS returns a generic
         # ValidationException with a "Could not find model" message instead.
-        if e.response["Error"]["Code"] == "ValidationException" and "Could not find model" in e.response["Error"].get(
-            "Message", ""
-        ):
+        if "Could not find model" in e.response["Error"].get("Message", ""):
             return None
         raise
 
@@ -165,8 +157,14 @@ def list_models(client, **params: Any) -> List[Dict[str, Any]]:
     Returns:
         A list of model summary dictionaries.
     """
+    paginate_params: Dict[str, Any] = dict(params)
+    max_results = paginate_params.pop("MaxResults", None)
     paginator = client.get_paginator("list_models")
-    return paginator.paginate(**params).build_full_result()["Models"]
+    if max_results is not None:
+        return paginator.paginate(**paginate_params, PaginationConfig={"MaxItems": max_results}).build_full_result()[
+            "Models"
+        ]
+    return paginator.paginate(**paginate_params).build_full_result()["Models"]
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -197,6 +195,14 @@ def _model_data_s3_uri(container: Dict[str, Any]) -> Optional[str]:
     return container.get("ModelDataSource", {}).get("S3DataSource", {}).get("S3Uri")
 
 
+def _vpc_config_differs(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+    for key in ("Subnets", "SecurityGroupIds"):
+        if set(desired.get(key) or []) != set(existing.get(key) or []):
+            return True
+
+    return False
+
+
 def model_needs_replacement(existing: Dict[str, Any], module) -> bool:
     """
     Determine whether an existing SageMaker model differs from the desired state in a
@@ -210,9 +216,21 @@ def model_needs_replacement(existing: Dict[str, Any], module) -> bool:
         True if primary_container, execution_role_arn, vpc_config or enable_network_isolation differ.
     """
     desired: Dict[str, Any] = _build_model_params(module)
-    for field in ("ExecutionRoleArn", "VpcConfig", "EnableNetworkIsolation"):
-        if desired.get(field) is not None and existing.get(field) != desired.get(field):
-            return True
+
+    if desired.get("ExecutionRoleArn") is not None and existing.get("ExecutionRoleArn") != desired.get(
+        "ExecutionRoleArn"
+    ):
+        return True
+
+    if desired.get("VpcConfig") is not None and _vpc_config_differs(
+        desired["VpcConfig"], existing.get("VpcConfig", {})
+    ):
+        return True
+
+    if desired.get("EnableNetworkIsolation") is not None and bool(existing.get("EnableNetworkIsolation")) != bool(
+        desired.get("EnableNetworkIsolation")
+    ):
+        return True
 
     desired_container: Dict[str, Any] = desired.get("PrimaryContainer", {})
     existing_container: Dict[str, Any] = existing.get("PrimaryContainer", {})
@@ -221,7 +239,7 @@ def model_needs_replacement(existing: Dict[str, Any], module) -> bool:
         if key in ("ModelDataUrl", "ModelDataSource"):
             continue
         existing_value = existing_container.get(key)
-        if value == dict() and existing_value is None:
+        if value == {} and existing_value is None:
             continue
         if existing_value != value:
             return True

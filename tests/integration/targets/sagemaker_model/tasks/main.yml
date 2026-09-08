@@ -60,7 +60,7 @@
         state: present
 
     - name: Install skopeo
-      ansible.builtin.apt:
+      ansible.builtin.package:
         name: skopeo
         state: present
 

@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_model_info
 short_description: Gather information about Amazon SageMaker Models
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@janlikar)
 description:

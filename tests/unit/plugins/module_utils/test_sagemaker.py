@@ -8,7 +8,50 @@
 
 from unittest.mock import MagicMock
 
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
+
+
+class TestListModels:
+    """Test cases for list_models function."""
+
+    def test_list_models_forwards_params_and_extracts_models(self):
+        """list_models should forward filter params to the paginator and return the Models list."""
+        client = MagicMock()
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value.build_full_result.return_value = {
+            "Models": [{"ModelName": "model-a"}, {"ModelName": "model-b"}],
+        }
+
+        result = list_models(client, NameContains="test")
+
+        client.get_paginator.assert_called_once_with("list_models")
+        paginator.paginate.assert_called_once_with(NameContains="test")
+        assert result == [{"ModelName": "model-a"}, {"ModelName": "model-b"}]
+
+    def test_list_models_empty_result(self):
+        """list_models should return an empty list when there are no models."""
+        client = MagicMock()
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value.build_full_result.return_value = {"Models": []}
+
+        assert list_models(client) == []
+
+    def test_list_models_max_results_uses_pagination_config(self):
+        """MaxResults should be translated into PaginationConfig={'MaxItems': ...} to cap total results."""
+        client = MagicMock()
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value.build_full_result.return_value = {
+            "Models": [{"ModelName": "model-a"}],
+        }
+
+        result = list_models(client, NameContains="test", MaxResults=5)
+
+        paginator.paginate.assert_called_once_with(NameContains="test", PaginationConfig={"MaxItems": 5})
+        assert result == [{"ModelName": "model-a"}]
 
 
 class TestModelNeedsReplacement:
@@ -179,6 +222,28 @@ class TestModelNeedsReplacement:
 
         assert model_needs_replacement(existing, module)
 
+    def test_vpc_config_reordered_lists_no_replacement(self):
+        """VPC subnets/security groups returned in a different order should not need replacement."""
+        existing = {
+            "ModelName": "test-model",
+            "PrimaryContainer": {
+                "Image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
+            },
+            "ExecutionRoleArn": "arn:role",
+            "VpcConfig": {
+                "Subnets": ["subnet-b", "subnet-a"],
+                "SecurityGroupIds": ["sg-2", "sg-1"],
+            },
+        }
+        module = self._create_mock_module(
+            vpc_config={
+                "subnets": ["subnet-a", "subnet-b"],
+                "security_group_ids": ["sg-1", "sg-2"],
+            }
+        )
+
+        assert not model_needs_replacement(existing, module)
+
     def test_enable_network_isolation_change_needs_replacement(self):
         """Model with different network isolation should need replacement."""
         existing = {
@@ -188,6 +253,32 @@ class TestModelNeedsReplacement:
             },
             "ExecutionRoleArn": "arn:role",
             "EnableNetworkIsolation": False,
+        }
+        module = self._create_mock_module(enable_network_isolation=True)
+
+        assert model_needs_replacement(existing, module)
+
+    def test_enable_network_isolation_explicit_false_vs_missing_no_replacement(self):
+        """Explicitly desired False network isolation should not need replacement when AWS omits the key."""
+        existing = {
+            "ModelName": "test-model",
+            "PrimaryContainer": {
+                "Image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
+            },
+            "ExecutionRoleArn": "arn:role",
+        }
+        module = self._create_mock_module(enable_network_isolation=False)
+
+        assert not model_needs_replacement(existing, module)
+
+    def test_enable_network_isolation_desired_true_vs_missing_needs_replacement(self):
+        """Desired True network isolation should need replacement when AWS omits the key (implying False)."""
+        existing = {
+            "ModelName": "test-model",
+            "PrimaryContainer": {
+                "Image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/example:latest",
+            },
+            "ExecutionRoleArn": "arn:role",
         }
         module = self._create_mock_module(enable_network_isolation=True)
 

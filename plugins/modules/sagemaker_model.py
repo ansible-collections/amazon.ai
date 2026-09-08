@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_model
 short_description: Manage Amazon SageMaker Models
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@janlikar)
 description:
@@ -147,6 +147,14 @@ options:
         description:
             - Whether network isolation is enabled for the model.
         type: bool
+    force:
+        description:
+            - Whether to delete and recreate the model when O(primary_container), O(execution_role_arn),
+              O(vpc_config), or O(enable_network_isolation) drift from the existing model.
+            - Amazon SageMaker models cannot be updated in place for these fields; without this option
+              the module fails instead of replacing the model.
+        type: bool
+        default: false
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
@@ -167,6 +175,16 @@ EXAMPLES = r"""
   amazon.ai.sagemaker_model:
     state: absent
     model_name: example-model
+
+- name: Force replacement of a SageMaker model when its container image changes
+  amazon.ai.sagemaker_model:
+    state: present
+    model_name: example-model
+    execution_role_arn: arn:aws:iam::123456789012:role/SageMakerExecutionRole
+    primary_container:
+      image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/example:v2
+      model_data_url: s3://example-bucket/model.tar.gz
+    force: true
 """
 
 RETURN = r"""
@@ -240,6 +258,7 @@ except ImportError:
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model
@@ -257,6 +276,59 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 def _normalize_model(model: Dict[str, Any]) -> Dict[str, Any]:
     return camel_dict_to_snake_dict(model, ignore_list=["tags"])
+
+
+def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
+    result: Dict[str, Any] = dict(msg="", model={}, tags={})
+    if existing is None:
+        changed, result["msg"] = create_model(client, module)
+        if not module.check_mode:
+            existing = describe_model(client, module.params["model_name"])
+            if existing is not None:
+                result["model"] = _normalize_model(existing)
+                result["tags"] = list_tags(client, existing["ModelArn"])
+        return changed, result
+
+    if model_needs_replacement(existing, module):
+        if not module.params["force"]:
+            module.fail_json(
+                msg=(
+                    "SageMaker model requires replacement when primary_container, execution_role_arn,"
+                    " vpc_config, or enable_network_isolation changes. Set force=true to delete and"
+                    " recreate the model."
+                )
+            )
+
+        _deleted, delete_msg = delete_model(client, module)
+        changed, create_msg = create_model(client, module)
+        result["msg"] = f"{delete_msg} {create_msg}"
+        if not module.check_mode:
+            existing = describe_model(client, module.params["model_name"])
+            if existing is not None:
+                result["model"] = _normalize_model(existing)
+                result["tags"] = list_tags(client, existing["ModelArn"])
+        return changed, result
+
+    changed: bool = False
+    if module.params.get("tags") is not None:
+        changed, result["msg"] = update_model_tags(
+            client,
+            module,
+            existing["ModelArn"],
+            module.params.get("tags"),
+            purge_tags=module.params["purge_tags"],
+        )
+    result["model"] = _normalize_model(existing)
+    result["tags"] = list_tags(client, existing["ModelArn"])
+    return changed, result
+
+
+def _ensure_absent(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
+    if existing is None:
+        return False, dict(msg="Model does not exist.")
+
+    changed, msg = delete_model(client, module)
+    return changed, dict(msg=msg)
 
 
 def main() -> None:
@@ -312,6 +384,7 @@ def main() -> None:
         tags=dict(type="dict", aliases=["resource_tags"]),
         purge_tags=dict(type="bool", default=True),
         enable_network_isolation=dict(type="bool"),
+        force=dict(type="bool", default=False),
     )
 
     module = AnsibleAWSModule(
@@ -321,49 +394,16 @@ def main() -> None:
     )
 
     try:
-        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
+        try:
+            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+            module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    try:
         existing: Optional[Dict[str, Any]] = describe_model(client, module.params["model_name"])
-        changed: bool = False
-        result: Dict[str, Any] = dict(msg="")
-
         if module.params["state"] == "present":
-            result.update(dict(model=dict(), tags=dict()))
-            if existing is None:
-                changed, result["msg"] = create_model(client, module)
-                if not module.check_mode:
-                    existing = describe_model(client, module.params["model_name"])
-                    if existing is not None:
-                        result["model"] = _normalize_model(existing)
-                        result["tags"] = list_tags(client, existing["ModelArn"])
-            else:
-                if model_needs_replacement(existing, module):
-                    module.fail_json(
-                        msg=(
-                            "SageMaker model requires replacement when primary_container, execution_role_arn,"
-                            " vpc_config, or enable_network_isolation changes."
-                        )
-                    )
-
-                if module.params.get("tags") is not None:
-                    changed, result["msg"] = update_model_tags(
-                        client,
-                        module,
-                        existing["ModelArn"],
-                        module.params.get("tags"),
-                        purge_tags=module.params["purge_tags"],
-                    )
-
-                result["model"] = _normalize_model(existing)
-                result["tags"] = list_tags(client, existing["ModelArn"])
+            changed, result = _ensure_present(client, module, existing)
         else:
-            if existing is None:
-                result["msg"] = "Model does not exist."
-            else:
-                changed, result["msg"] = delete_model(client, module)
+            changed, result = _ensure_absent(client, module, existing)
 
         module.exit_json(changed=changed, **result)
 

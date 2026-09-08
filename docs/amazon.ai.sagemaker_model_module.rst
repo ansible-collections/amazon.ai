@@ -8,7 +8,7 @@ amazon.ai.sagemaker_model
 **Manage Amazon SageMaker Models**
 
 
-Version added: 1.1.0
+Version added: 2.0.0
 
 .. contents::
    :local:
@@ -163,6 +163,26 @@ Parameters
                 <td>
                         <div>The ARN of the IAM role that SageMaker can assume.</div>
                         <div>Required when O(state=present).</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>force</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">boolean</span>
+                    </div>
+                </td>
+                <td>
+                        <ul style="margin: 0; padding: 0"><b>Choices:</b>
+                                    <li><div style="color: blue"><b>no</b>&nbsp;&larr;</div></li>
+                                    <li>yes</li>
+                        </ul>
+                </td>
+                <td>
+                        <div>Whether to delete and recreate the model when O(primary_container), O(execution_role_arn), O(vpc_config), or O(enable_network_isolation) drift from the existing model.</div>
+                        <div>Amazon SageMaker models cannot be updated in place for these fields; without this option the module fails instead of replacing the model.</div>
                 </td>
             </tr>
             <tr>
@@ -722,6 +742,16 @@ Examples
       amazon.ai.sagemaker_model:
         state: absent
         model_name: example-model
+
+    - name: Force replacement of a SageMaker model when its container image changes
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: example-model
+        execution_role_arn: arn:aws:iam::123456789012:role/SageMakerExecutionRole
+        primary_container:
+          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/example:v2
+          model_data_url: s3://example-bucket/model.tar.gz
+        force: true
 
 
 
