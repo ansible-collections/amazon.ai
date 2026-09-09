@@ -19,7 +19,7 @@
         assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agentcore.json') }}"
         state: present
         managed_policies:
-          - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+          - "arn:aws:iam::aws:policy/BedrockAgentCoreFullAccess"
       register: runtime_role
 
     - name: Save role ARN
