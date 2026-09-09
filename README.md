@@ -63,6 +63,8 @@ Name | Description
 [amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
 [amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
 [amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
+[amazon.ai.bedrock_agentcore_runtime](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_module.rst)|Manage Amazon Bedrock AgentCore runtimes
+[amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
 [amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
 [amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
 [amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models

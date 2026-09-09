@@ -1,0 +1,25 @@
+---
+test_id: "{{ tiny_prefix }}"
+agent_runtime_name: "test_agentcore_runtime_{{ test_id }}"
+agent_runtime_role_name: "ansible-test-agentcore-runtime-role-{{ test_id }}"
+# Container image URI: use a public, minimal image for testing.
+# This needs to be verified to be publicly pullable before enabling the target.
+# Example: public.ecr.aws/docker/library/hello-world:latest
+container_uri: "public.ecr.aws/lambda/python:3.12"
+network_mode: "PUBLIC"
+create_session_storage_mount_path: "/mnt/data"
+update_session_storage_mount_path: "/mnt/session"
+authorizer_discovery_url: "https://accounts.google.com/.well-known/openid-configuration"
+update_authorizer_discovery_url: "https://oauth.id.jumpcloud.com/.well-known/openid-configuration"
+authorizer_allowed_audience:
+  - "integration-test-audience"
+update_authorizer_allowed_audience:
+  - "integration-test-audience-updated"
+authorizer_allowed_clients:
+  - "integration-test-client"
+update_authorizer_allowed_clients:
+  - "integration-test-client-updated"
+authorizer_allowed_scopes:
+  - "integration-test-scope"
+update_authorizer_allowed_scopes:
+  - "integration-test-scope-updated"
