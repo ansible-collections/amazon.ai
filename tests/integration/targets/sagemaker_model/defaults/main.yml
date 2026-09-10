@@ -1,0 +1,16 @@
+---
+test_id: "{{ tiny_prefix }}"
+model_name: "test-sagemaker-model-{{ test_id }}"
+model_role_name: "ansible-test-sagemaker-model-role-{{ test_id }}"
+model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
+# SageMaker requires a Docker V2 manifest (OCI manifests are rejected). The test creates
+# the ECR repo and pushes a Docker V2 image via skopeo (installed inside the test container)
+# at the start of the test run.
+# model_image is resolved at runtime from aws_account_id in tasks/main.yml.
+model_ecr_repository_name: "ansible-test-sagemaker-model"
+model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
+model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
+model_data_url_updated: "s3://{{ model_bucket_name }}/model-v2.tar.gz"
+missing_model_name: "test-sagemaker-model-missing-{{ test_id }}"
+invalid_role_model_name: "test-sagemaker-model-invalid-role-{{ test_id }}"
+invalid_execution_role_arn: "arn:aws:iam::123456789012:role/NonExistentSageMakerRole-{{ test_id }}"

@@ -1,0 +1,444 @@
+---
+- name: SageMaker Model integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Get AWS caller info
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Save account ID
+      ansible.builtin.set_fact:
+        aws_account_id: "{{ caller_info.account }}"
+
+    - name: Save container image URI
+      ansible.builtin.set_fact:
+        model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
+
+    - name: Save test tag values
+      ansible.builtin.set_fact:
+        model_tags_initial:
+          project: demo
+        model_tags_updated:
+          team: ai
+
+    - name: Create IAM role for SageMaker Model execution
+      amazon.aws.iam_role:
+        name: "{{ model_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_model.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      register: model_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        model_execution_role_arn: "{{ model_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Waiting for IAM role to be fully propagated."
+
+    # -------------------------------------------------------
+    # ECR — ensure repo exists and push a Docker V2 image
+    # skopeo is installed inside the test container so no
+    # host-side dependency is needed for local or CI runs
+    # -------------------------------------------------------
+    - name: Ensure ECR repository exists
+      community.aws.ecs_ecr:
+        name: "{{ model_ecr_repository_name }}"
+        state: present
+
+    - name: Install skopeo
+      ansible.builtin.package:
+        name: skopeo
+        state: present
+
+    - name: Install awscli
+      ansible.builtin.pip:
+        name: awscli
+        state: present
+
+    - name: Get ECR login password
+      ansible.builtin.command: aws ecr get-login-password --region {{ aws_region }}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default('') }}"
+      register: ecr_token
+      no_log: true
+
+    - name: Push Docker V2 image to ECR
+      ansible.builtin.command: >-
+        skopeo copy
+        --format v2s2
+        --dest-creds AWS:{{ ecr_token.stdout }}
+        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ model_image }}
+      no_log: true
+
+    - name: Create S3 bucket for model artifacts
+      amazon.aws.s3_bucket:
+        name: "{{ model_bucket_name }}"
+        state: present
+
+    - name: Upload model artifact to S3
+      amazon.aws.s3_object:
+        bucket: "{{ model_bucket_name }}"
+        object: "model.tar.gz"
+        content: "placeholder model artifact"
+        mode: put
+
+    - name: Upload updated model artifact to S3
+      amazon.aws.s3_object:
+        bucket: "{{ model_bucket_name }}"
+        object: "model-v2.tar.gz"
+        content: "placeholder updated model artifact"
+        mode: put
+
+    # -------------------------------------------------------
+    # CREATE — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker Model (check_mode)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_initial }}"
+      check_mode: true
+      register: model_create_check
+
+    - name: Assert check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - model_create_check.changed
+          - "'Check mode' in model_create_check.msg"
+
+    # -------------------------------------------------------
+    # CREATE — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker Model (First Run)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_initial }}"
+      register: model_create_first
+
+    - name: Assert model was created
+      ansible.builtin.assert:
+        that:
+          - model_create_first.changed
+          - "'created successfully' in model_create_first.msg"
+          - model_create_first.model.model_name == model_name
+          - model_create_first.model.primary_container.image == model_image
+          - model_create_first.tags.project == 'demo'
+
+    # -------------------------------------------------------
+    # INFO — get specific model
+    # -------------------------------------------------------
+    - name: Get info about the created model
+      amazon.ai.sagemaker_model_info:
+        model_name: "{{ model_name }}"
+      register: model_info
+
+    - name: Assert info module returns the model
+      ansible.builtin.assert:
+        that:
+          - model_info.models | length == 1
+          - model_info.models[0].model_name == model_name
+          - model_info.models[0].primary_container.image == model_image
+          - model_info.models[0].execution_role_arn == model_execution_role_arn
+          - model_info.models[0].tags.project == 'demo'
+
+    # -------------------------------------------------------
+    # INFO — list with name_contains filter
+    # -------------------------------------------------------
+    - name: List models filtered by matching name_contains
+      amazon.ai.sagemaker_model_info:
+        name_contains: "{{ test_id }}"
+      register: model_info_filtered
+
+    - name: Assert filtered results contain our model
+      ansible.builtin.assert:
+        that:
+          - model_info_filtered.models | length >= 1
+          - model_name in (model_info_filtered.models | map(attribute='model_name') | list)
+
+    - name: List models filtered by non-matching name_contains
+      amazon.ai.sagemaker_model_info:
+        name_contains: "definitely-not-a-real-model-name-xyz"
+      register: model_info_unmatched
+
+    - name: Assert non-matching filter returns no results
+      ansible.builtin.assert:
+        that:
+          - model_info_unmatched.models | length == 0
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker Model (Second Run - Idempotency - check_mode)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_initial }}"
+      check_mode: true
+      register: model_create_second_check
+
+    - name: Assert idempotency in check_mode
+      ansible.builtin.assert:
+        that:
+          - not model_create_second_check.changed
+          - "'No updates needed' in model_create_second_check.msg"
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker Model (Second Run - Idempotency)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_initial }}"
+      register: model_create_second
+
+    - name: Assert idempotency
+      ansible.builtin.assert:
+        that:
+          - not model_create_second.changed
+          - "'No updates needed' in model_create_second.msg"
+
+    # -------------------------------------------------------
+    # TAGS — update with purge_tags=false (merge mode)
+    # -------------------------------------------------------
+    - name: Update model tags (purge_tags=false)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_updated }}"
+        purge_tags: false
+      register: model_tags_merge
+
+    - name: Assert tags were merged, not replaced
+      ansible.builtin.assert:
+        that:
+          - model_tags_merge.changed
+          - "'tags updated successfully' in model_tags_merge.msg"
+          - model_tags_merge.tags.project == 'demo'
+          - model_tags_merge.tags.team == 'ai'
+
+    # -------------------------------------------------------
+    # TAGS — update with purge_tags=true (exact set)
+    # -------------------------------------------------------
+    - name: Update model tags (purge_tags=true)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+        tags: "{{ model_tags_updated }}"
+        purge_tags: true
+      register: model_tags_purge
+
+    - name: Assert omitted tags were removed
+      ansible.builtin.assert:
+        that:
+          - model_tags_purge.changed
+          - "'tags updated successfully' in model_tags_purge.msg"
+          - "model_tags_purge.tags == {'team': 'ai'}"
+
+    # -------------------------------------------------------
+    # IMMUTABLE DRIFT — attempt to change a create-only field
+    # -------------------------------------------------------
+    - name: Attempt to change primary_container.model_data_url (immutable drift)
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ model_name }}"
+        execution_role_arn: "{{ model_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url_updated }}"
+        tags:
+          team: ai
+      register: model_drift
+      ignore_errors: true
+
+    - name: Assert immutable drift attempt fails
+      ansible.builtin.assert:
+        that:
+          - model_drift.failed
+          - "'requires replacement' in model_drift.msg"
+
+    # -------------------------------------------------------
+    # FAILURE — missing required create input
+    # -------------------------------------------------------
+    - name: Attempt to create a model missing required inputs
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ missing_model_name }}"
+      register: model_missing_input
+      ignore_errors: true
+
+    - name: Assert missing required input fails
+      ansible.builtin.assert:
+        that:
+          - model_missing_input.failed
+
+    # -------------------------------------------------------
+    # FAILURE — invalid execution_role_arn
+    # -------------------------------------------------------
+    - name: Attempt to create a model with an invalid execution_role_arn
+      amazon.ai.sagemaker_model:
+        state: present
+        model_name: "{{ invalid_role_model_name }}"
+        execution_role_arn: "{{ invalid_execution_role_arn }}"
+        primary_container:
+          image: "{{ model_image }}"
+          model_data_url: "{{ model_data_url }}"
+      register: model_invalid_role
+      ignore_errors: true
+
+    - name: Assert invalid execution_role_arn fails
+      ansible.builtin.assert:
+        that:
+          - model_invalid_role.failed
+
+    # -------------------------------------------------------
+    # DELETE — check_mode
+    # -------------------------------------------------------
+    - name: Delete SageMaker Model (check_mode)
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ model_name }}"
+      check_mode: true
+      register: model_delete_check
+
+    - name: Assert delete check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - model_delete_check.changed
+          - "'Check mode' in model_delete_check.msg"
+
+    - name: Assert model still exists after check_mode delete
+      amazon.ai.sagemaker_model_info:
+        model_name: "{{ model_name }}"
+      register: model_info_after_check_delete
+
+    - name: Assert model was not actually deleted
+      ansible.builtin.assert:
+        that:
+          - model_info_after_check_delete.models | length == 1
+
+    # -------------------------------------------------------
+    # DELETE — actual
+    # -------------------------------------------------------
+    - name: Delete SageMaker Model (First Run)
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ model_name }}"
+      register: model_delete_first
+
+    - name: Assert model was deleted
+      ansible.builtin.assert:
+        that:
+          - model_delete_first.changed
+          - "'deleted successfully' in model_delete_first.msg"
+          - model_delete_first.model is not defined
+          - model_delete_first.tags is not defined
+
+    - name: Get info about the deleted model
+      amazon.ai.sagemaker_model_info:
+        model_name: "{{ model_name }}"
+      register: model_info_deleted
+
+    - name: Assert info lookup for the deleted model is non-fatal and empty
+      ansible.builtin.assert:
+        that:
+          - not model_info_deleted.failed
+          - model_info_deleted.models | length == 0
+
+    # -------------------------------------------------------
+    # DELETE — idempotency
+    # -------------------------------------------------------
+    - name: Delete SageMaker Model (Second Run - Idempotency)
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ model_name }}"
+      register: model_delete_second
+
+    - name: Assert delete idempotency
+      ansible.builtin.assert:
+        that:
+          - not model_delete_second.changed
+          - "'does not exist' in model_delete_second.msg"
+          - model_delete_second.model is not defined
+          - model_delete_second.tags is not defined
+
+  always:
+    - name: Cleanup - Delete SageMaker Model
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ model_name }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete S3 bucket for model artifacts
+      amazon.aws.s3_bucket:
+        name: "{{ model_bucket_name }}"
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Cleanup - Delete missing-input test model
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ missing_model_name }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete invalid-role test model
+      amazon.ai.sagemaker_model:
+        state: absent
+        model_name: "{{ invalid_role_model_name }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete IAM role for SageMaker Model execution
+      amazon.aws.iam_role:
+        name: "{{ model_role_name }}"
+        state: absent
+      ignore_errors: true
+
+    - name: Cleanup - Delete ECR repository
+      community.aws.ecs_ecr:
+        name: "{{ model_ecr_repository_name }}"
+        state: absent
+        force_absent: true
+      ignore_errors: true

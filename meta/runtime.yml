@@ -20,3 +20,5 @@ action_groups:
     - sagemaker_code_repository_info
     - sagemaker_image
     - sagemaker_image_info
+    - sagemaker_model
+    - sagemaker_model_info

@@ -75,6 +75,8 @@ Name | Description
 [amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
 [amazon.ai.sagemaker_image](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_module.rst)|Manage Amazon SageMaker Images
 [amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
+[amazon.ai.sagemaker_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_module.rst)|Manage Amazon SageMaker Models
+[amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
 
 <!--end collection content-->
 
