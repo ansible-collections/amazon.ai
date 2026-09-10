@@ -8,7 +8,7 @@ amazon.ai.sagemaker_endpoint_config_info
 **Gather information about SageMaker endpoint configurations**
 
 
-Version added: 1.1.0
+Version added: 2.0.0
 
 .. contents::
    :local:

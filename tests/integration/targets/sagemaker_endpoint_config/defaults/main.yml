@@ -1,5 +1,6 @@
 test_id: "{{ tiny_prefix }}"
-endpoint_config_name: "test-sm-endpoint-config-{{ test_id }}"
+endpoint_config_name: "test-sm-endpoint-config-a-{{ test_id }}"
+secondary_endpoint_config_name: "test-sm-endpoint-config-b-{{ test_id }}"
 model_name: "test-sagemaker-model-{{ test_id }}"
 model_role_name: "ansible-test-sagemaker-model-role-{{ test_id }}"
 model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"

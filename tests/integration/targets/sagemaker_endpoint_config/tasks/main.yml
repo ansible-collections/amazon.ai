@@ -125,6 +125,8 @@
         that:
           - endpoint_config_create.changed
           - endpoint_config_create.endpoint_config.endpoint_config_arn is defined
+          - endpoint_config_create.msg == "Endpoint configuration {{ endpoint_config_name }} created successfully."
+          - "endpoint_config_create.tags == {'Environment': 'integration'}"
 
     - name: Re-run endpoint configuration creation
       amazon.ai.sagemaker_endpoint_config:
@@ -142,6 +144,58 @@
       ansible.builtin.assert:
         that:
           - not endpoint_config_rerun.changed
+          - endpoint_config_rerun.msg == "Endpoint configuration {{ endpoint_config_name }} is already up to date."
+          - "endpoint_config_rerun.tags == {'Environment': 'integration'}"
+
+    - name: Create secondary endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+      check_mode: true
+      register: secondary_endpoint_config_check
+
+    - name: Assert secondary endpoint configuration check mode
+      ansible.builtin.assert:
+        that:
+          - secondary_endpoint_config_check.changed
+          - "secondary_endpoint_config_check.msg.startswith('Check mode: would have ')"
+
+    - name: Create secondary endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+      register: secondary_endpoint_config_create
+
+    - name: Assert secondary endpoint configuration was created
+      ansible.builtin.assert:
+        that:
+          - secondary_endpoint_config_create.changed
+          - secondary_endpoint_config_create.msg == "Endpoint configuration {{ secondary_endpoint_config_name }} created successfully."
+          - secondary_endpoint_config_create.tags == {}
+
+    - name: Re-run secondary endpoint configuration creation
+      amazon.ai.sagemaker_endpoint_config:
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+        production_variants:
+          - variant_name: AllTraffic
+            model_name: "{{ model_name }}"
+            initial_instance_count: 1
+            instance_type: ml.m5.large
+      register: secondary_endpoint_config_rerun
+
+    - name: Assert secondary endpoint configuration idempotency
+      ansible.builtin.assert:
+        that:
+          - not secondary_endpoint_config_rerun.changed
+          - secondary_endpoint_config_rerun.msg == "Endpoint configuration {{ secondary_endpoint_config_name }} is already up to date."
 
     - name: Query endpoint configuration
       amazon.ai.sagemaker_endpoint_config_info:
@@ -153,6 +207,21 @@
         that:
           - endpoint_config_info.endpoint_configs | length == 1
           - endpoint_config_info.endpoint_configs[0].endpoint_config_name == endpoint_config_name
+
+    - name: List endpoint configurations with filters and ordering
+      amazon.ai.sagemaker_endpoint_config_info:
+        name_contains: "test-sm-endpoint-config-"
+        max_results: 2
+        sort_by: Name
+        sort_order: Ascending
+      register: endpoint_config_list_info
+
+    - name: Assert endpoint configuration filters and ordering
+      ansible.builtin.assert:
+        that:
+          - endpoint_config_list_info.endpoint_configs | length == 2
+          - endpoint_config_list_info.endpoint_configs[0].endpoint_config_name == endpoint_config_name
+          - endpoint_config_list_info.endpoint_configs[1].endpoint_config_name == secondary_endpoint_config_name
 
     - name: Delete endpoint configuration in check mode
       amazon.ai.sagemaker_endpoint_config:
@@ -177,6 +246,7 @@
       ansible.builtin.assert:
         that:
           - endpoint_config_delete.changed
+          - endpoint_config_delete.msg == "Endpoint configuration {{ endpoint_config_name }} deleted successfully."
 
     - name: Re-run endpoint configuration deletion
       amazon.ai.sagemaker_endpoint_config:
@@ -188,7 +258,51 @@
       ansible.builtin.assert:
         that:
           - not endpoint_config_delete_rerun.changed
+          - endpoint_config_delete_rerun.msg == "Endpoint configuration {{ endpoint_config_name }} does not exist."
+
+    - name: Delete secondary endpoint configuration in check mode
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+      check_mode: true
+      register: secondary_endpoint_config_delete_check
+
+    - name: Assert secondary endpoint configuration delete check mode
+      ansible.builtin.assert:
+        that:
+          - secondary_endpoint_config_delete_check.changed
+          - "secondary_endpoint_config_delete_check.msg.startswith('Check mode: would have ')"
+
+    - name: Delete secondary endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+      register: secondary_endpoint_config_delete
+
+    - name: Assert secondary endpoint configuration was deleted
+      ansible.builtin.assert:
+        that:
+          - secondary_endpoint_config_delete.changed
+          - secondary_endpoint_config_delete.msg == "Endpoint configuration {{ secondary_endpoint_config_name }} deleted successfully."
+
+    - name: Re-run secondary endpoint configuration deletion
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+      register: secondary_endpoint_config_delete_rerun
+
+    - name: Assert secondary endpoint configuration deletion idempotency
+      ansible.builtin.assert:
+        that:
+          - not secondary_endpoint_config_delete_rerun.changed
+          - secondary_endpoint_config_delete_rerun.msg == "Endpoint configuration {{ secondary_endpoint_config_name }} does not exist."
   always:
+    - name: Cleanup secondary endpoint configuration
+      amazon.ai.sagemaker_endpoint_config:
+        state: absent
+        endpoint_config_name: "{{ secondary_endpoint_config_name }}"
+      ignore_errors: true
+
     - name: Cleanup endpoint configuration
       amazon.ai.sagemaker_endpoint_config:
         state: absent

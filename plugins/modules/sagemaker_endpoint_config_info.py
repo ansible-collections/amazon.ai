@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_endpoint_config_info
 short_description: Gather information about SageMaker endpoint configurations
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@JanLikar)
 description:
@@ -38,6 +38,10 @@ options:
         description: The sort order.
         type: str
         choices: [Ascending, Descending]
+attributes:
+    check_mode:
+        description: Can run in check mode without changing the target.
+        support: full
 seealso:
     - module: amazon.ai.sagemaker_endpoint_config
       description: Manage SageMaker endpoint configurations.
@@ -73,7 +77,11 @@ endpoint_configs:
 try:
     import botocore
 except ImportError:
-    pass
+    pass  # Handled by AnsibleAWSModule
+
+from typing import Any
+from typing import Dict
+from typing import List
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
@@ -87,7 +95,16 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
 
-def main():
+def _describe_endpoint_configs(client, summaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    configs: List[Dict[str, Any]] = []
+    for summary in summaries:
+        config = describe_endpoint_config(client, summary["EndpointConfigName"])
+        if config is not None:
+            configs.append(config)
+    return configs
+
+
+def main() -> None:
     argument_spec = dict(
         endpoint_config_name=dict(type="str", aliases=["name"]),
         creation_time_after=dict(type="str"),
@@ -110,11 +127,11 @@ def main():
         ],
     )
     try:
-        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
+        try:
+            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+            module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    try:
         if module.params.get("endpoint_config_name"):
             found = describe_endpoint_config(client, module.params["endpoint_config_name"])
             configs = [found] if found else []
@@ -130,15 +147,14 @@ def main():
                     "sort_order",
                 )
             }
-            configs = list_endpoint_configs(
+            summaries = list_endpoint_configs(
                 client,
                 **snake_dict_to_camel_dict(scrub_none_parameters(raw), capitalize_first=True),
             )
+            configs = _describe_endpoint_configs(client, summaries)
         module.exit_json(endpoint_configs=[camel_dict_to_snake_dict(config) for config in configs])
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e)
 
 
 if __name__ == "__main__":

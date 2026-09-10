@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_endpoint_config
 short_description: Manage Amazon SageMaker endpoint configurations
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@JanLikar)
 description:
@@ -29,6 +29,55 @@ options:
         description: Production variants for the endpoint configuration. Required when O(state=present).
         type: list
         elements: dict
+        suboptions:
+            variant_name:
+                description: The name of the production variant.
+                type: str
+                required: true
+            model_name:
+                description: The name of the SageMaker model.
+                type: str
+                required: true
+            initial_instance_count:
+                description: The initial number of instances.
+                type: int
+            instance_type:
+                description: The ML compute instance type.
+                type: str
+            initial_variant_weight:
+                description: The initial traffic weight for the variant.
+                type: float
+            serverless_config:
+                description: Serverless inference configuration.
+                type: dict
+                suboptions:
+                    memory_size_in_m_b:
+                        description: The memory size in MB for each inference instance.
+                        type: int
+                        aliases: [memory_size_in_mb]
+                    max_concurrency:
+                        description: The maximum number of concurrent invocations.
+                        type: int
+                    provisioned_concurrency:
+                        description: The provisioned concurrency.
+                        type: int
+            routing_config:
+                description: Request routing configuration.
+                type: dict
+                suboptions:
+                    routing_strategy:
+                        description: The request routing strategy.
+                        type: str
+                    prefix_aware_routing_config:
+                        description: Prefix-aware routing configuration.
+                        type: dict
+                        suboptions:
+                            prefix_length:
+                                description: The prefix length used for routing.
+                                type: int
+                            concurrency_threshold:
+                                description: The concurrency threshold for prefix-aware routing.
+                                type: int
     async_inference_config:
         description: Async inference configuration.
         type: dict
@@ -38,7 +87,6 @@ options:
     enable_network_isolation:
         description: Whether to enable network isolation.
         type: bool
-        default: false
     execution_role_arn:
         description: The IAM execution role ARN.
         type: str
@@ -55,6 +103,55 @@ options:
         description: Shadow production variants.
         type: list
         elements: dict
+        suboptions:
+            variant_name:
+                description: The name of the shadow production variant.
+                type: str
+                required: true
+            model_name:
+                description: The name of the SageMaker model.
+                type: str
+                required: true
+            initial_instance_count:
+                description: The initial number of instances.
+                type: int
+            instance_type:
+                description: The ML compute instance type.
+                type: str
+            initial_variant_weight:
+                description: The initial traffic weight for the variant.
+                type: float
+            serverless_config:
+                description: Serverless inference configuration.
+                type: dict
+                suboptions:
+                    memory_size_in_m_b:
+                        description: The memory size in MB for each inference instance.
+                        type: int
+                        aliases: [memory_size_in_mb]
+                    max_concurrency:
+                        description: The maximum number of concurrent invocations.
+                        type: int
+                    provisioned_concurrency:
+                        description: The provisioned concurrency.
+                        type: int
+            routing_config:
+                description: Request routing configuration.
+                type: dict
+                suboptions:
+                    routing_strategy:
+                        description: The request routing strategy.
+                        type: str
+                    prefix_aware_routing_config:
+                        description: Prefix-aware routing configuration.
+                        type: dict
+                        suboptions:
+                            prefix_length:
+                                description: The prefix length used for routing.
+                                type: int
+                            concurrency_threshold:
+                                description: The concurrency threshold for prefix-aware routing.
+                                type: int
     vpc_config:
         description: VPC configuration.
         type: dict
@@ -66,18 +163,14 @@ options:
         description: Whether to remove tags not specified in tags.
         type: bool
         default: true
-    wait:
-        description: Retained for consistency; endpoint configurations have no waiter.
-        type: bool
-        default: true
-    wait_timeout:
-        description: Retained for consistency; endpoint configurations have no waiter.
-        type: int
-        default: 600
 notes:
     - Required IAM actions include sagemaker:CreateEndpointConfig, sagemaker:DescribeEndpointConfig,
       sagemaker:DeleteEndpointConfig, sagemaker:AddTags, sagemaker:ListTags, sagemaker:DeleteTags, and
       iam:PassRole when an execution role is supplied.
+attributes:
+    check_mode:
+        description: Can run in check mode and report what would change without changing the target.
+        support: full
 seealso:
     - module: amazon.ai.sagemaker_endpoint_config_info
       description: Gather information about SageMaker endpoint configurations.
@@ -107,10 +200,22 @@ RETURN = r"""
 endpoint_config:
     description: The endpoint configuration after the operation.
     type: dict
+    contains:
+        endpoint_config_name:
+            description: The endpoint configuration name.
+            type: str
+        endpoint_config_arn:
+            description: The endpoint configuration ARN.
+            type: str
     returned: on success when state is present
     sample:
         endpoint_config_name: my-endpoint-config
         endpoint_config_arn: arn:aws:sagemaker:us-east-1:123456789012:endpoint-config/my-endpoint-config
+tags:
+    description: A dictionary containing the endpoint configuration tags.
+    type: dict
+    returned: on success when state is present
+    sample: {}
 msg:
     description: Informative message about the action.
     type: str
@@ -121,8 +226,9 @@ msg:
 try:
     import botocore
 except ImportError:
-    pass
+    pass  # Handled by AnsibleAWSModule
 
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
@@ -137,31 +243,6 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def _variants_differ(desired_variants, existing_variants) -> bool:
-    if not isinstance(existing_variants, list) or len(desired_variants) != len(existing_variants):
-        return True
-    return any(
-        existing_variant.get(field) != value
-        for desired_variant, existing_variant in zip(desired_variants, existing_variants)
-        for field, value in desired_variant.items()
-    )
-
-
-def _endpoint_config_property_differs(key, desired_value, existing) -> bool:
-    existing_value = existing.get(key)
-    if key in ("ProductionVariants", "ShadowProductionVariants"):
-        return _variants_differ(desired_value, existing_value)
-    return desired_value != existing_value
-
-
-def _endpoint_config_properties_differ(desired, existing) -> bool:
-    return any(
-        _endpoint_config_property_differs(key, desired_value, existing)
-        for key, desired_value in desired.items()
-        if key not in ("EndpointConfigName", "Tags")
-    )
-
-
 def _endpoint_config_tags_message(name, changed, check_mode) -> str:
     if not changed:
         return f"Endpoint configuration {name} is already up to date."
@@ -170,24 +251,84 @@ def _endpoint_config_tags_message(name, changed, check_mode) -> str:
     return f"Endpoint configuration {name} tags updated successfully."
 
 
-def main():
+def main() -> None:
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "absent"]),
         endpoint_config_name=dict(type="str", required=True, aliases=["name"]),
-        production_variants=dict(type="list", elements="dict"),
+        production_variants=dict(
+            type="list",
+            elements="dict",
+            options=dict(
+                variant_name=dict(type="str", required=True),
+                model_name=dict(type="str", required=True),
+                initial_instance_count=dict(type="int"),
+                instance_type=dict(type="str"),
+                initial_variant_weight=dict(type="float"),
+                serverless_config=dict(
+                    type="dict",
+                    options=dict(
+                        memory_size_in_m_b=dict(type="int", aliases=["memory_size_in_mb"]),
+                        max_concurrency=dict(type="int"),
+                        provisioned_concurrency=dict(type="int"),
+                    ),
+                ),
+                routing_config=dict(
+                    type="dict",
+                    options=dict(
+                        routing_strategy=dict(type="str"),
+                        prefix_aware_routing_config=dict(
+                            type="dict",
+                            options=dict(
+                                prefix_length=dict(type="int"),
+                                concurrency_threshold=dict(type="int"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
         async_inference_config=dict(type="dict"),
         data_capture_config=dict(type="dict"),
-        enable_network_isolation=dict(type="bool", default=False),
+        enable_network_isolation=dict(type="bool"),
         execution_role_arn=dict(type="str"),
         explainer_config=dict(type="dict"),
         kms_key_id=dict(type="str"),
         metrics_config=dict(type="dict"),
-        shadow_production_variants=dict(type="list", elements="dict"),
+        shadow_production_variants=dict(
+            type="list",
+            elements="dict",
+            options=dict(
+                variant_name=dict(type="str", required=True),
+                model_name=dict(type="str", required=True),
+                initial_instance_count=dict(type="int"),
+                instance_type=dict(type="str"),
+                initial_variant_weight=dict(type="float"),
+                serverless_config=dict(
+                    type="dict",
+                    options=dict(
+                        memory_size_in_m_b=dict(type="int", aliases=["memory_size_in_mb"]),
+                        max_concurrency=dict(type="int"),
+                        provisioned_concurrency=dict(type="int"),
+                    ),
+                ),
+                routing_config=dict(
+                    type="dict",
+                    options=dict(
+                        routing_strategy=dict(type="str"),
+                        prefix_aware_routing_config=dict(
+                            type="dict",
+                            options=dict(
+                                prefix_length=dict(type="int"),
+                                concurrency_threshold=dict(type="int"),
+                            ),
+                        ),
+                    ),
+                ),
+            ),
+        ),
         vpc_config=dict(type="dict"),
         tags=dict(type="dict", aliases=["resource_tags"]),
         purge_tags=dict(type="bool", default=True),
-        wait=dict(type="bool", default=True),
-        wait_timeout=dict(type="int", default=600),
     )
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
@@ -196,11 +337,11 @@ def main():
     )
     name = module.params["endpoint_config_name"]
     try:
-        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
+        try:
+            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+            module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    try:
         existing = describe_endpoint_config(client, name)
         if module.params["state"] == "absent":
             if not existing:
@@ -218,11 +359,10 @@ def main():
                 )
             changed = reconcile_endpoint_config_tags(client, module, existing)
             result = camel_dict_to_snake_dict(describe_endpoint_config(client, name), ignore_list=["tags"])
-            if module.params.get("tags") is not None:
-                result["tags"] = list_tags(client, existing["EndpointConfigArn"])
             module.exit_json(
                 changed=changed,
                 endpoint_config=result,
+                tags=list_tags(client, existing["EndpointConfigArn"]),
                 msg=_endpoint_config_tags_message(name, changed, module.check_mode),
             )
 
@@ -231,17 +371,14 @@ def main():
         create_endpoint_config(client, module)
         created = describe_endpoint_config(client, name)
         result = camel_dict_to_snake_dict(created, ignore_list=["tags"])
-        if module.params.get("tags") is not None:
-            result["tags"] = list_tags(client, created["EndpointConfigArn"])
         module.exit_json(
             changed=True,
             endpoint_config=result,
+            tags=list_tags(client, created["EndpointConfigArn"]),
             msg=f"Endpoint configuration {name} created successfully.",
         )
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e)
 
 
 if __name__ == "__main__":

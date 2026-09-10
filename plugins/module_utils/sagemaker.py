@@ -353,6 +353,49 @@ def endpoint_config_params(module) -> Dict[str, Any]:
     return snake_dict_to_camel_dict(scrub_none_parameters(values), capitalize_first=True)
 
 
+def _variants_differ(desired_variants: List[Dict[str, Any]], existing_variants: Any) -> bool:
+    if not isinstance(existing_variants, list) or len(desired_variants) != len(existing_variants):
+        return True
+    existing_by_name = {variant.get("VariantName"): variant for variant in existing_variants}
+    for desired_variant in desired_variants:
+        variant_name = desired_variant.get("VariantName")
+        if variant_name not in existing_by_name or _mapping_differs(desired_variant, existing_by_name[variant_name]):
+            return True
+    return False
+
+
+def _mapping_differs(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+    for key, desired_value in desired.items():
+        existing_value = existing.get(key)
+        if isinstance(desired_value, dict):
+            if not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value):
+                return True
+        elif key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
+            continue
+        elif desired_value != existing_value:
+            return True
+    return False
+
+
+def _endpoint_config_property_differs(key: str, desired_value: Any, existing: Dict[str, Any]) -> bool:
+    existing_value = existing.get(key)
+    if key in ("ProductionVariants", "ShadowProductionVariants"):
+        return _variants_differ(desired_value, existing_value)
+    if isinstance(desired_value, dict):
+        return not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value)
+    if key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
+        return False
+    return desired_value != existing_value
+
+
+def _endpoint_config_properties_differ(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+    return any(
+        _endpoint_config_property_differs(key, desired_value, existing)
+        for key, desired_value in desired.items()
+        if key not in ("EndpointConfigName", "Tags")
+    )
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def create_endpoint_config(client, module) -> None:
     params = endpoint_config_params(module)
