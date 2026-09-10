@@ -128,4 +128,4 @@ jobs:
           ansible-core-version: ${{ matrix.ansible-core-version }}
           testing-type: units
           target-python-version: ${{ matrix.python-version }}
-          test-deps: amazon.aws
+          test-deps: -r ansible_collections/amazon/ai/tests/unit/requirements.yml
