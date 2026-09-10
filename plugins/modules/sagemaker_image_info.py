@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_image_info
 short_description: Gather information about SageMaker Images
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@JanLikar)
 description:

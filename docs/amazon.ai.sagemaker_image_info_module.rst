@@ -8,7 +8,7 @@ amazon.ai.sagemaker_image_info
 **Gather information about SageMaker Images**
 
 
-Version added: 1.1.0
+Version added: 2.0.0
 
 .. contents::
    :local:
