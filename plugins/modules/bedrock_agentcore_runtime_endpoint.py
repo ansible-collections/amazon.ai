@@ -155,6 +155,7 @@ except ImportError:
 from typing import Any
 from typing import Dict
 from typing import Optional
+from typing import Tuple
 
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeEndpointStatus
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import create_agent_runtime_endpoint
@@ -170,7 +171,15 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def runtime_endpoint_status_check(
+def _missing_runtime(state: str, module: AnsibleAWSModule, result: Dict[str, Any], agent_runtime_name: str) -> None:
+    if state == "present":
+        module.fail_json(msg=f"Agent runtime with name '{agent_runtime_name}' not found.")
+    else:
+        result["msg"] = "Agent runtime not found. No action taken."
+        module.exit_json(changed=False, **camel_dict_to_snake_dict(result))
+
+
+def _runtime_endpoint_status_check(
     existing_runtime_endpoint: Optional[Dict[str, Any]], state: str, module: AnsibleAWSModule
 ) -> None:
     # Early exit if existing_runtime_endpoint is deleting, creating or updating
@@ -188,6 +197,37 @@ def runtime_endpoint_status_check(
                 changed=False,
                 msg=f"Agent runtime endpoint {existing_runtime_endpoint.get('endpoint_name')} is currently in {existing_runtime_endpoint.get('status')}.",
             )
+
+
+def _present(
+    module: AnsibleAWSModule,
+    client,
+    result: Dict[str, Any],
+    existing_endpoint: Optional[Dict[str, Any]],
+    agent_runtime_id: str,
+) -> Tuple[bool, str, Dict[str, Any]]:
+    if existing_endpoint is None:
+        changed, endpoint_resp_name, msg = create_agent_runtime_endpoint(module, client, agent_runtime_id)
+    else:
+        changed, endpoint_resp_name, msg = update_agent_runtime_endpoint(
+            module, client, agent_runtime_id, existing_endpoint
+        )
+    endpoint = (
+        get_agent_runtime_endpoint(client, agent_runtime_id, endpoint_resp_name) if endpoint_resp_name else dict()
+    )
+    result["agent_runtime_endpoint"] = endpoint
+    return changed, msg, result
+
+
+def _absent(
+    module: AnsibleAWSModule, client, existing_endpoint: Optional[Dict[str, Any]], agent_runtime_id: str
+) -> Tuple[bool, str]:
+    changed: bool = False
+    if existing_endpoint is not None:
+        changed, msg = delete_agent_runtime_endpoint(module, client, agent_runtime_id, existing_endpoint)
+    else:
+        msg = "Endpoint does not exist."
+    return changed, msg
 
 
 def main() -> None:
@@ -222,38 +262,19 @@ def main() -> None:
 
         existing_runtime: Optional[Dict[str, Any]] = get_agent_runtime_quick_summary_by_name(client, agent_runtime_name)
         if not existing_runtime:
-            if state == "present":
-                module.fail_json(msg=f"Agent runtime with name '{agent_runtime_name}' not found.")
-            else:
-                result["msg"] = "Agent runtime not found. No action taken."
-                module.exit_json(changed=False, **camel_dict_to_snake_dict(result))
+            _missing_runtime(state, module, result, agent_runtime_name)
         else:
             agent_runtime_id = existing_runtime.get("agent_runtime_id")
 
             existing_endpoint: Optional[Dict[str, Any]] = get_agent_runtime_endpoint(
                 client, agent_runtime_id, endpoint_name
             )
-            runtime_endpoint_status_check(existing_endpoint, state, module)
+            _runtime_endpoint_status_check(existing_endpoint, state, module)
 
             if state == "present":
-                if existing_endpoint is None:
-                    changed, endpoint_resp_name, msg = create_agent_runtime_endpoint(module, client, agent_runtime_id)
-                else:
-                    changed, endpoint_resp_name, msg = update_agent_runtime_endpoint(
-                        module, client, agent_runtime_id, existing_endpoint
-                    )
-                endpoint = (
-                    get_agent_runtime_endpoint(client, agent_runtime_id, endpoint_resp_name)
-                    if endpoint_resp_name
-                    else dict()
-                )
-                result["agent_runtime_endpoint"] = endpoint
-
+                changed, msg, result = _present(module, client, result, existing_endpoint, agent_runtime_id)
             else:
-                if existing_endpoint is not None:
-                    changed, msg = delete_agent_runtime_endpoint(module, client, agent_runtime_id, existing_endpoint)
-                else:
-                    msg = "Endpoint does not exist."
+                changed, msg = _absent(module, client, existing_endpoint, agent_runtime_id)
             result["msg"] = msg
 
     except AnsibleAWSError as e:
