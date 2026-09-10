@@ -369,7 +369,7 @@ def main() -> None:
                         ),
                     ),
                 ),
-                environment=dict(type="dict", default={}),
+                environment=dict(type="dict", default={}, no_log=True),
             ),
             mutually_exclusive=[["model_data_url", "model_data_source"]],
         ),

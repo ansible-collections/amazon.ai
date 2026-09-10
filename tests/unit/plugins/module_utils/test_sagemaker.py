@@ -8,8 +8,211 @@
 
 from unittest.mock import MagicMock
 
+import pytest
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from botocore.exceptions import ClientError
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        'Could not find endpoint configuration "missing-config".',
+        "Could not find endpoint configuration",
+    ],
+)
+def test_describe_endpoint_config_returns_none_when_missing(message):
+    client = MagicMock()
+    client.describe_endpoint_config.side_effect = ClientError(
+        {"Error": {"Code": "ValidationException", "Message": message}},
+        "DescribeEndpointConfig",
+    )
+
+    assert describe_endpoint_config(client, "missing-config") is None
+
+
+def test_describe_endpoint_config_reraises_other_validation_errors():
+    client = MagicMock()
+    client.describe_endpoint_config.side_effect = ClientError(
+        {"Error": {"Code": "ValidationException", "Message": "Some other validation problem."}},
+        "DescribeEndpointConfig",
+    )
+
+    with pytest.raises(ClientError):
+        describe_endpoint_config(client, "bad-config")
+
+
+def test_reconcile_endpoint_config_tags_check_mode_does_not_modify_tags():
+    client = MagicMock()
+    module = MagicMock()
+    module.check_mode = True
+    module.params = {"tags": {"environment": "test"}, "purge_tags": True}
+    existing = {"EndpointConfigArn": "arn:aws:sagemaker:region:account:endpoint-config/test"}
+
+    client.get_paginator.return_value.paginate.return_value.build_full_result.return_value = {
+        "Tags": [{"Key": "environment", "Value": "production"}, {"Key": "owner", "Value": "team"}]
+    }
+
+    assert reconcile_endpoint_config_tags(client, module, existing)
+    client.add_tags.assert_not_called()
+    client.delete_tags.assert_not_called()
+
+
+def test_list_endpoint_configs_limits_total_results():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {"EndpointConfigs": []}
+
+    list_endpoint_configs(client, MaxResults=1)
+
+    paginator.paginate.assert_called_once_with(PaginationConfig={"MaxItems": 1})
+
+
+def test_endpoint_config_properties_differ_ignores_name_and_tags():
+    desired = {
+        "EndpointConfigName": "config",
+        "Tags": [{"Key": "environment", "Value": "test"}],
+        "KmsKeyId": "key",
+    }
+    existing = {"EndpointConfigName": "config", "Tags": [{"Key": "owner", "Value": "team"}], "KmsKeyId": "key"}
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_detects_variant_changes():
+    desired = {"ProductionVariants": [{"VariantName": "AllTraffic", "InitialInstanceCount": 2}]}
+    existing = {"ProductionVariants": [{"VariantName": "AllTraffic", "InitialInstanceCount": 1}]}
+
+    assert _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_matches_variants_by_name():
+    desired = {
+        "ProductionVariants": [
+            {"VariantName": "Blue", "ModelName": "blue-model"},
+            {"VariantName": "Green", "ModelName": "green-model"},
+        ]
+    }
+    existing = {
+        "ProductionVariants": [
+            {"VariantName": "Green", "ModelName": "green-model", "InitialInstanceCount": 1},
+            {"VariantName": "Blue", "ModelName": "blue-model", "InitialInstanceCount": 1},
+        ]
+    }
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_ignores_aws_nested_defaults():
+    desired = {
+        "ProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {"MemorySizeInMB": 2048},
+            }
+        ]
+    }
+    existing = {
+        "ProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {
+                    "MemorySizeInMB": 2048,
+                    "MaxConcurrency": 10,
+                },
+            }
+        ]
+    }
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_matches_shadow_variants_by_name():
+    desired = {
+        "ShadowProductionVariants": [
+            {"VariantName": "Blue", "ModelName": "blue-model"},
+            {"VariantName": "Green", "ModelName": "green-model"},
+        ]
+    }
+    existing = {
+        "ShadowProductionVariants": [
+            {"VariantName": "Green", "ModelName": "green-model", "InitialInstanceCount": 1},
+            {"VariantName": "Blue", "ModelName": "blue-model", "InitialInstanceCount": 1},
+        ]
+    }
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_ignores_shadow_variant_nested_defaults():
+    desired = {
+        "ShadowProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {"MemorySizeInMB": 2048},
+            }
+        ]
+    }
+    existing = {
+        "ShadowProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {
+                    "MemorySizeInMB": 2048,
+                    "MaxConcurrency": 10,
+                    "ProvisionedConcurrency": 5,
+                },
+            }
+        ]
+    }
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_detects_shadow_variant_changes():
+    desired = {
+        "ShadowProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {"MemorySizeInMB": 4096},
+            }
+        ]
+    }
+    existing = {
+        "ShadowProductionVariants": [
+            {
+                "VariantName": "Serverless",
+                "ServerlessConfig": {"MemorySizeInMB": 2048, "MaxConcurrency": 10},
+            }
+        ]
+    }
+
+    assert _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_detects_renamed_shadow_variant():
+    desired = {"ShadowProductionVariants": [{"VariantName": "Green", "ModelName": "green-model"}]}
+    existing = {"ShadowProductionVariants": [{"VariantName": "Blue", "ModelName": "green-model"}]}
+
+    assert _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_ignores_omitted_network_isolation():
+    desired = {"EnableNetworkIsolation": False}
+    existing = {"EnableNetworkIsolation": False}
+
+    assert not _endpoint_config_properties_differ(desired, existing)
+
+
+def test_endpoint_config_properties_differ_treats_missing_network_isolation_as_false():
+    desired = {"EnableNetworkIsolation": False}
+    existing = {}
+
+    assert not _endpoint_config_properties_differ(desired, existing)
 
 
 class TestListModels:
