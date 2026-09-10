@@ -1,0 +1,6 @@
+cloud/aws
+
+needs/target/setup_node_query
+
+bedrock_agent_info
+bedrock_foundation_models_info
