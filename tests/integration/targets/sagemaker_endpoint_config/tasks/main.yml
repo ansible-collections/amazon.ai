@@ -207,6 +207,7 @@
         that:
           - endpoint_config_info.endpoint_configs | length == 1
           - endpoint_config_info.endpoint_configs[0].endpoint_config_name == endpoint_config_name
+          - "endpoint_config_info.endpoint_configs[0].tags == {'Environment': 'integration'}"
 
     - name: List endpoint configurations with filters and ordering
       amazon.ai.sagemaker_endpoint_config_info:

@@ -406,7 +406,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                             <div>Matching endpoint configurations.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">[{&#x27;endpoint_config_name&#x27;: &#x27;my-endpoint-config&#x27;, &#x27;endpoint_config_arn&#x27;: &#x27;arn:aws:sagemaker:us-east-1:123456789012:endpoint-config/my-endpoint-config&#x27;}]</div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">[{&#x27;endpoint_config_name&#x27;: &#x27;my-endpoint-config&#x27;, &#x27;endpoint_config_arn&#x27;: &#x27;arn:aws:sagemaker:us-east-1:123456789012:endpoint-config/my-endpoint-config&#x27;, &#x27;tags&#x27;: {&#x27;project&#x27;: &#x27;demo&#x27;}}]</div>
                 </td>
             </tr>
     </table>

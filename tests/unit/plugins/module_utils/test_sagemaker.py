@@ -62,6 +62,47 @@ def test_reconcile_endpoint_config_tags_check_mode_does_not_modify_tags():
     client.delete_tags.assert_not_called()
 
 
+def test_reconcile_endpoint_config_tags_modifies_tags():
+    client = MagicMock()
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"tags": {"environment": "test"}, "purge_tags": True}
+    existing = {"EndpointConfigArn": "arn:aws:sagemaker:region:account:endpoint-config/test"}
+
+    client.get_paginator.return_value.paginate.return_value.build_full_result.return_value = {
+        "Tags": [{"Key": "environment", "Value": "production"}, {"Key": "owner", "Value": "team"}]
+    }
+
+    assert reconcile_endpoint_config_tags(client, module, existing)
+    client.add_tags.assert_called_once_with(
+        ResourceArn="arn:aws:sagemaker:region:account:endpoint-config/test",
+        Tags=[{"Key": "environment", "Value": "test"}],
+    )
+    client.delete_tags.assert_called_once_with(
+        ResourceArn="arn:aws:sagemaker:region:account:endpoint-config/test",
+        TagKeys=["owner"],
+    )
+
+
+def test_reconcile_endpoint_config_tags_purge_false_only_adds_tags():
+    client = MagicMock()
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"tags": {"environment": "test"}, "purge_tags": False}
+    existing = {"EndpointConfigArn": "arn:aws:sagemaker:region:account:endpoint-config/test"}
+
+    client.get_paginator.return_value.paginate.return_value.build_full_result.return_value = {
+        "Tags": [{"Key": "environment", "Value": "production"}, {"Key": "owner", "Value": "team"}]
+    }
+
+    assert reconcile_endpoint_config_tags(client, module, existing)
+    client.add_tags.assert_called_once_with(
+        ResourceArn="arn:aws:sagemaker:region:account:endpoint-config/test",
+        Tags=[{"Key": "environment", "Value": "test"}],
+    )
+    client.delete_tags.assert_not_called()
+
+
 def test_list_endpoint_configs_limits_total_results():
     client = MagicMock()
     paginator = client.get_paginator.return_value

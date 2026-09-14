@@ -72,6 +72,8 @@ endpoint_configs:
     sample:
         - endpoint_config_name: my-endpoint-config
           endpoint_config_arn: arn:aws:sagemaker:us-east-1:123456789012:endpoint-config/my-endpoint-config
+          tags:
+            project: demo
 """
 
 try:
@@ -85,6 +87,7 @@ from typing import List
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
@@ -93,6 +96,12 @@ from ansible_collections.amazon.aws.plugins.module_utils.exceptions import Ansib
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
+
+
+def _normalize_endpoint_config(client, config: Dict[str, Any]) -> Dict[str, Any]:
+    normalized: Dict[str, Any] = camel_dict_to_snake_dict(config, ignore_list=["tags"])
+    normalized["tags"] = list_tags(client, config["EndpointConfigArn"])
+    return normalized
 
 
 def _describe_endpoint_configs(client, summaries: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -152,7 +161,7 @@ def main() -> None:
                 **snake_dict_to_camel_dict(scrub_none_parameters(raw), capitalize_first=True),
             )
             configs = _describe_endpoint_configs(client, summaries)
-        module.exit_json(endpoint_configs=[camel_dict_to_snake_dict(config) for config in configs])
+        module.exit_json(endpoint_configs=[_normalize_endpoint_config(client, config) for config in configs])
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
