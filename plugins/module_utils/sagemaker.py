@@ -10,7 +10,10 @@ from typing import Tuple
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
+from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_message
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
+from ansible_collections.amazon.aws.plugins.module_utils.tagging import ansible_dict_to_boto3_tag_list
+from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
 
@@ -308,3 +311,117 @@ def update_model_tags(
         client.delete_tags(ResourceArn=model_arn, TagKeys=tags_to_remove)
 
     return True, "Model tags updated successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_endpoint_config(client, endpoint_config_name: str) -> Optional[Dict[str, Any]]:
+    try:
+        return client.describe_endpoint_config(EndpointConfigName=endpoint_config_name)
+    except is_boto3_error_message("Could not find endpoint configuration"):
+        # DescribeEndpointConfig has no dedicated not-found error; AWS returns a generic
+        # ValidationException whose message reports the missing endpoint configuration.
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_endpoint_configs(client, **params: Any) -> List[Dict[str, Any]]:
+    paginator = client.get_paginator("list_endpoint_configs")
+    max_results = params.pop("MaxResults", None)
+    if max_results is not None:
+        params["PaginationConfig"] = dict(MaxItems=max_results)
+    return paginator.paginate(**params).build_full_result()["EndpointConfigs"]
+
+
+def endpoint_config_params(module) -> Dict[str, Any]:
+    values = {
+        field: module.params.get(field)
+        for field in (
+            "endpoint_config_name",
+            "production_variants",
+            "data_capture_config",
+            "tags",
+            "kms_key_id",
+            "async_inference_config",
+            "explainer_config",
+            "shadow_production_variants",
+            "execution_role_arn",
+            "vpc_config",
+            "enable_network_isolation",
+            "metrics_config",
+        )
+    }
+    return snake_dict_to_camel_dict(scrub_none_parameters(values), capitalize_first=True)
+
+
+def _variants_differ(desired_variants: List[Dict[str, Any]], existing_variants: Any) -> bool:
+    if not isinstance(existing_variants, list) or len(desired_variants) != len(existing_variants):
+        return True
+    existing_by_name = {variant.get("VariantName"): variant for variant in existing_variants}
+    for desired_variant in desired_variants:
+        variant_name = desired_variant.get("VariantName")
+        if variant_name not in existing_by_name or _mapping_differs(desired_variant, existing_by_name[variant_name]):
+            return True
+    return False
+
+
+def _mapping_differs(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+    for key, desired_value in desired.items():
+        existing_value = existing.get(key)
+        if isinstance(desired_value, dict):
+            if not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value):
+                return True
+        elif key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
+            continue
+        elif desired_value != existing_value:
+            return True
+    return False
+
+
+def _endpoint_config_property_differs(key: str, desired_value: Any, existing: Dict[str, Any]) -> bool:
+    existing_value = existing.get(key)
+    if key in ("ProductionVariants", "ShadowProductionVariants"):
+        return _variants_differ(desired_value, existing_value)
+    if isinstance(desired_value, dict):
+        return not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value)
+    if key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
+        return False
+    return desired_value != existing_value
+
+
+def _endpoint_config_properties_differ(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+    return any(
+        _endpoint_config_property_differs(key, desired_value, existing)
+        for key, desired_value in desired.items()
+        if key not in ("EndpointConfigName", "Tags")
+    )
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def create_endpoint_config(client, module) -> None:
+    params = endpoint_config_params(module)
+    if "Tags" in params:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+    client.create_endpoint_config(**params)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def delete_endpoint_config(client, endpoint_config_name: str) -> None:
+    client.delete_endpoint_config(EndpointConfigName=endpoint_config_name)
+
+
+def reconcile_endpoint_config_tags(client, module, existing: Dict[str, Any]) -> bool:
+    if module.params.get("tags") is None:
+        return False
+    current_tags = list_tags(client, existing["EndpointConfigArn"])
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(ResourceArn=existing["EndpointConfigArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=existing["EndpointConfigArn"], TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
