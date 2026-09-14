@@ -176,6 +176,95 @@ def list_models(client, **params: Any) -> List[Dict[str, Any]]:
 
 
 @AWSRetry.jittered_backoff(retries=10)
+def describe_model_package_group(client, model_package_group_name: str) -> Optional[Dict[str, Any]]:
+    """Retrieve details for a specific SageMaker model package group."""
+    try:
+        return client.describe_model_package_group(ModelPackageGroupName=model_package_group_name)
+    except (is_boto3_error_message("does not exist"), is_boto3_error_message("not found")):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_model_package_groups(client, **params: Any) -> List[Dict[str, Any]]:
+    """Retrieve a list of SageMaker model package groups."""
+    paginate_params: Dict[str, Any] = dict(params)
+    max_results = paginate_params.pop("MaxResults", None)
+    paginator = client.get_paginator("list_model_package_groups")
+    if max_results is not None:
+        return paginator.paginate(**paginate_params, PaginationConfig={"MaxItems": max_results}).build_full_result()[
+            "ModelPackageGroupSummaryList"
+        ]
+    return paginator.paginate(**paginate_params).build_full_result()["ModelPackageGroupSummaryList"]
+
+
+def _build_model_package_group_params(module) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        field: module.params.get(field) for field in ("model_package_group_name", "model_package_group_description")
+    }
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if tags is not None:
+        params["tags"] = [{"key": key, "value": value} for key, value in tags.items()]
+    return snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def create_model_package_group(client, module) -> Tuple[bool, str]:
+    """Create a SageMaker model package group."""
+    name = module.params["model_package_group_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created model package group {name}."
+
+    client.create_model_package_group(**_build_model_package_group_params(module))
+    return True, f"Model package group {name} created successfully."
+
+
+def model_package_group_needs_update(existing: Dict[str, Any], module) -> bool:
+    """Determine whether a model package group description drift requires replacement."""
+    desired_description = module.params.get("model_package_group_description")
+    if desired_description is not None and existing.get("ModelPackageGroupDescription") != desired_description:
+        return True
+    return False
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def delete_model_package_group(client, module) -> Tuple[bool, str]:
+    """Delete a SageMaker model package group."""
+    name = module.params["model_package_group_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted model package group {name}."
+
+    client.delete_model_package_group(ModelPackageGroupName=name)
+    return True, f"Model package group {name} deleted successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def update_model_package_group_tags(
+    client, module, model_package_group_arn: str, desired_tags: Dict[str, str], purge_tags: bool = True
+) -> Tuple[bool, str]:
+    """Reconcile SageMaker model package group tags in place."""
+    current_tags: Dict[str, str] = list_tags(client, model_package_group_arn)
+
+    tags_to_add: Dict[str, str] = {key: value for key, value in desired_tags.items() if current_tags.get(key) != value}
+    tags_to_remove: List[str] = [key for key in current_tags if key not in desired_tags] if purge_tags else []
+
+    if not tags_to_add and not tags_to_remove:
+        return False, "No updates needed."
+
+    if module.check_mode:
+        return True, "Check mode: would have updated model package group tags."
+
+    if tags_to_add:
+        client.add_tags(
+            ResourceArn=model_package_group_arn,
+            Tags=[{"Key": key, "Value": value} for key, value in tags_to_add.items()],
+        )
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=model_package_group_arn, TagKeys=tags_to_remove)
+
+    return True, "Model package group tags updated successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
 def create_model(client, module) -> Tuple[bool, str]:
     """
     Create a SageMaker model.

@@ -1,0 +1,12 @@
+---
+test_id: "{{ tiny_prefix }}"
+model_package_group_name: "test-sagemaker-model-package-group-{{ test_id }}"
+model_package_group_description: "Demo model package group"
+model_package_group_description_updated: "Updated demo model package group"
+model_package_group_tags_initial:
+  project: demo
+  environment: dev
+model_package_group_tags_updated:
+  project: demo
+  environment: prod
+  owner: platform

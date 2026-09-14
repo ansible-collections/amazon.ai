@@ -7,14 +7,19 @@
 """Unit tests for sagemaker module_utils."""
 
 from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
 from botocore.exceptions import ClientError
 
 
@@ -296,6 +301,121 @@ class TestListModels:
 
         paginator.paginate.assert_called_once_with(NameContains="test", PaginationConfig={"MaxItems": 5})
         assert result == [{"ModelName": "model-a"}]
+
+
+class TestListModelPackageGroups:
+    """Test cases for list_model_package_groups function."""
+
+    def test_list_model_package_groups_forwards_params_and_extracts_groups(self):
+        """list_model_package_groups should forward paging params and return the group list."""
+        client = MagicMock()
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value.build_full_result.return_value = {
+            "ModelPackageGroupSummaryList": [
+                {"ModelPackageGroupName": "group-a"},
+                {"ModelPackageGroupName": "group-b"},
+            ],
+        }
+
+        result = list_model_package_groups(client, NameContains="demo")
+
+        client.get_paginator.assert_called_once_with("list_model_package_groups")
+        paginator.paginate.assert_called_once_with(NameContains="demo")
+        assert result == [{"ModelPackageGroupName": "group-a"}, {"ModelPackageGroupName": "group-b"}]
+
+    def test_list_model_package_groups_max_results_uses_pagination_config(self):
+        """MaxResults should be translated into PaginationConfig={'MaxItems': ...}."""
+        client = MagicMock()
+        paginator = MagicMock()
+        client.get_paginator.return_value = paginator
+        paginator.paginate.return_value.build_full_result.return_value = {
+            "ModelPackageGroupSummaryList": [{"ModelPackageGroupName": "group-a"}],
+        }
+
+        result = list_model_package_groups(client, NameContains="demo", MaxResults=5)
+
+        paginator.paginate.assert_called_once_with(NameContains="demo", PaginationConfig={"MaxItems": 5})
+        assert result == [{"ModelPackageGroupName": "group-a"}]
+
+
+class TestDescribeModelPackageGroup:
+    """Test cases for describe_model_package_group function."""
+
+    def test_describe_model_package_group_returns_none_for_missing_group(self):
+        """A missing model package group should be treated as a non-fatal lookup miss."""
+        client = MagicMock()
+        client.describe_model_package_group.side_effect = ClientError(
+            {
+                "Error": {
+                    "Code": "ValidationException",
+                    "Message": "Model package group does not exist.",
+                }
+            },
+            "DescribeModelPackageGroup",
+        )
+
+        assert describe_model_package_group(client, "missing-group") is None
+
+
+class TestModelPackageGroupNeedsUpdate:
+    """Test cases for model_package_group_needs_update function."""
+
+    def test_description_drift_requires_update(self):
+        """Changing the model package group description should require replacement semantics."""
+        existing = {"ModelPackageGroupDescription": "old"}
+        module = MagicMock()
+        module.params = {"model_package_group_description": "new"}
+
+        assert model_package_group_needs_update(existing, module)
+
+    def test_missing_desired_description_is_not_drift(self):
+        """An omitted desired description should not trigger drift when existing data is present."""
+        existing = {"ModelPackageGroupDescription": "same"}
+        module = MagicMock()
+        module.params = {"model_package_group_description": None}
+
+        assert not model_package_group_needs_update(existing, module)
+
+
+class TestUpdateModelPackageGroupTags:
+    """Test cases for update_model_package_group_tags function."""
+
+    @patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags", return_value={"keep": "value", "remove": "old"})
+    def test_purge_tags_false_keeps_unmentioned_keys(self, mock_list_tags):
+        """When purge_tags is false, extra tags should stay untouched."""
+        client = MagicMock()
+        module = MagicMock()
+        module.check_mode = False
+
+        result = update_model_package_group_tags(
+            client, module, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", {"keep": "new"}, purge_tags=False
+        )
+
+        client.add_tags.assert_called_once_with(
+            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", Tags=[{"Key": "keep", "Value": "new"}]
+        )
+        client.delete_tags.assert_not_called()
+        assert result == (True, "Model package group tags updated successfully.")
+        mock_list_tags.assert_called_once_with(client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo")
+
+    @patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags", return_value={"keep": "old", "remove": "old"})
+    def test_purge_tags_true_removes_unmentioned_keys(self, mock_list_tags):
+        """When purge_tags is true, tags omitted from the desired set should be removed."""
+        client = MagicMock()
+        module = MagicMock()
+        module.check_mode = False
+
+        result = update_model_package_group_tags(
+            client, module, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", {"keep": "new"}, purge_tags=True
+        )
+
+        client.add_tags.assert_called_once_with(
+            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", Tags=[{"Key": "keep", "Value": "new"}]
+        )
+        client.delete_tags.assert_called_once_with(ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", TagKeys=["remove"])
+        assert result == (True, "Model package group tags updated successfully.")
+        mock_list_tags.assert_called_once_with(client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo")
 
 
 class TestModelNeedsReplacement:

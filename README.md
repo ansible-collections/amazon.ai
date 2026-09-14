@@ -81,6 +81,8 @@ Name | Description
 [amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
 [amazon.ai.sagemaker_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_module.rst)|Manage Amazon SageMaker Models
 [amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
+[amazon.ai.sagemaker_model_package_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_module.rst)|Manage Amazon SageMaker Model Package Groups
+[amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
 
 <!--end collection content-->
 
