@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_image
 short_description: Manage Amazon SageMaker Images
-version_added: "1.1.0"
+version_added: "2.0.0"
 author:
     - Jan Likar (@JanLikar)
 description:
