@@ -1,0 +1,104 @@
+- hosts: localhost
+  gather_facts: true
+
+  roles:
+    - role: setup_node_query
+
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+
+  vars:
+    agent_name: "test-node-query-agent-{{ tiny_prefix }}"
+    agent_role_name: "ansible-test-nq-agent-role-{{ tiny_prefix }}"
+    foundation_model: "amazon.nova-micro-v1:0"
+    instruction: "You are a test agent for node query integration tests."
+    bedrock_agent_facts:
+      device_type: "ai_agent"
+      infra_bucket: "machine_learning"
+      infra_type: "public_cloud"
+    bedrock_model_facts:
+      device_type: "ai_model"
+      infra_bucket: "machine_learning"
+      infra_type: "public_cloud"
+
+  tasks:
+    - block:
+        # --- Bedrock Agent ---
+        - name: Create IAM role for Bedrock Agent
+          amazon.aws.iam_role:
+            name: "{{ agent_role_name }}"
+            assume_role_policy_document: "{{ lookup('file', 'assume_role_bedrock_agent.json') }}"
+            state: present
+            managed_policies:
+              - "arn:aws:iam::aws:policy/AmazonBedrockFullAccess"
+          register: agent_role
+
+        - name: Wait for IAM role to propagate
+          ansible.builtin.pause:
+            seconds: 15
+            prompt: "Waiting for IAM role to be fully propagated."
+
+        - name: Create Bedrock Agent
+          amazon.ai.bedrock_agent:
+            state: present
+            agent_name: "{{ agent_name }}"
+            foundation_model: "{{ foundation_model }}"
+            instruction: "{{ instruction }}"
+            agent_resource_role_arn: "{{ agent_role.iam_role.arn }}"
+          register: agent_create
+
+        - name: List agents by name
+          amazon.ai.bedrock_agent_info:
+            agent_name: "{{ agent_name }}"
+          register: _agents
+
+        - name: Run jq query on agent result data
+          ansible.builtin.set_fact:
+            agent_node_count: "{{ _agents | to_json | aws_jq(event_node_queries.bedrock_agent_info) }}"
+
+        - name: Validate agent node query result
+          ansible.builtin.assert:
+            that:
+              - agent_node_count | length == 1
+              - agent_node_count[0].canonical_facts.id == _agents.agents[0].agent_id
+              - agent_node_count[0].canonical_facts.name == agent_name
+              - agent_node_count[0].canonical_facts.status == _agents.agents[0].agent_status
+              - agent_node_count[0].facts == bedrock_agent_facts
+
+        # --- Foundation Models ---
+        - name: List foundation models
+          amazon.ai.bedrock_foundation_models_info:
+          register: _models
+
+        - name: Run jq query on foundation models result data
+          ansible.builtin.set_fact:
+            model_node_count: "{{ _models | to_json | aws_jq(event_node_queries.bedrock_foundation_models_info) }}"
+
+        - name: Validate foundation models node query result
+          ansible.builtin.assert:
+            that:
+              - model_node_count | length > 0
+              - model_node_count[0].canonical_facts.id is defined
+              - model_node_count[0].facts == bedrock_model_facts
+
+      always:
+        - name: Delete Bedrock Agent
+          amazon.ai.bedrock_agent:
+            state: absent
+            agent_name: "{{ agent_name }}"
+          ignore_errors: true
+
+        - name: Delete IAM role
+          amazon.aws.iam_role:
+            name: "{{ agent_role_name }}"
+            state: absent
+          ignore_errors: true
