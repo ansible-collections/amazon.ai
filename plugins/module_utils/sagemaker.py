@@ -446,11 +446,12 @@ def describe_endpoint(client, endpoint_name: str) -> Optional[Dict[str, Any]]:
     """
     try:
         return client.describe_endpoint(EndpointName=endpoint_name)
-    except is_boto3_error_message("Could not find endpoint"):
+    except is_boto3_error_code("ValidationException") as e:
         # DescribeEndpoint has no dedicated not-found error; AWS returns a generic
         # ValidationException whose message reports the missing endpoint.
-        # UNVERIFIED: confirm the not-found message against live AWS.
-        return None
+        if "Could not find endpoint" in e.response["Error"].get("Message", ""):
+            return None
+        raise
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -496,12 +497,13 @@ def wait_for_endpoint(client, module, deleted: bool = False) -> None:
         deleted: When True, wait for the endpoint to be deleted; otherwise wait for InService.
     """
     endpoint_name = module.params["endpoint_name"]
-    delay = 30
+    wait_timeout = module.params["wait_timeout"]
+    delay = min(30, wait_timeout)
     waiter = client.get_waiter("endpoint_deleted" if deleted else "endpoint_in_service")
     try:
         waiter.wait(
             EndpointName=endpoint_name,
-            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, module.params["wait_timeout"] // delay)),
+            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, wait_timeout // delay)),
         )
     except WaiterError as e:
         reason = ""
@@ -515,7 +517,7 @@ def wait_for_endpoint(client, module, deleted: bool = False) -> None:
 @AWSRetry.jittered_backoff(retries=10)
 def create_endpoint(client, module) -> None:
     """
-    Create a SageMaker endpoint and, when requested, wait for it to become InService.
+    Create a SageMaker endpoint.
 
     Args:
         client: The boto3 SageMaker client.
@@ -525,8 +527,6 @@ def create_endpoint(client, module) -> None:
     if module.params.get("tags") is not None:
         params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
     client.create_endpoint(**params)
-    if module.params["wait"]:
-        wait_for_endpoint(client, module)
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -542,22 +542,18 @@ def update_endpoint(client, module) -> None:
         EndpointName=module.params["endpoint_name"],
         EndpointConfigName=module.params["endpoint_config_name"],
     )
-    if module.params["wait"]:
-        wait_for_endpoint(client, module)
 
 
 @AWSRetry.jittered_backoff(retries=10)
 def delete_endpoint(client, module) -> None:
     """
-    Delete a SageMaker endpoint and, when requested, wait for it to be removed.
+    Delete a SageMaker endpoint.
 
     Args:
         client: The boto3 SageMaker client.
         module: The Ansible module instance.
     """
     client.delete_endpoint(EndpointName=module.params["endpoint_name"])
-    if module.params["wait"]:
-        wait_for_endpoint(client, module, deleted=True)
 
 
 def reconcile_endpoint_tags(client, module, existing: Dict[str, Any]) -> bool:

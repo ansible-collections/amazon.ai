@@ -123,7 +123,7 @@ endpoint:
 tags:
     description: A dictionary containing the endpoint tags.
     type: dict
-    returned: on success when O(state=present) and tags are managed
+    returned: on success when O(state=present)
     sample: {}
 msg:
     description: Informative message about the action.
@@ -139,6 +139,7 @@ except ImportError:
 
 from typing import Any
 from typing import Dict
+from typing import Optional
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_endpoint
@@ -167,6 +168,68 @@ def _tags_message(name, changed, check_mode) -> str:
     return f"Endpoint {name} tags updated successfully."
 
 
+def _absent(module, client, name: str, existing: Optional[Dict[str, Any]]) -> None:
+    if not existing:
+        module.exit_json(changed=False, msg=f"Endpoint {name} does not exist.")
+    if existing["EndpointStatus"] == "Deleting":
+        if not module.check_mode and module.params["wait"]:
+            wait_for_endpoint(client, module, deleted=True)
+        module.exit_json(changed=False, msg=f"Endpoint {name} is already being deleted.")
+    if module.check_mode:
+        module.exit_json(changed=True, msg=f"Check mode: would have deleted endpoint {name}.")
+    delete_endpoint(client, module)
+    if module.params["wait"]:
+        wait_for_endpoint(client, module, deleted=True)
+    module.exit_json(changed=True, msg=f"Endpoint {name} deleted successfully.")
+
+
+def _present(module, client, name: str, existing: Optional[Dict[str, Any]]) -> None:
+    if existing:
+        status = existing["EndpointStatus"]
+        if status in ("Creating", "Updating", "SystemUpdating", "Deleting", "RollingBack"):
+            module.fail_json(msg=f"Cannot update endpoint {name} while it is in state {status}.")
+
+        if existing["EndpointConfigName"] != module.params["endpoint_config_name"]:
+            if module.check_mode:
+                module.exit_json(changed=True, msg=f"Check mode: would have updated endpoint {name}.")
+            update_endpoint(client, module)
+            if module.params["wait"]:
+                wait_for_endpoint(client, module)
+            reconcile_endpoint_tags(client, module, existing)
+            endpoint = _endpoint_result(client, name)
+            exit_kwargs = dict(
+                changed=True,
+                endpoint=endpoint,
+                tags=list_tags(client, endpoint["endpoint_arn"]),
+                msg=f"Endpoint {name} updated successfully.",
+            )
+            module.exit_json(**exit_kwargs)
+
+        changed = reconcile_endpoint_tags(client, module, existing)
+        endpoint = _endpoint_result(client, name)
+        exit_kwargs = dict(
+            changed=changed,
+            endpoint=endpoint,
+            tags=list_tags(client, endpoint["endpoint_arn"]),
+            msg=_tags_message(name, changed, module.check_mode),
+        )
+        module.exit_json(**exit_kwargs)
+
+    if module.check_mode:
+        module.exit_json(changed=True, msg=f"Check mode: would have created endpoint {name}.")
+    create_endpoint(client, module)
+    if module.params["wait"]:
+        wait_for_endpoint(client, module)
+    endpoint = _endpoint_result(client, name)
+    exit_kwargs = dict(
+        changed=True,
+        endpoint=endpoint,
+        tags=list_tags(client, endpoint["endpoint_arn"]),
+        msg=f"Endpoint {name} created successfully.",
+    )
+    module.exit_json(**exit_kwargs)
+
+
 def main() -> None:
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "absent"]),
@@ -191,60 +254,8 @@ def main() -> None:
 
         existing = describe_endpoint(client, name)
         if module.params["state"] == "absent":
-            if not existing:
-                module.exit_json(changed=False, msg=f"Endpoint {name} does not exist.")
-            if existing["EndpointStatus"] == "Deleting":
-                if not module.check_mode and module.params["wait"]:
-                    wait_for_endpoint(client, module, deleted=True)
-                module.exit_json(changed=False, msg=f"Endpoint {name} is already being deleted.")
-            if module.check_mode:
-                module.exit_json(changed=True, msg=f"Check mode: would have deleted endpoint {name}.")
-            delete_endpoint(client, module)
-            module.exit_json(changed=True, msg=f"Endpoint {name} deleted successfully.")
-
-        if existing:
-            status = existing["EndpointStatus"]
-            if status in ("Deleting", "RollingBack"):
-                module.fail_json(msg=f"Cannot update endpoint {name} while it is in state {status}.")
-
-            if existing["EndpointConfigName"] != module.params["endpoint_config_name"]:
-                if module.check_mode:
-                    module.exit_json(changed=True, msg=f"Check mode: would have updated endpoint {name}.")
-                update_endpoint(client, module)
-                reconcile_endpoint_tags(client, module, existing)
-                endpoint = _endpoint_result(client, name)
-                exit_kwargs = dict(
-                    changed=True,
-                    endpoint=endpoint,
-                    msg=f"Endpoint {name} updated successfully.",
-                )
-                if module.params.get("tags") is not None:
-                    exit_kwargs["tags"] = list_tags(client, endpoint["endpoint_arn"])
-                module.exit_json(**exit_kwargs)
-
-            changed = reconcile_endpoint_tags(client, module, existing)
-            endpoint = _endpoint_result(client, name)
-            exit_kwargs = dict(
-                changed=changed,
-                endpoint=endpoint,
-                msg=_tags_message(name, changed, module.check_mode),
-            )
-            if module.params.get("tags") is not None:
-                exit_kwargs["tags"] = list_tags(client, endpoint["endpoint_arn"])
-            module.exit_json(**exit_kwargs)
-
-        if module.check_mode:
-            module.exit_json(changed=True, msg=f"Check mode: would have created endpoint {name}.")
-        create_endpoint(client, module)
-        endpoint = _endpoint_result(client, name)
-        exit_kwargs = dict(
-            changed=True,
-            endpoint=endpoint,
-            msg=f"Endpoint {name} created successfully.",
-        )
-        if module.params.get("tags") is not None:
-            exit_kwargs["tags"] = list_tags(client, endpoint["endpoint_arn"])
-        module.exit_json(**exit_kwargs)
+            _absent(module, client, name, existing)
+        _present(module, client, name, existing)
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
