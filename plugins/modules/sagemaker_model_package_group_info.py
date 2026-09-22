@@ -53,9 +53,10 @@ options:
             - Ignored when O(model_package_group_name) is provided.
         type: str
         choices: ['Ascending', 'Descending']
-    max_results:
+    max_items:
         description:
             - The maximum number of model package groups to return.
+            - When O(tags) is set, this limit is applied before tag filtering, so fewer matching groups may be returned.
             - Ignored when O(model_package_group_name) is provided.
         type: int
 notes:
@@ -183,21 +184,21 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         params["SortBy"] = module.params["sort_by"]
     if module.params.get("sort_order"):
         params["SortOrder"] = module.params["sort_order"]
-    if module.params.get("max_results"):
-        params["MaxResults"] = module.params["max_results"]
-
-    summaries: List[Dict[str, Any]] = list_model_package_groups(client, **params)
-    groups: List[Dict[str, Any]] = list()
-    for summary in summaries:
-        group = describe_model_package_group(client, summary["ModelPackageGroupName"])
-        if group is None:
-            continue
-        tags: Dict[str, str] = list_tags(client, group["ModelPackageGroupArn"])
-        groups.append(_normalize_model_package_group(group, tags))
-
+    summaries: List[Dict[str, Any]] = list_model_package_groups(
+        client,
+        max_items=module.params.get("max_items"),
+        **params,
+    )
+    groups: List[Dict[str, Any]] = []
     desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
-    if desired_tags:
-        groups = [group for group in groups if desired_tags.items() <= group["tags"].items()]
+
+    for summary in summaries:
+        tags: Dict[str, str] = list_tags(client, summary["ModelPackageGroupArn"])
+
+        if desired_tags and desired_tags.items() > tags.items():
+            continue
+
+        groups.append(_normalize_model_package_group(summary, tags))
 
     return groups
 
@@ -211,7 +212,7 @@ def main() -> None:
         creation_time_before=dict(type="str"),
         sort_by=dict(type="str", choices=["Name", "CreationTime"]),
         sort_order=dict(type="str", choices=["Ascending", "Descending"]),
-        max_results=dict(type="int"),
+        max_items=dict(type="int"),
     )
 
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)

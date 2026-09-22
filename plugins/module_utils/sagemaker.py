@@ -7,6 +7,13 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
+try:
+    from botocore.exceptions import WaiterError
+    from botocore.waiter import WaiterModel
+    from botocore.waiter import create_waiter_with_client
+except ImportError:
+    pass
+
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
@@ -180,21 +187,22 @@ def describe_model_package_group(client, model_package_group_name: str) -> Optio
     """Retrieve details for a specific SageMaker model package group."""
     try:
         return client.describe_model_package_group(ModelPackageGroupName=model_package_group_name)
-    except (is_boto3_error_message("does not exist"), is_boto3_error_message("not found")):
-        return None
+    except is_boto3_error_code("ValidationException") as e:
+        message = e.response["Error"].get("Message", "")
+        if "does not exist" in message or "not found" in message:
+            return None
+        raise
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def list_model_package_groups(client, **params: Any) -> List[Dict[str, Any]]:
+def list_model_package_groups(client, max_items: Optional[int] = None, **params: Any) -> List[Dict[str, Any]]:
     """Retrieve a list of SageMaker model package groups."""
-    paginate_params: Dict[str, Any] = dict(params)
-    max_results = paginate_params.pop("MaxResults", None)
     paginator = client.get_paginator("list_model_package_groups")
-    if max_results is not None:
-        return paginator.paginate(**paginate_params, PaginationConfig={"MaxItems": max_results}).build_full_result()[
+    if max_items is not None:
+        return paginator.paginate(**params, PaginationConfig={"MaxItems": max_items}).build_full_result()[
             "ModelPackageGroupSummaryList"
         ]
-    return paginator.paginate(**paginate_params).build_full_result()["ModelPackageGroupSummaryList"]
+    return paginator.paginate(**params).build_full_result()["ModelPackageGroupSummaryList"]
 
 
 def _build_model_package_group_params(module) -> Dict[str, Any]:
@@ -203,11 +211,10 @@ def _build_model_package_group_params(module) -> Dict[str, Any]:
     }
     tags: Optional[Dict[str, str]] = module.params.get("tags")
     if tags is not None:
-        params["tags"] = [{"key": key, "value": value} for key, value in tags.items()]
+        params["tags"] = ansible_dict_to_boto3_tag_list(tags)
     return snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def create_model_package_group(client, module) -> Tuple[bool, str]:
     """Create a SageMaker model package group."""
     name = module.params["model_package_group_name"]
@@ -226,7 +233,54 @@ def model_package_group_needs_update(existing: Dict[str, Any], module) -> bool:
     return False
 
 
-@AWSRetry.jittered_backoff(retries=10)
+def wait_for_model_package_group_deletion(
+    client, module, model_package_group_name: str, wait_timeout: int = 600
+) -> None:
+    """Wait until a SageMaker model package group is actually gone.
+
+    SageMaker does not provide a native waiter for this API, so we define a small custom waiter
+    that treats a ValidationException from DescribeModelPackageGroup as the success condition for
+    the resource being absent.
+    """
+    if not module.params.get("wait", True):
+        return
+
+    delay = 15
+    max_attempts = max(1, wait_timeout // delay)
+    waiter_model = WaiterModel(
+        {
+            "version": 2,
+            "waiters": {
+                "ModelPackageGroupDeleted": {
+                    "delay": delay,
+                    "maxAttempts": max_attempts,
+                    "operation": "DescribeModelPackageGroup",
+                    "acceptors": [
+                        {
+                            "matcher": "error",
+                            "expected": "ValidationException",
+                            "state": "success",
+                        }
+                    ],
+                }
+            },
+        }
+    )
+    waiter = create_waiter_with_client("ModelPackageGroupDeleted", waiter_model, client)
+    try:
+        waiter.wait(
+            ModelPackageGroupName=model_package_group_name,
+            WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
+        )
+    except WaiterError:
+        module.fail_json(
+            msg=(
+                f"Timeout waiting for model package group {model_package_group_name} to be deleted. "
+                "The resource still exists after the configured wait timeout."
+            )
+        )
+
+
 def delete_model_package_group(client, module) -> Tuple[bool, str]:
     """Delete a SageMaker model package group."""
     name = module.params["model_package_group_name"]
@@ -234,18 +288,18 @@ def delete_model_package_group(client, module) -> Tuple[bool, str]:
         return True, f"Check mode: would have deleted model package group {name}."
 
     client.delete_model_package_group(ModelPackageGroupName=name)
+    wait_timeout: int = module.params.get("wait_timeout", 600)
+    if module.params.get("wait", True):
+        wait_for_model_package_group_deletion(client, module, name, wait_timeout=wait_timeout)
     return True, f"Model package group {name} deleted successfully."
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def update_model_package_group_tags(
     client, module, model_package_group_arn: str, desired_tags: Dict[str, str], purge_tags: bool = True
 ) -> Tuple[bool, str]:
     """Reconcile SageMaker model package group tags in place."""
     current_tags: Dict[str, str] = list_tags(client, model_package_group_arn)
-
-    tags_to_add: Dict[str, str] = {key: value for key, value in desired_tags.items() if current_tags.get(key) != value}
-    tags_to_remove: List[str] = [key for key in current_tags if key not in desired_tags] if purge_tags else []
+    tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, purge_tags)
 
     if not tags_to_add and not tags_to_remove:
         return False, "No updates needed."
@@ -256,7 +310,7 @@ def update_model_package_group_tags(
     if tags_to_add:
         client.add_tags(
             ResourceArn=model_package_group_arn,
-            Tags=[{"Key": key, "Value": value} for key, value in tags_to_add.items()],
+            Tags=ansible_dict_to_boto3_tag_list(tags_to_add),
         )
     if tags_to_remove:
         client.delete_tags(ResourceArn=model_package_group_arn, TagKeys=tags_to_remove)

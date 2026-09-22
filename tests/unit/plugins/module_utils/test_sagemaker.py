@@ -12,8 +12,8 @@ from unittest.mock import patch
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
@@ -324,8 +324,8 @@ class TestListModelPackageGroups:
         paginator.paginate.assert_called_once_with(NameContains="demo")
         assert result == [{"ModelPackageGroupName": "group-a"}, {"ModelPackageGroupName": "group-b"}]
 
-    def test_list_model_package_groups_max_results_uses_pagination_config(self):
-        """MaxResults should be translated into PaginationConfig={'MaxItems': ...}."""
+    def test_list_model_package_groups_max_items_uses_pagination_config(self):
+        """max_items should be translated into PaginationConfig={'MaxItems': ...}."""
         client = MagicMock()
         paginator = MagicMock()
         client.get_paginator.return_value = paginator
@@ -333,7 +333,7 @@ class TestListModelPackageGroups:
             "ModelPackageGroupSummaryList": [{"ModelPackageGroupName": "group-a"}],
         }
 
-        result = list_model_package_groups(client, NameContains="demo", MaxResults=5)
+        result = list_model_package_groups(client, NameContains="demo", max_items=5)
 
         paginator.paginate.assert_called_once_with(NameContains="demo", PaginationConfig={"MaxItems": 5})
         assert result == [{"ModelPackageGroupName": "group-a"}]
@@ -381,7 +381,10 @@ class TestModelPackageGroupNeedsUpdate:
 class TestUpdateModelPackageGroupTags:
     """Test cases for update_model_package_group_tags function."""
 
-    @patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags", return_value={"keep": "value", "remove": "old"})
+    @patch(
+        "ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags",
+        return_value={"keep": "value", "remove": "old"},
+    )
     def test_purge_tags_false_keeps_unmentioned_keys(self, mock_list_tags):
         """When purge_tags is false, extra tags should stay untouched."""
         client = MagicMock()
@@ -389,17 +392,27 @@ class TestUpdateModelPackageGroupTags:
         module.check_mode = False
 
         result = update_model_package_group_tags(
-            client, module, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", {"keep": "new"}, purge_tags=False
+            client,
+            module,
+            "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo",
+            {"keep": "new"},
+            purge_tags=False,
         )
 
         client.add_tags.assert_called_once_with(
-            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", Tags=[{"Key": "keep", "Value": "new"}]
+            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo",
+            Tags=[{"Key": "keep", "Value": "new"}],
         )
         client.delete_tags.assert_not_called()
         assert result == (True, "Model package group tags updated successfully.")
-        mock_list_tags.assert_called_once_with(client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo")
+        mock_list_tags.assert_called_once_with(
+            client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo"
+        )
 
-    @patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags", return_value={"keep": "old", "remove": "old"})
+    @patch(
+        "ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags",
+        return_value={"keep": "old", "remove": "old"},
+    )
     def test_purge_tags_true_removes_unmentioned_keys(self, mock_list_tags):
         """When purge_tags is true, tags omitted from the desired set should be removed."""
         client = MagicMock()
@@ -407,15 +420,24 @@ class TestUpdateModelPackageGroupTags:
         module.check_mode = False
 
         result = update_model_package_group_tags(
-            client, module, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", {"keep": "new"}, purge_tags=True
+            client,
+            module,
+            "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo",
+            {"keep": "new"},
+            purge_tags=True,
         )
 
         client.add_tags.assert_called_once_with(
-            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", Tags=[{"Key": "keep", "Value": "new"}]
+            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo",
+            Tags=[{"Key": "keep", "Value": "new"}],
         )
-        client.delete_tags.assert_called_once_with(ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", TagKeys=["remove"])
+        client.delete_tags.assert_called_once_with(
+            ResourceArn="arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo", TagKeys=["remove"]
+        )
         assert result == (True, "Model package group tags updated successfully.")
-        mock_list_tags.assert_called_once_with(client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo")
+        mock_list_tags.assert_called_once_with(
+            client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo"
+        )
 
 
 class TestModelNeedsReplacement:

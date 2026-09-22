@@ -14,7 +14,8 @@ author:
 description:
     - Create and delete Amazon SageMaker model package groups.
     - Reconcile tags on an existing model package group.
-    - Replace a group when a create-only field changes and force is enabled.
+    - Replace a group when a create-only field changes and O(force=true) is enabled.
+    - "This replacement is destructive: AWS deletes the current group and recreates it, and the group must be empty before deletion succeeds."
 options:
     state:
         description:
@@ -46,8 +47,21 @@ options:
         description:
             - Whether to delete and recreate the model package group when O(model_package_group_description)
               differs from the existing resource.
+            - This is destructive and permanently removes the existing group before creating a new one.
+            - AWS requires the group to be empty before deletion succeeds; if model versions are still attached,
+              the delete fails and the replacement is not performed.
         type: bool
         default: false
+    wait:
+        description:
+            - Whether to wait for the delete operation to complete before returning.
+        type: bool
+        default: true
+    wait_timeout:
+        description:
+            - The number of seconds to wait for a delete to complete when O(wait=true).
+        type: int
+        default: 600
 notes:
     - 'Requires the following IAM permissions:'
     - sagemaker:CreateModelPackageGroup
@@ -132,6 +146,12 @@ model_package_group:
             type: dict
             sample:
                 project: demo
+tags:
+    description: A dictionary of tags assigned to the model package group.
+    type: dict
+    returned: when O(state=present)
+    sample:
+        project: demo
 msg:
     description: Informative message about the action.
     type: str
@@ -169,64 +189,62 @@ def _normalize_model_package_group(group: Dict[str, Any], tags: Dict[str, str]) 
     return normalized
 
 
+def _model_package_group_result(group: Optional[Dict[str, Any]], msg: str, client) -> Dict[str, Any]:
+    result: Dict[str, Any] = {"msg": msg, "model_package_group": {}, "tags": {}}
+    if group is not None:
+        tags: Dict[str, str] = list_tags(client, group["ModelPackageGroupArn"])
+        result["model_package_group"] = _normalize_model_package_group(group, tags)
+        result["tags"] = tags
+    return result
+
+
+def _created_model_package_group_result(client, module) -> Tuple[bool, Dict[str, Any]]:
+    changed, msg = create_model_package_group(client, module)
+    if module.check_mode:
+        return changed, _model_package_group_result(None, msg, client)
+
+    group = describe_model_package_group(client, module.params["model_package_group_name"])
+    return changed, _model_package_group_result(group, msg, client)
+
+
 def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
-    result: Dict[str, Any] = dict(msg="", model_package_group={}, tags={})
     if existing is None:
-        changed, result["msg"] = create_model_package_group(client, module)
-        if not module.check_mode:
-            existing = describe_model_package_group(client, module.params["model_package_group_name"])
-            if existing is not None:
-                result["model_package_group"] = _normalize_model_package_group(
-                    existing, list_tags(client, existing["ModelPackageGroupArn"])
-                )
-                result["tags"] = list_tags(client, existing["ModelPackageGroupArn"])
-        return changed, result
+        return _created_model_package_group_result(client, module)
 
     if model_package_group_needs_update(existing, module):
         if not module.params["force"]:
-            module.fail_json(
-                msg=(
-                    "SageMaker model package group requires replacement when model_package_group_description "
-                    "changes. Set force=true to delete and recreate the model package group."
-                )
+            module.warn(
+                "Model package group description drift detected. force=true is required to replace the resource; "
+                "continuing without replacement."
             )
+        else:
+            if module.check_mode:
+                return True, {"msg": "Model package group would be replaced because its description differs."}
 
-        _deleted, delete_msg = delete_model_package_group(client, module)
-        changed, create_msg = create_model_package_group(client, module)
-        result["msg"] = f"{delete_msg} {create_msg}"
-        if not module.check_mode:
-            existing = describe_model_package_group(client, module.params["model_package_group_name"])
-            if existing is not None:
-                result["model_package_group"] = _normalize_model_package_group(
-                    existing, list_tags(client, existing["ModelPackageGroupArn"])
-                )
-                result["tags"] = list_tags(client, existing["ModelPackageGroupArn"])
-        return changed, result
+            _deleted, delete_msg = delete_model_package_group(client, module)
+            changed, result = _created_model_package_group_result(client, module)
+            result["msg"] = f"{delete_msg} {result['msg']}"
+            return changed, result
 
     changed = False
+    msg = "No updates needed."
     if module.params.get("tags") is not None:
-        changed, result["msg"] = update_model_package_group_tags(
+        changed, msg = update_model_package_group_tags(
             client,
             module,
             existing["ModelPackageGroupArn"],
             module.params.get("tags"),
             purge_tags=module.params["purge_tags"],
         )
-    result["model_package_group"] = _normalize_model_package_group(
-        existing, list_tags(client, existing["ModelPackageGroupArn"])
-    )
-    result["tags"] = list_tags(client, existing["ModelPackageGroupArn"])
-    if not result["msg"]:
-        result["msg"] = "No updates needed."
-    return changed, result
+    return changed, _model_package_group_result(existing, msg, client)
 
 
 def _ensure_absent(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
     if existing is None:
-        return False, dict(msg="Model package group does not exist.")
+        return False, {"msg": "Model package group does not exist."}
 
     changed, msg = delete_model_package_group(client, module)
-    return changed, dict(msg=msg)
+    return changed, {"msg": msg}
 
 
 def main() -> None:
@@ -237,6 +255,8 @@ def main() -> None:
         tags=dict(type="dict", aliases=["resource_tags"]),
         purge_tags=dict(type="bool", default=True),
         force=dict(type="bool", default=False),
+        wait=dict(type="bool", default=True),
+        wait_timeout=dict(type="int", default=600),
     )
 
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)

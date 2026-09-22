@@ -160,21 +160,20 @@
           - tags_update_purge.tags.owner == 'platform'
 
     # -------------------------------------------------------
-    # FORCE path — description drift fails without force
+    # FORCE path — description drift warns without force
     # -------------------------------------------------------
-    - name: Attempt description drift without force
+    - name: Detect description drift without force
       amazon.ai.sagemaker_model_package_group:
         state: present
         model_package_group_name: "{{ model_package_group_name }}"
         model_package_group_description: "{{ model_package_group_description_updated }}"
       register: force_fail
-      ignore_errors: true
 
-    - name: Assert force is required for create-only drift
+    - name: Assert description drift does not replace without force
       ansible.builtin.assert:
         that:
-          - force_fail is failed
-          - "'force' in force_fail.msg"
+          - not force_fail.changed
+          - force_fail.model_package_group.model_package_group_description == model_package_group_description
 
     # -------------------------------------------------------
     # FORCE path — replacement with force=true
