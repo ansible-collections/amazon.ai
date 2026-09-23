@@ -195,7 +195,7 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
     for summary in summaries:
         tags: Dict[str, str] = list_tags(client, summary["ModelPackageGroupArn"])
 
-        if desired_tags and desired_tags.items() > tags.items():
+        if desired_tags and not desired_tags.items() <= tags.items():
             continue
 
         groups.append(_normalize_model_package_group(summary, tags))

@@ -20,6 +20,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_n
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
 from botocore.exceptions import ClientError
 
 
@@ -438,6 +439,30 @@ class TestUpdateModelPackageGroupTags:
         mock_list_tags.assert_called_once_with(
             client, "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo"
         )
+
+
+class TestFindModelPackageGroups:
+    """Test model package group info tag filtering."""
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_model_package_groups")
+    def test_tag_filter_excludes_mismatched_values(self, mock_list_model_package_groups, mock_list_tags):
+        """A desired tag value must match the group's actual tag value."""
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {
+            "model_package_group_name": None,
+            "tags": {"project": "demo"},
+        }
+        mock_list_model_package_groups.return_value = [
+            {
+                "ModelPackageGroupName": "group-a",
+                "ModelPackageGroupArn": "arn:a",
+            }
+        ]
+        mock_list_tags.return_value = {"project": "other"}
+
+        assert find_model_package_groups(client, module) == []
 
 
 class TestModelNeedsReplacement:
