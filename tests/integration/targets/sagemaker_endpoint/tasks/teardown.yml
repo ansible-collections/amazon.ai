@@ -1,0 +1,38 @@
+---
+- name: Cleanup endpoint
+  amazon.ai.sagemaker_endpoint:
+    state: absent
+    endpoint_name: "{{ endpoint_name }}"
+  ignore_errors: true
+
+- name: Cleanup first endpoint configuration
+  amazon.ai.sagemaker_endpoint_config:
+    state: absent
+    endpoint_config_name: "{{ endpoint_config_name }}"
+  ignore_errors: true
+
+- name: Cleanup second endpoint configuration
+  amazon.ai.sagemaker_endpoint_config:
+    state: absent
+    endpoint_config_name: "{{ endpoint_config_name_updated }}"
+  ignore_errors: true
+
+- name: Cleanup SageMaker model
+  amazon.ai.sagemaker_model:
+    state: absent
+    model_name: "{{ model_name }}"
+  ignore_errors: true
+
+- name: Cleanup S3 bucket
+  amazon.aws.s3_bucket:
+    name: "{{ model_bucket_name }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+- name: Cleanup IAM role
+  amazon.aws.iam_role:
+    name: "{{ model_role_name }}"
+    state: absent
+    delete_instance_profile: true
+  ignore_errors: true

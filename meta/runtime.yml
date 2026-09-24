@@ -24,3 +24,5 @@ action_groups:
     - sagemaker_model_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
+    - sagemaker_endpoint
+    - sagemaker_endpoint_info
