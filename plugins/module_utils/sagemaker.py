@@ -9,10 +9,10 @@ from typing import Tuple
 
 try:
     from botocore.exceptions import WaiterError
-    from botocore.waiter import WaiterModel
-    from botocore.waiter import create_waiter_with_client
 except ImportError:
     pass
+
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
@@ -22,11 +22,6 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import ansible_dict_to_boto3_tag_list
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
-
-try:
-    from botocore.exceptions import WaiterError
-except ImportError:
-    pass
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -231,54 +226,6 @@ def model_package_group_needs_update(existing: Dict[str, Any], module) -> bool:
     if desired_description is not None and existing.get("ModelPackageGroupDescription") != desired_description:
         return True
     return False
-
-
-def wait_for_model_package_group_deletion(
-    client, module, model_package_group_name: str, wait_timeout: int = 600
-) -> None:
-    """Wait until a SageMaker model package group is actually gone.
-
-    SageMaker does not provide a native waiter for this API, so we define a small custom waiter
-    that treats a ValidationException from DescribeModelPackageGroup as the success condition for
-    the resource being absent.
-    """
-    if not module.params.get("wait", True):
-        return
-
-    delay = 15
-    max_attempts = max(1, wait_timeout // delay)
-    waiter_model = WaiterModel(
-        {
-            "version": 2,
-            "waiters": {
-                "ModelPackageGroupDeleted": {
-                    "delay": delay,
-                    "maxAttempts": max_attempts,
-                    "operation": "DescribeModelPackageGroup",
-                    "acceptors": [
-                        {
-                            "matcher": "error",
-                            "expected": "ValidationException",
-                            "state": "success",
-                        }
-                    ],
-                }
-            },
-        }
-    )
-    waiter = create_waiter_with_client("ModelPackageGroupDeleted", waiter_model, client)
-    try:
-        waiter.wait(
-            ModelPackageGroupName=model_package_group_name,
-            WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
-        )
-    except WaiterError:
-        module.fail_json(
-            msg=(
-                f"Timeout waiting for model package group {model_package_group_name} to be deleted. "
-                "The resource still exists after the configured wait timeout."
-            )
-        )
 
 
 def delete_model_package_group(client, module) -> Tuple[bool, str]:
