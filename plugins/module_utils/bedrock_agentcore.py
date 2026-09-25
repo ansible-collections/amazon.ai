@@ -28,6 +28,16 @@ class AgentRuntimeStatus(str, Enum):
     READY = "READY"
 
 
+class AgentRuntimeEndpointStatus(str, Enum):
+    CREATING = "CREATING"
+    CREATE_FAILED = "CREATE_FAILED"
+    UPDATING = "UPDATING"
+    UPDATE_FAILED = "UPDATE_FAILED"
+    READY = "READY"
+    DELETING = "DELETING"
+    DELETED = "DELETED"
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def list_agent_runtimes(client) -> List[Dict[str, Any]]:
     """
@@ -82,6 +92,22 @@ def get_agent_runtime_by_name(client, agent_runtime_name: str) -> Optional[Dict[
     return existing_runtime
 
 
+def modify_runtime_response(response: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Modify the response from Boto3's get_agent_runtime to exclude deprecated fields.
+    If these fields are left in and sent back they may cause errors.
+
+    Args:
+        response: The original response dictionary from get_agent_runtime.
+
+    Returns:
+        The modified response dictionary with deprecated fields removed.
+    """
+    if "networkConfiguration" in response and "networkModeConfig" in response["networkConfiguration"]:
+        response["networkConfiguration"]["networkModeConfig"].pop("requireServiceS3Endpoint", None)
+    return response
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def get_agent_runtime_by_id(client, agent_runtime_id: str) -> Optional[Dict[str, Any]]:
     """
@@ -99,7 +125,51 @@ def get_agent_runtime_by_id(client, agent_runtime_id: str) -> Optional[Dict[str,
     except is_boto3_error_code("ResourceNotFoundException"):
         return None
     ignore_list = ("tags", "environmentVariables", "environment_variables")
-    return camel_dict_to_snake_dict(response, ignore_list=ignore_list)
+    return camel_dict_to_snake_dict(modify_runtime_response(response), ignore_list=ignore_list)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_agent_runtime_endpoints(client, agent_runtime_id: str) -> List[Dict[str, Any]]:
+    """
+    Retrieve all endpoints for an AgentCore runtime using the AWS paginator.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_runtime_id: The ID of the AgentCore runtime.
+
+    Returns:
+        A list of agent runtime endpoint dictionaries.
+    """
+    paginator = client.get_paginator("list_agent_runtime_endpoints")
+    response = paginator.paginate(agentRuntimeId=agent_runtime_id).build_full_result()
+    return [camel_dict_to_snake_dict(endpoint) for endpoint in response.get("runtimeEndpoints", [])]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def get_agent_runtime_endpoint(
+    client,
+    agent_runtime_id: str,
+    endpoint_name: str,
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve detailed information for an AgentCore runtime endpoint.
+
+    Args:
+        client: The boto3 Bedrock Agent client.
+        agent_runtime_id: The ID of the AgentCore runtime.
+        endpoint_name: The name of the endpoint.
+
+    Returns:
+        The detailed dictionary of the AgentCore runtime endpoint if found, else None.
+    """
+    try:
+        response = client.get_agent_runtime_endpoint(
+            agentRuntimeId=agent_runtime_id,
+            endpointName=endpoint_name,
+        )
+    except is_boto3_error_code("ResourceNotFoundException"):
+        return None
+    return camel_dict_to_snake_dict(response)
 
 
 def _runtime_artifact(module: AnsibleAWSModule, existing_runtime: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -399,3 +469,207 @@ def delete_agent_runtime(module: AnsibleAWSModule, client, existing_runtime: Dic
     if module.params.get("wait", True):
         wait_for_agent_runtime_status(client, module, existing_runtime["agent_runtime_id"], AgentRuntimeStatus.DELETED)
     return True, f"Agent runtime {name} deleted successfully."
+
+
+def wait_for_agent_runtime_endpoint_status(
+    client,
+    module: AnsibleAWSModule,
+    agent_runtime_id: str,
+    endpoint_name: str,
+    status: str,
+    sleep_time: int = 5,
+) -> None:
+    """
+    Wait for an Amazon Bedrock Agent Runtime Endpoint to reach a specific status.
+
+    This function polls the Bedrock Agent Runtime Endpoint at fixed intervals until it either
+    reaches the desired `status` or the configured timeout expires.
+
+    Behavior:
+        - Uses `client.get_agent_runtime_endpoint()` to retrieve the agent runtime endpoint's current status.
+        - Waits `sleep_time` seconds between each polling attempt.
+        - Stops early if the agent runtime reaches the desired status or is deleted
+          while waiting for the "DELETED" state.
+        - Fails the Ansible module gracefully if the timeout expires.
+
+    Args:
+        client: A boto3 Bedrock Agent client instance.
+        module: The current Ansible module object, used for error reporting
+                and accessing parameters (specifically `wait_timeout`).
+        agent_runtime_id (str): The unique identifier of the Bedrock Agent runtime that owns the endpoint to monitor.
+        endpoint_name (str): The name of the agent runtime endpoint to monitor.
+        status (str): The target agent status to wait for
+                      (e.g., "PREPARED", "DELETED").
+        sleep_time (int, optional): Number of seconds to sleep between polling
+                                    attempts. Defaults to 5 seconds.
+
+    Raises:
+        ClientError: If AWS returns an unexpected error during polling.
+        TimeoutError: If the agent runtime endpoint does not reach the target status before
+                      the timeout expires.
+    """
+    wait_timeout = module.params.get("wait_timeout", 600)
+    max_attempts = max(1, wait_timeout // sleep_time)
+    current_status = None
+
+    for attempt in range(max_attempts):
+        endpoint = get_agent_runtime_endpoint(client, agent_runtime_id, endpoint_name)
+        if endpoint is None:
+            if status == AgentRuntimeEndpointStatus.DELETED:
+                return
+            module.fail_json(
+                msg=f"Agent runtime endpoint {endpoint_name} was not found while waiting for status '{status}'."
+            )
+
+        current_status = endpoint.get("status")
+        if current_status == status:
+            return
+        if current_status in {AgentRuntimeEndpointStatus.CREATE_FAILED, AgentRuntimeEndpointStatus.UPDATE_FAILED}:
+            module.fail_json(
+                msg=f"Agent runtime endpoint {endpoint_name} failed with status '{current_status}': "
+                f"{endpoint.get('failure_reason', 'Unknown failure reason')}."
+            )
+        if attempt < max_attempts - 1:
+            time.sleep(sleep_time)
+
+    module.fail_json(
+        msg=f"Timeout waiting for agent runtime endpoint {endpoint_name} to reach status '{status}'. "
+        f"Last known status: '{current_status}'."
+    )
+
+
+def _runtime_endpoint_case_sensitive_parameters(module: AnsibleAWSModule, params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Adjusts parameters for an AgentCore runtime endpoint to account for case sensitivity content.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        params: The parameters dictionary for the AgentCore runtime endpoint.
+    Returns:
+        An updated params dictionary with added case-sensitive parameters.
+    """
+    if module.params.get("tags"):
+        params["tags"] = module.params.get("tags")
+    return params
+
+
+def create_agent_runtime_endpoint(
+    module: AnsibleAWSModule,
+    client,
+    agent_runtime_id: str,
+) -> Tuple[bool, Optional[str], str]:
+    """
+    Creates a new agent runtime endpoint if not in check_mode, otherwise simulates creation.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: boto3 bedrock-agent client.
+        agent_runtime_id: The ID of the agent runtime for which to create the endpoint.
+
+    Returns:
+        (changed, endpoint_name, message)
+    """
+    endpoint_name = module.params["endpoint_name"]
+    if module.check_mode:
+        return True, None, f"Check mode: would have created agent runtime endpoint {endpoint_name}."
+
+    params: Dict[str, Any] = dict(
+        agent_runtime_id=agent_runtime_id,
+        name=endpoint_name,
+        agent_runtime_version=module.params.get("agent_runtime_version"),
+        description=module.params.get("description"),
+    )
+    params = snake_dict_to_camel_dict(scrub_none_parameters(params))
+    params = _runtime_endpoint_case_sensitive_parameters(module, params)
+    response = client.create_agent_runtime_endpoint(**params)
+
+    endpoint_name_resp: str = response.get("name", endpoint_name)
+    # User has an option to wait for the endpoint to be ready, default is True
+    if module.params.get("wait", True):
+        wait_for_agent_runtime_endpoint_status(
+            client, module, agent_runtime_id, endpoint_name_resp, AgentRuntimeEndpointStatus.READY
+        )
+    return True, endpoint_name_resp, f"Agent runtime endpoint {endpoint_name} created successfully."
+
+
+def update_agent_runtime_endpoint(
+    module: AnsibleAWSModule,
+    client,
+    agent_runtime_id: str,
+    existing_endpoint: Dict[str, Any],
+) -> Tuple[bool, Optional[str], str]:
+    """
+    Updates an existing agent runtime endpoint if not in check_mode, otherwise simulates the update.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: boto3 bedrock-agent client.
+        agent_runtime_id: The ID of the agent runtime for which to update the endpoint.
+        existing_endpoint: The current state of the agent runtime endpoint.
+
+    Returns:
+        (changed, endpoint_name, message)
+    """
+    endpoint_name: str = existing_endpoint["name"]
+    if module.check_mode:
+        return True, endpoint_name, f"Check mode: would have updated agent runtime endpoint {endpoint_name}."
+
+    desired: Dict[str, Any] = dict(
+        agent_runtime_version=module.params.get("agent_runtime_version"),
+        description=module.params.get("description"),
+    )
+    current: Dict[str, Any] = dict(
+        agent_runtime_version=existing_endpoint.get("target_version", existing_endpoint.get("live_version")),
+        description=existing_endpoint.get("description"),
+    )
+    if not any(value is not None and value != current[key] for key, value in desired.items()):
+        return False, endpoint_name, "No updates needed."
+
+    params: Dict[str, Any] = dict(
+        agent_runtime_id=agent_runtime_id,
+        endpoint_name=endpoint_name,
+        **desired,
+    )
+    response = client.update_agent_runtime_endpoint(**snake_dict_to_camel_dict(scrub_none_parameters(params)))
+    updated_name: str = response.get("name", endpoint_name)
+    # User has an option to wait for the endpoint to be ready, default is True
+    if module.params.get("wait", True):
+        wait_for_agent_runtime_endpoint_status(
+            client, module, agent_runtime_id, updated_name, AgentRuntimeEndpointStatus.READY
+        )
+    return True, updated_name, f"Agent runtime endpoint {endpoint_name} updated successfully."
+
+
+def delete_agent_runtime_endpoint(
+    module: AnsibleAWSModule,
+    client,
+    agent_runtime_id: str,
+    existing_endpoint: Dict[str, Any],
+) -> Tuple[bool, str]:
+    """
+    Deletes an existing agent runtime endpoint if not in check_mode, otherwise simulates the deletion.
+
+    Args:
+        module: The AnsibleAWSModule instance.
+        client: boto3 bedrock-agent client.
+        agent_runtime_id: The ID of the agent runtime for which to delete the endpoint.
+        existing_endpoint: The current state of the agent runtime endpoint.
+
+    Returns:
+        (changed, message)
+    """
+    endpoint_name: str = existing_endpoint["name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted agent runtime endpoint '{endpoint_name}'."
+
+    client.delete_agent_runtime_endpoint(agentRuntimeId=agent_runtime_id, endpointName=endpoint_name)
+    # User has an option to wait for the endpoint to be deleted, default is True
+    if module.params.get("wait", True):
+        wait_for_agent_runtime_endpoint_status(
+            client,
+            module,
+            agent_runtime_id,
+            endpoint_name,
+            AgentRuntimeEndpointStatus.DELETED,
+        )
+    return True, f"Agent runtime endpoint {endpoint_name} deleted successfully."
