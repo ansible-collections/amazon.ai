@@ -211,7 +211,7 @@
 
     - name: List endpoint configurations with filters and ordering
       amazon.ai.sagemaker_endpoint_config_info:
-        name_contains: "test-sm-endpoint-config-"
+        name_contains: "{{ test_id }}"
         max_results: 2
         sort_by: Name
         sort_order: Ascending

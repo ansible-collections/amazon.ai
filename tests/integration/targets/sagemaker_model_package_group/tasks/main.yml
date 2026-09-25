@@ -1,0 +1,247 @@
+---
+- name: SageMaker Model Package Group integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    # -------------------------------------------------------
+    # CREATE — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker model package group (check_mode)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_initial }}"
+      check_mode: true
+      register: create_check
+
+    - name: Assert create check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - create_check.changed
+          - "'Check mode' in create_check.msg"
+
+    # -------------------------------------------------------
+    # CREATE — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker model package group (first run)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_initial }}"
+      register: create_first
+
+    - name: Assert model package group was created
+      ansible.builtin.assert:
+        that:
+          - create_first.changed
+          - "'created successfully' in create_first.msg"
+          - create_first.model_package_group.model_package_group_name == model_package_group_name
+          - create_first.model_package_group.model_package_group_description == model_package_group_description
+          - create_first.tags.project == 'demo'
+
+    # -------------------------------------------------------
+    # INFO — get specific resource
+    # -------------------------------------------------------
+    - name: Get info about the created model package group
+      amazon.ai.sagemaker_model_package_group_info:
+        model_package_group_name: "{{ model_package_group_name }}"
+      register: group_info
+
+    - name: Assert info module returns the group
+      ansible.builtin.assert:
+        that:
+          - group_info.model_package_groups | length == 1
+          - group_info.model_package_groups[0].model_package_group_name == model_package_group_name
+          - group_info.model_package_groups[0].model_package_group_description == model_package_group_description
+          - group_info.model_package_groups[0].tags.project == 'demo'
+
+    # -------------------------------------------------------
+    # INFO — list all resources with filter
+    # -------------------------------------------------------
+    - name: List model package groups filtered by name
+      amazon.ai.sagemaker_model_package_group_info:
+        name_contains: "{{ test_id }}"
+      register: group_info_filtered
+
+    - name: Assert filtered results contain our group
+      ansible.builtin.assert:
+        that:
+          - group_info_filtered.model_package_groups | length >= 1
+          - model_package_group_name in (group_info_filtered.model_package_groups | map(attribute='model_package_group_name') | list)
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker model package group (second run - idempotency - check_mode)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_initial }}"
+      check_mode: true
+      register: create_second_check
+
+    - name: Assert idempotency in check_mode
+      ansible.builtin.assert:
+        that:
+          - not create_second_check.changed
+          - "'No updates needed' in create_second_check.msg"
+
+    # -------------------------------------------------------
+    # IDEMPOTENCY — actual
+    # -------------------------------------------------------
+    - name: Create SageMaker model package group (second run - idempotency)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_initial }}"
+      register: create_second
+
+    - name: Assert idempotency
+      ansible.builtin.assert:
+        that:
+          - not create_second.changed
+          - "'No updates needed' in create_second.msg"
+
+    # -------------------------------------------------------
+    # TAGS — update with purge_tags=false
+    # -------------------------------------------------------
+    - name: Update model package group tags (purge_tags=false)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_updated }}"
+        purge_tags: false
+      register: tags_update_merge
+
+    - name: Assert tags were merged, not replaced
+      ansible.builtin.assert:
+        that:
+          - tags_update_merge.changed
+          - "'tags updated successfully' in tags_update_merge.msg"
+          - tags_update_merge.tags.project == 'demo'
+          - tags_update_merge.tags.environment == 'prod'
+          - tags_update_merge.tags.owner == 'platform'
+
+    # -------------------------------------------------------
+    # TAGS — update with purge_tags=true
+    # -------------------------------------------------------
+    - name: Update model package group tags (purge_tags=true)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags:
+          project: demo
+          owner: platform
+        purge_tags: true
+      register: tags_update_purge
+
+    - name: Assert tags were purged to the exact set
+      ansible.builtin.assert:
+        that:
+          - tags_update_purge.changed
+          - "'tags updated successfully' in tags_update_purge.msg"
+          - tags_update_purge.tags.keys() | list | length == 2
+          - tags_update_purge.tags.project == 'demo'
+          - tags_update_purge.tags.owner == 'platform'
+
+    # -------------------------------------------------------
+    # FORCE path — description drift warns without force
+    # -------------------------------------------------------
+    - name: Detect description drift without force
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description_updated }}"
+      register: force_fail
+
+    - name: Assert description drift does not replace without force
+      ansible.builtin.assert:
+        that:
+          - not force_fail.changed
+          - force_fail.model_package_group.model_package_group_description == model_package_group_description
+
+    # -------------------------------------------------------
+    # FORCE path — replacement with force=true
+    # -------------------------------------------------------
+    - name: Replace model package group with force=true
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description_updated }}"
+        force: true
+      register: force_replace
+
+    - name: Assert replacement succeeded
+      ansible.builtin.assert:
+        that:
+          - force_replace.changed
+          - "'deleted successfully' in force_replace.msg or 'created successfully' in force_replace.msg"
+          - force_replace.model_package_group.model_package_group_description == model_package_group_description_updated
+
+    # -------------------------------------------------------
+    # DELETE — check_mode
+    # -------------------------------------------------------
+    - name: Delete SageMaker model package group (check_mode)
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ model_package_group_name }}"
+      check_mode: true
+      register: delete_check
+
+    - name: Assert delete check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - delete_check.changed
+          - "'Check mode' in delete_check.msg"
+
+    # -------------------------------------------------------
+    # DELETE — actual
+    # -------------------------------------------------------
+    - name: Delete SageMaker model package group (first run)
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ model_package_group_name }}"
+      register: delete_first
+
+    - name: Assert deletion succeeded
+      ansible.builtin.assert:
+        that:
+          - delete_first.changed
+          - "'deleted successfully' in delete_first.msg"
+
+    # -------------------------------------------------------
+    # DELETE — idempotency
+    # -------------------------------------------------------
+    - name: Delete SageMaker model package group (idempotent rerun)
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ model_package_group_name }}"
+      register: delete_second
+
+    - name: Assert absent rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not delete_second.changed
+          - "'does not exist' in delete_second.msg"
+
+  always:
+    - name: Ensure cleanup of the model package group if it still exists
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ model_package_group_name }}"
+      ignore_errors: true

@@ -3,10 +3,10 @@ requires_ansible: '>=2.17.0'
 action_groups:
   aws:
     - bedrock_agent
-    - bedrock_agent_alias
-    - bedrock_agent_alias_info
     - bedrock_agent_action_group
     - bedrock_agent_action_group_info
+    - bedrock_agent_alias
+    - bedrock_agent_alias_info
     - bedrock_agent_info
     - bedrock_agentcore_runtime
     - bedrock_agentcore_runtime_info
@@ -18,10 +18,14 @@ action_groups:
     - devopsguru_resource_collection_info
     - sagemaker_code_repository
     - sagemaker_code_repository_info
+    - sagemaker_endpoint_config
+    - sagemaker_endpoint_config_info
     - sagemaker_image
     - sagemaker_image_info
     - sagemaker_model
     - sagemaker_model_info
+    - sagemaker_model_package_group
+    - sagemaker_model_package_group_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
     - sagemaker_endpoint
