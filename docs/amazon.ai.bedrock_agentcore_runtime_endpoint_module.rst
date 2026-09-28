@@ -375,6 +375,8 @@ Notes
 -----
 
 .. note::
+   - Verify the required IAM actions against the AWS Service Authorization Reference before relying on them in a policy.
+   - The IAM actions are bedrock-agentcore:CreateAgentRuntimeEndpoint, bedrock-agentcore:GetAgentRuntimeEndpoint, bedrock-agentcore:UpdateAgentRuntimeEndpoint, bedrock-agentcore:DeleteAgentRuntimeEndpoint, and bedrock-agentcore:ListAgentRuntimeEndpoints, plus iam:PassRole when a role is supplied.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 

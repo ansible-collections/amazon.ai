@@ -90,6 +90,10 @@ agent_runtime_endpoints:
             description: The timestamp when the endpoint was last updated.
             type: str
             sample: "2025-10-03T14:33:09.676524+00:00"
+        failure_reason:
+            description: The reason for a failed endpoint operation (when applicable).
+            type: str
+            sample: "Runtime version not found"
 """
 
 try:
@@ -105,8 +109,6 @@ from typing import Optional
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_quick_summary_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import list_agent_runtime_endpoints
-
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
@@ -154,9 +156,7 @@ def main() -> None:
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 
-    module.exit_json(
-        agent_runtime_endpoints=[camel_dict_to_snake_dict(endpoint, ignore_list=["tags"]) for endpoint in result]
-    )
+    module.exit_json(agent_runtime_endpoints=result)
 
 
 if __name__ == "__main__":

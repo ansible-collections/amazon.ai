@@ -62,6 +62,11 @@ options:
         default: 600
 seealso:
     - module: amazon.ai.bedrock_agentcore_runtime_endpoint_info
+notes:
+    - Verify the required IAM actions against the AWS Service Authorization Reference before relying on them in a policy.
+    - The IAM actions are bedrock-agentcore:CreateAgentRuntimeEndpoint, bedrock-agentcore:GetAgentRuntimeEndpoint,
+      bedrock-agentcore:UpdateAgentRuntimeEndpoint, bedrock-agentcore:DeleteAgentRuntimeEndpoint, and
+      bedrock-agentcore:ListAgentRuntimeEndpoints, plus iam:PassRole when a role is supplied.
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
@@ -163,6 +168,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_quick_summary_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime_endpoint
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import wait_for_agent_runtime_endpoint_status
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -180,23 +186,28 @@ def _missing_runtime(state: str, module: AnsibleAWSModule, result: Dict[str, Any
 
 
 def _runtime_endpoint_status_check(
-    existing_runtime_endpoint: Optional[Dict[str, Any]], state: str, module: AnsibleAWSModule
+    client,
+    existing_runtime_endpoint: Optional[Dict[str, Any]],
+    module: AnsibleAWSModule,
+    agent_runtime_id: str,
 ) -> None:
     # Early exit if existing_runtime_endpoint is deleting, creating or updating
     if existing_runtime_endpoint:
-        if existing_runtime_endpoint.get("status") == AgentRuntimeEndpointStatus.DELETING:
-            module.exit_json(
-                changed=False,
-                msg=f"Agent runtime endpoint {existing_runtime_endpoint.get('endpoint_name')} is currently being deleted.",
-            )
-        if state == "present" and existing_runtime_endpoint.get("status") in {
+        if existing_runtime_endpoint.get("status") in {
             AgentRuntimeEndpointStatus.UPDATING,
             AgentRuntimeEndpointStatus.CREATING,
+            AgentRuntimeEndpointStatus.DELETING,
         }:
-            module.exit_json(
-                changed=False,
-                msg=f"Agent runtime endpoint {existing_runtime_endpoint.get('endpoint_name')} is currently in {existing_runtime_endpoint.get('status')}.",
-            )
+            endpoint_name: str = existing_runtime_endpoint["name"]
+            if module.params["wait"]:
+                wait_for_agent_runtime_endpoint_status(
+                    client, module, agent_runtime_id, endpoint_name, AgentRuntimeEndpointStatus.READY
+                )
+            else:
+                module.exit_json(
+                    changed=False,
+                    msg=f"Agent runtime endpoint {endpoint_name} is currently in {existing_runtime_endpoint.get('status')} state.",
+                )
 
 
 def _present(
@@ -264,12 +275,12 @@ def main() -> None:
         if not existing_runtime:
             _missing_runtime(state, module, result, agent_runtime_name)
         else:
-            agent_runtime_id = existing_runtime.get("agent_runtime_id")
+            agent_runtime_id = existing_runtime["agent_runtime_id"]
 
             existing_endpoint: Optional[Dict[str, Any]] = get_agent_runtime_endpoint(
                 client, agent_runtime_id, endpoint_name
             )
-            _runtime_endpoint_status_check(existing_endpoint, state, module)
+            _runtime_endpoint_status_check(client, existing_endpoint, module, agent_runtime_id)
 
             if state == "present":
                 changed, msg, result = _present(module, client, result, existing_endpoint, agent_runtime_id)
