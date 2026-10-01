@@ -190,24 +190,56 @@ def _runtime_endpoint_status_check(
     existing_runtime_endpoint: Optional[Dict[str, Any]],
     module: AnsibleAWSModule,
     agent_runtime_id: str,
-) -> None:
-    # Early exit if existing_runtime_endpoint is deleting, creating or updating
-    if existing_runtime_endpoint:
-        if existing_runtime_endpoint.get("status") in {
-            AgentRuntimeEndpointStatus.UPDATING,
-            AgentRuntimeEndpointStatus.CREATING,
-            AgentRuntimeEndpointStatus.DELETING,
-        }:
-            endpoint_name: str = existing_runtime_endpoint["name"]
-            if module.params["wait"]:
-                wait_for_agent_runtime_endpoint_status(
-                    client, module, agent_runtime_id, endpoint_name, AgentRuntimeEndpointStatus.READY
-                )
-            else:
-                module.exit_json(
-                    changed=False,
-                    msg=f"Agent runtime endpoint {endpoint_name} is currently in {existing_runtime_endpoint.get('status')} state.",
-                )
+) -> Optional[Dict[str, Any]]:
+    """
+    Handle an endpoint that is mid-transition (CREATING/UPDATING/DELETING).
+
+    Returns the refreshed endpoint dict (None if it no longer exists) so callers always
+    act on up-to-date state after any wait, instead of the possibly-stale snapshot that
+    was fetched before this check ran.
+    """
+    if not existing_runtime_endpoint:
+        return existing_runtime_endpoint
+
+    status = existing_runtime_endpoint.get("status")
+    if status not in {
+        AgentRuntimeEndpointStatus.UPDATING,
+        AgentRuntimeEndpointStatus.CREATING,
+        AgentRuntimeEndpointStatus.DELETING,
+    }:
+        return existing_runtime_endpoint
+
+    endpoint_name: str = existing_runtime_endpoint["name"]
+
+    # Check mode can't block on real AWS state transitions; report the transitional
+    # state rather than entering a live wait loop (or, for DELETING, previously failing
+    # outright because the wait target was hardcoded to READY).
+    if module.check_mode:
+        module.exit_json(
+            changed=False,
+            msg=f"Agent runtime endpoint {endpoint_name} is currently in {status} state (check mode).",
+        )
+
+    if not module.params["wait"]:
+        module.exit_json(
+            changed=False,
+            msg=f"Agent runtime endpoint {endpoint_name} is currently in {status} state.",
+        )
+
+    # DELETING can only ever resolve to DELETED (gone). CREATING/UPDATING resolve to READY.
+    # Waiting for READY while DELETING is wrong in both directions: it can never be
+    # satisfied, and once the endpoint disappears the waiter fails with a "not found"
+    # error instead of recognizing the deletion completed successfully.
+    target_status = (
+        AgentRuntimeEndpointStatus.DELETED
+        if status == AgentRuntimeEndpointStatus.DELETING
+        else AgentRuntimeEndpointStatus.READY
+    )
+    wait_for_agent_runtime_endpoint_status(client, module, agent_runtime_id, endpoint_name, target_status)
+
+    # Re-fetch: the endpoint may now be gone (DELETED) or in a new state (READY), and
+    # callers must not act on the pre-wait snapshot.
+    return get_agent_runtime_endpoint(client, agent_runtime_id, endpoint_name)
 
 
 def _present(
@@ -280,7 +312,7 @@ def main() -> None:
             existing_endpoint: Optional[Dict[str, Any]] = get_agent_runtime_endpoint(
                 client, agent_runtime_id, endpoint_name
             )
-            _runtime_endpoint_status_check(client, existing_endpoint, module, agent_runtime_id)
+            existing_endpoint = _runtime_endpoint_status_check(client, existing_endpoint, module, agent_runtime_id)
 
             if state == "present":
                 changed, msg, result = _present(module, client, result, existing_endpoint, agent_runtime_id)
