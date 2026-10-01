@@ -190,6 +190,7 @@ def _runtime_endpoint_status_check(
     existing_runtime_endpoint: Optional[Dict[str, Any]],
     module: AnsibleAWSModule,
     agent_runtime_id: str,
+    state: str,
 ) -> Optional[Dict[str, Any]]:
     """
     Handle an endpoint that is mid-transition (CREATING/UPDATING/DELETING).
@@ -235,10 +236,21 @@ def _runtime_endpoint_status_check(
         if status == AgentRuntimeEndpointStatus.DELETING
         else AgentRuntimeEndpointStatus.READY
     )
-    wait_for_agent_runtime_endpoint_status(client, module, agent_runtime_id, endpoint_name, target_status)
+    # When deleting, we only need the in-flight transition to settle to a terminal state
+    # before issuing the delete. A CREATE_FAILED/UPDATE_FAILED endpoint can still be
+    # deleted, so don't fail the module on those when state=absent.
+    fail_on_failed_status = state != "absent"
+    wait_for_agent_runtime_endpoint_status(
+        client,
+        module,
+        agent_runtime_id,
+        endpoint_name,
+        target_status,
+        fail_on_failed_status=fail_on_failed_status,
+    )
 
-    # Re-fetch: the endpoint may now be gone (DELETED) or in a new state (READY), and
-    # callers must not act on the pre-wait snapshot.
+    # Re-fetch: the endpoint may now be gone (DELETED) or in a new state (READY/failed),
+    # and callers must not act on the pre-wait snapshot.
     return get_agent_runtime_endpoint(client, agent_runtime_id, endpoint_name)
 
 
@@ -312,7 +324,9 @@ def main() -> None:
             existing_endpoint: Optional[Dict[str, Any]] = get_agent_runtime_endpoint(
                 client, agent_runtime_id, endpoint_name
             )
-            existing_endpoint = _runtime_endpoint_status_check(client, existing_endpoint, module, agent_runtime_id)
+            existing_endpoint = _runtime_endpoint_status_check(
+                client, existing_endpoint, module, agent_runtime_id, state
+            )
 
             if state == "present":
                 changed, msg, result = _present(module, client, result, existing_endpoint, agent_runtime_id)
