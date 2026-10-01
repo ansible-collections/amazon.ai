@@ -1,0 +1,3 @@
+bugfixes:
+  - bedrock_agentcore_runtime_endpoint - fix the module waiting for an unreachable ``READY`` status (and failing with a "not found" error on a successful deletion) when a runtime endpoint is in a ``DELETING`` state; the module now waits for ``DELETED`` in that case and refreshes endpoint state after any wait instead of acting on a stale snapshot.
+  - bedrock_agentcore_runtime_endpoint - avoid blocking on live AWS state transitions in check mode when a runtime endpoint is ``CREATING``, ``UPDATING``, or ``DELETING``.
