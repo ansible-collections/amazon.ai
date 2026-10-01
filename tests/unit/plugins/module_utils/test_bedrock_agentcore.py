@@ -10,13 +10,14 @@ from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
-from botocore.exceptions import ClientError
-
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeEndpointStatus
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import _create_agent_runtime_endpoint_api
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import create_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import wait_for_agent_runtime_endpoint_status
-from ansible_collections.amazon.ai.plugins.modules.bedrock_agentcore_runtime_endpoint import _runtime_endpoint_status_check
+from ansible_collections.amazon.ai.plugins.modules.bedrock_agentcore_runtime_endpoint import (
+    _runtime_endpoint_status_check,
+)
+from botocore.exceptions import ClientError
 
 
 class FailJsonException(Exception):
@@ -47,9 +48,7 @@ def test_wait_returns_cleanly_when_deleting_endpoint_disappears(mock_get):
     mock_get.return_value = None
     module = _make_module()
 
-    wait_for_agent_runtime_endpoint_status(
-        MagicMock(), module, "rt-id", "ep-name", AgentRuntimeEndpointStatus.DELETED
-    )
+    wait_for_agent_runtime_endpoint_status(MagicMock(), module, "rt-id", "ep-name", AgentRuntimeEndpointStatus.DELETED)
 
     module.fail_json.assert_not_called()
 
@@ -73,9 +72,7 @@ def test_wait_returns_when_target_status_reached(mock_get):
     mock_get.return_value = {"name": "ep-name", "status": "READY"}
     module = _make_module()
 
-    wait_for_agent_runtime_endpoint_status(
-        MagicMock(), module, "rt-id", "ep-name", AgentRuntimeEndpointStatus.READY
-    )
+    wait_for_agent_runtime_endpoint_status(MagicMock(), module, "rt-id", "ep-name", AgentRuntimeEndpointStatus.READY)
 
     module.fail_json.assert_not_called()
 
