@@ -145,8 +145,8 @@ def test_status_check_deleting_waits_for_deleted_without_failing(mock_wait, mock
     result = _runtime_endpoint_status_check(MagicMock(), endpoint, module, "rt-id", "absent")
 
     assert result is None
-    _, kwargs = mock_wait.call_args
     args = mock_wait.call_args.args
+    kwargs = mock_wait.call_args.kwargs
     assert args[4] == AgentRuntimeEndpointStatus.DELETED
     assert kwargs["fail_on_failed_status"] is False
 
@@ -163,8 +163,8 @@ def test_status_check_creating_waits_for_ready_and_fails_on_failure(mock_wait, m
     result = _runtime_endpoint_status_check(MagicMock(), endpoint, module, "rt-id", "present")
 
     assert result is refreshed
-    _, kwargs = mock_wait.call_args
     args = mock_wait.call_args.args
+    kwargs = mock_wait.call_args.kwargs
     assert args[4] == AgentRuntimeEndpointStatus.READY
     assert kwargs["fail_on_failed_status"] is True
 
