@@ -1,6 +1,8 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+import json
+import time
 from typing import Any
 from typing import Dict
 from typing import List
@@ -200,6 +202,34 @@ def list_model_package_groups(client, max_items: Optional[int] = None, **params:
     return paginator.paginate(**params).build_full_result()["ModelPackageGroupSummaryList"]
 
 
+@AWSRetry.jittered_backoff(retries=10)
+def describe_model_package(client, model_package_name: str, **kwargs: Any) -> Optional[Dict[str, Any]]:
+    """Retrieve details for a specific SageMaker model package."""
+    try:
+        request_kwargs: Dict[str, Any] = {"ModelPackageName": model_package_name}
+        request_kwargs.update(kwargs)
+        return client.describe_model_package(**request_kwargs)
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+        is_boto3_error_message("not found"),
+    ):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_model_packages(client, **params: Any) -> List[Dict[str, Any]]:
+    """Retrieve a list of SageMaker model packages."""
+    paginate_params: Dict[str, Any] = dict(params)
+    max_results = paginate_params.pop("MaxResults", None)
+    paginator = client.get_paginator("list_model_packages")
+    if max_results is not None:
+        return paginator.paginate(**paginate_params, PaginationConfig={"MaxItems": max_results}).build_full_result()[
+            "ModelPackageSummaryList"
+        ]
+    return paginator.paginate(**paginate_params).build_full_result()["ModelPackageSummaryList"]
+
+
 def _build_model_package_group_params(module) -> Dict[str, Any]:
     params: Dict[str, Any] = {
         field: module.params.get(field) for field in ("model_package_group_name", "model_package_group_description")
@@ -263,6 +293,306 @@ def update_model_package_group_tags(
         client.delete_tags(ResourceArn=model_package_group_arn, TagKeys=tags_to_remove)
 
     return True, "Model package group tags updated successfully."
+
+
+def _fix_model_package_api_key_names(value: Any) -> Any:
+    """Normalize AWS API key names for model package dictionaries."""
+    if isinstance(value, dict):
+        fixed: Dict[str, Any] = {}
+        for key, nested_value in value.items():
+            normalized_key = key
+            if key == "SupportedResponseMimeTypes":
+                normalized_key = "SupportedResponseMIMETypes"
+            fixed[normalized_key] = _fix_model_package_api_key_names(nested_value)
+        return fixed
+    if isinstance(value, list):
+        return [_fix_model_package_api_key_names(item) for item in value]
+    return value
+
+
+def _preserve_custom_metadata_keys(value: Any) -> Any:
+    """Preserve caller-defined customer metadata keys when converting AWS API payloads."""
+    if isinstance(value, dict):
+        return {key: _preserve_custom_metadata_keys(nested_value) for key, nested_value in value.items()}
+    if isinstance(value, list):
+        return [_preserve_custom_metadata_keys(item) for item in value]
+    return value
+
+
+def _model_package_values_match(actual: Any, desired: Any) -> bool:
+    """Compare model package values after normalizing AWS key casing and ignoring AWS-only extras."""
+    if actual is None and desired is None:
+        return True
+    if actual is None or desired is None:
+        return False
+
+    actual = _normalize_model_package_compare_value(actual)
+    desired = _normalize_model_package_compare_value(desired)
+
+    if isinstance(desired, dict):
+        if not isinstance(actual, dict):
+            return False
+        for key, desired_value in desired.items():
+            if key not in actual:
+                return False
+            if not _model_package_values_match(actual[key], desired_value):
+                return False
+        return True
+
+    if isinstance(desired, list):
+        if not isinstance(actual, list):
+            return False
+        if desired and all(isinstance(item, dict) for item in desired):
+            if len(actual) != len(desired):
+                return False
+            matched_ids = set()
+            for desired_item in desired:
+                matched = False
+                for index, actual_item in enumerate(actual):
+                    if index in matched_ids:
+                        continue
+                    if _model_package_values_match(actual_item, desired_item):
+                        matched_ids.add(index)
+                        matched = True
+                        break
+                if not matched:
+                    return False
+            return True
+
+        def key_func(item):
+            return json.dumps(item, sort_keys=True, separators=(",", ":"))
+
+        return sorted(actual, key=key_func) == sorted(desired, key=key_func)
+
+    return actual == desired
+
+
+def _normalize_model_package_compare_value(value: Any) -> Any:
+    """Normalize user-supplied model package values to the AWS API shape for comparisons."""
+    if value is None:
+        return None
+    if isinstance(value, dict):
+        if "CustomerMetadataProperties" in value:
+            preserved = _preserve_custom_metadata_keys(value["CustomerMetadataProperties"])
+            return {"CustomerMetadataProperties": preserved}
+        if "customer_metadata_properties" in value:
+            preserved = _preserve_custom_metadata_keys(value["customer_metadata_properties"])
+            return {"CustomerMetadataProperties": preserved}
+
+        normalized = snake_dict_to_camel_dict(scrub_none_parameters(value), capitalize_first=True)
+        return _fix_model_package_api_key_names(normalized)
+    if isinstance(value, list):
+        return [_normalize_model_package_compare_value(item) for item in value]
+    return value
+
+
+def get_model_package_tag_arn(package: Dict[str, Any], client: Optional[Any] = None) -> Optional[str]:
+    """Return the ARN that owns package tags. SageMaker tags package versions only through the parent group."""
+    if package.get("ModelPackageGroupArn"):
+        return package["ModelPackageGroupArn"]
+    group_name = package.get("ModelPackageGroupName")
+    if client and group_name:
+        group = describe_model_package_group(client, group_name)
+        if group and group.get("ModelPackageGroupArn"):
+            return group["ModelPackageGroupArn"]
+    package_arn = package.get("ModelPackageArn")
+    if package_arn and ":model-package/" in package_arn:
+        arn_prefix, package_path = package_arn.split(":model-package/", 1)
+        package_path_parts = package_path.split("/")
+        if len(package_path_parts) == 2:
+            return f"{arn_prefix}:model-package-group/{package_path_parts[0]}"
+    return package_arn
+
+
+def _build_model_package_params(module) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        field: module.params.get(field)
+        for field in (
+            "model_package_name",
+            "model_package_group_name",
+            "model_package_description",
+            "model_package_registration_type",
+            "inference_specification",
+            "validation_specification",
+            "source_algorithm_specification",
+            "certify_for_marketplace",
+            "additional_inference_specifications",
+            "model_card",
+            "model_metrics",
+            "domain",
+            "task",
+            "sample_payload_url",
+            "skip_model_validation",
+            "drift_check_baselines",
+            "security_config",
+            "source_uri",
+            "customer_metadata_properties",
+            "metadata_properties",
+            "model_approval_status",
+            "approval_description",
+            "model_life_cycle",
+            "tags",
+        )
+    }
+    tags: Optional[Dict[str, str]] = params.pop("tags", None)
+    if tags is not None:
+        params["tags"] = [{"Key": key, "Value": value} for key, value in tags.items()]
+    customer_metadata_properties = params.pop("customer_metadata_properties", None)
+    normalized = snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
+    if customer_metadata_properties is not None:
+        normalized["CustomerMetadataProperties"] = _preserve_custom_metadata_keys(customer_metadata_properties)
+    return _fix_model_package_api_key_names(normalized)
+
+
+def _build_model_package_update_params(module, model_package_arn: str) -> Dict[str, Any]:
+    params: Dict[str, Any] = {"ModelPackageArn": model_package_arn}
+    update_fields: Dict[str, Any] = {}
+    for field in (
+        "model_approval_status",
+        "approval_description",
+        "customer_metadata_properties",
+        "customer_metadata_properties_to_remove",
+        "model_life_cycle",
+        "additional_inference_specifications_to_add",
+    ):
+        value = module.params.get(field)
+        if value is not None:
+            update_fields[field] = value
+    customer_metadata_properties = update_fields.pop("customer_metadata_properties", None)
+    params.update(snake_dict_to_camel_dict(scrub_none_parameters(update_fields), capitalize_first=True))
+    if customer_metadata_properties is not None:
+        params["CustomerMetadataProperties"] = _preserve_custom_metadata_keys(customer_metadata_properties)
+    return scrub_none_parameters(params)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def create_model_package(client, module) -> Tuple[bool, str, Optional[str]]:
+    """Create a SageMaker model package."""
+    name = module.params.get("model_package_name")
+    group_name = module.params.get("model_package_group_name")
+    if module.check_mode:
+        if name:
+            return True, f"Check mode: would have created model package {name}.", None
+        return True, f"Check mode: would have created model package in group {group_name}.", None
+
+    response = client.create_model_package(**_build_model_package_params(module))
+    if name:
+        return True, f"Model package {name} created successfully.", response.get("ModelPackageArn")
+    return True, f"Model package in group {group_name} created successfully.", response.get("ModelPackageArn")
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def update_model_package(client, module, model_package_arn: str) -> Tuple[bool, str]:
+    """Update a SageMaker model package in place."""
+    name = module.params.get("model_package_name")
+    if name is None:
+        raise ValueError("model_package_name is required for model package updates.")
+    if module.check_mode:
+        return True, f"Check mode: would have updated model package {name}."
+
+    client.update_model_package(**_build_model_package_update_params(module, model_package_arn))
+    return True, f"Model package {name} updated successfully."
+
+
+def model_package_needs_update(existing: Dict[str, Any], module) -> bool:
+    """Determine whether a model package requires an in-place update."""
+    desired = _build_model_package_update_params(module, existing.get("ModelPackageArn", ""))
+    for key in (
+        "ModelApprovalStatus",
+        "ApprovalDescription",
+        "CustomerMetadataProperties",
+        "ModelLifeCycle",
+    ):
+        desire_value = desired.get(key)
+        if desire_value is None:
+            continue
+        if not _model_package_values_match(existing.get(key), desire_value):
+            return True
+
+    properties_to_remove = module.params.get("customer_metadata_properties_to_remove")
+    existing_properties = existing.get("CustomerMetadataProperties", {})
+    if properties_to_remove and any(key in existing_properties for key in properties_to_remove):
+        return True
+
+    specifications_to_add = module.params.get("additional_inference_specifications_to_add")
+    existing_specifications = existing.get("AdditionalInferenceSpecifications", [])
+    if specifications_to_add and any(
+        not any(_model_package_values_match(actual, desired) for actual in existing_specifications)
+        for desired in specifications_to_add
+    ):
+        return True
+
+    return False
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def delete_model_package(client, module) -> Tuple[bool, str]:
+    """Delete a SageMaker model package."""
+    name = module.params.get("model_package_name")
+    if name is None:
+        raise ValueError("model_package_name is required for model package deletion.")
+    if module.check_mode:
+        return True, f"Check mode: would have deleted model package {name}."
+
+    client.delete_model_package(ModelPackageName=name)
+    return True, f"Model package {name} deleted successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def wait_for_model_package_status(client, model_package_name: Optional[str], wait_timeout: int = 600) -> None:
+    """Wait until the model package reaches a terminal status."""
+    if model_package_name is None:
+        return
+
+    deadline = time.time() + wait_timeout
+    while time.time() < deadline:
+        try:
+            package = client.describe_model_package(ModelPackageName=model_package_name)
+        except (
+            is_boto3_error_code("ResourceNotFound"),
+            is_boto3_error_message("does not exist"),
+            is_boto3_error_message("not found"),
+        ):
+            return
+
+        status = package.get("ModelPackageStatus")
+        if status in ("Completed", "Failed"):
+            if status == "Failed":
+                raise RuntimeError(f"SageMaker model package {model_package_name} entered a failed state.")
+            return
+        if status == "Deleting":
+            time.sleep(5)
+            continue
+        time.sleep(5)
+
+    raise TimeoutError(f"Timed out waiting for model package {model_package_name} to reach a terminal status.")
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def update_model_package_tags(
+    client, module, model_package_arn: str, desired_tags: Dict[str, str], purge_tags: bool = True
+) -> Tuple[bool, str]:
+    """Reconcile SageMaker model package tags in place."""
+    current_tags: Dict[str, str] = list_tags(client, model_package_arn)
+
+    tags_to_add: Dict[str, str] = {key: value for key, value in desired_tags.items() if current_tags.get(key) != value}
+    tags_to_remove: List[str] = [key for key in current_tags if key not in desired_tags] if purge_tags else []
+
+    if not tags_to_add and not tags_to_remove:
+        return False, "No updates needed."
+
+    if module.check_mode:
+        return True, "Check mode: would have updated model package tags."
+
+    if tags_to_add:
+        client.add_tags(
+            ResourceArn=model_package_arn,
+            Tags=[{"Key": key, "Value": value} for key, value in tags_to_add.items()],
+        )
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=model_package_arn, TagKeys=tags_to_remove)
+
+    return True, "Model package tags updated successfully."
 
 
 @AWSRetry.jittered_backoff(retries=10)
