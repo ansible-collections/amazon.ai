@@ -56,6 +56,8 @@
     - name: Get info about the created model package group
       amazon.ai.sagemaker_model_package_group_info:
         model_package_group_name: "{{ model_package_group_name }}"
+        tags:
+          project: demo
       register: group_info
 
     - name: Assert info module returns the group
@@ -67,18 +69,53 @@
           - group_info.model_package_groups[0].tags.project == 'demo'
 
     # -------------------------------------------------------
-    # INFO — list all resources with filter
+    # INFO — missing exact-name lookup
     # -------------------------------------------------------
-    - name: List model package groups filtered by name
+    - name: Get info about a missing model package group
       amazon.ai.sagemaker_model_package_group_info:
-        name_contains: "{{ test_id }}"
-      register: group_info_filtered
+        model_package_group_name: "{{ model_package_group_name }}-missing"
+      register: missing_group_info
 
-    - name: Assert filtered results contain our group
+    - name: Assert missing info lookup returns an empty list
       ansible.builtin.assert:
         that:
-          - group_info_filtered.model_package_groups | length >= 1
-          - model_package_group_name in (group_info_filtered.model_package_groups | map(attribute='model_package_group_name') | list)
+          - missing_group_info.model_package_groups == []
+
+    # -------------------------------------------------------
+    # INFO — list resources with filters, sorting, and limit
+    # -------------------------------------------------------
+    - name: Create a second SageMaker model package group for list validation
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ secondary_model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_initial }}"
+      register: secondary_group_create
+
+    - name: Assert secondary model package group was created
+      ansible.builtin.assert:
+        that:
+          - secondary_group_create.changed
+          - secondary_group_create.model_package_group.model_package_group_name == secondary_model_package_group_name
+
+    - name: List model package groups filtered by name and tags, sorted by name
+      amazon.ai.sagemaker_model_package_group_info:
+        name_contains: "{{ test_id }}"
+        tags:
+          project: demo
+        sort_by: Name
+        sort_order: Ascending
+        max_items: 2
+      register: group_info_filtered
+
+    - name: Assert filtered and sorted results contain both test groups
+      ansible.builtin.assert:
+        that:
+          - group_info_filtered.model_package_groups | length == 2
+          - group_info_filtered.model_package_groups[0].model_package_group_name == model_package_group_name
+          - group_info_filtered.model_package_groups[1].model_package_group_name == secondary_model_package_group_name
+          - group_info_filtered.model_package_groups[0].tags.project == 'demo'
+          - group_info_filtered.model_package_groups[1].tags.project == 'demo'
 
     # -------------------------------------------------------
     # IDEMPOTENCY — check_mode
@@ -118,6 +155,22 @@
     # -------------------------------------------------------
     # TAGS — update with purge_tags=false
     # -------------------------------------------------------
+    - name: Update model package group tags (purge_tags=false, check_mode)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags: "{{ model_package_group_tags_updated }}"
+        purge_tags: false
+      check_mode: true
+      register: tags_update_merge_check
+
+    - name: Assert merge update check_mode reports a pending change
+      ansible.builtin.assert:
+        that:
+          - tags_update_merge_check.changed
+          - "tags_update_merge_check.msg is match('^Check mode: would have ')"
+
     - name: Update model package group tags (purge_tags=false)
       amazon.ai.sagemaker_model_package_group:
         state: present
@@ -136,9 +189,52 @@
           - tags_update_merge.tags.environment == 'prod'
           - tags_update_merge.tags.owner == 'platform'
 
+    - name: Re-query merged model package group tags
+      amazon.ai.sagemaker_model_package_group_info:
+        model_package_group_name: "{{ model_package_group_name }}"
+        tags: "{{ model_package_group_tags_updated }}"
+      register: tags_merge_info
+
+    - name: Assert merged tags persisted
+      ansible.builtin.assert:
+        that:
+          - tags_merge_info.model_package_groups | length == 1
+          - tags_merge_info.model_package_groups[0].tags == model_package_group_tags_updated
+
+    - name: Re-run merged tag update
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        tags: "{{ model_package_group_tags_updated }}"
+        purge_tags: false
+      register: tags_update_merge_second
+
+    - name: Assert merged tag update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not tags_update_merge_second.changed
+          - "'No updates needed' in tags_update_merge_second.msg"
+
     # -------------------------------------------------------
     # TAGS — update with purge_tags=true
     # -------------------------------------------------------
+    - name: Update model package group tags (purge_tags=true, check_mode)
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        tags:
+          project: demo
+          owner: platform
+        purge_tags: true
+      check_mode: true
+      register: tags_update_purge_check
+
+    - name: Assert purge update check_mode reports a pending change
+      ansible.builtin.assert:
+        that:
+          - tags_update_purge_check.changed
+          - "tags_update_purge_check.msg is match('^Check mode: would have ')"
+
     - name: Update model package group tags (purge_tags=true)
       amazon.ai.sagemaker_model_package_group:
         state: present
@@ -158,6 +254,38 @@
           - tags_update_purge.tags.keys() | list | length == 2
           - tags_update_purge.tags.project == 'demo'
           - tags_update_purge.tags.owner == 'platform'
+
+    - name: Re-query purged model package group tags
+      amazon.ai.sagemaker_model_package_group_info:
+        model_package_group_name: "{{ model_package_group_name }}"
+        tags:
+          project: demo
+          owner: platform
+      register: tags_purge_info
+
+    - name: Assert purged tags persisted
+      ansible.builtin.assert:
+        that:
+          - tags_purge_info.model_package_groups | length == 1
+          - tags_purge_info.model_package_groups[0].tags | length == 2
+          - tags_purge_info.model_package_groups[0].tags.project == 'demo'
+          - tags_purge_info.model_package_groups[0].tags.owner == 'platform'
+
+    - name: Re-run purged tag update
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        tags:
+          project: demo
+          owner: platform
+        purge_tags: true
+      register: tags_update_purge_second
+
+    - name: Assert purged tag update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not tags_update_purge_second.changed
+          - "'No updates needed' in tags_update_purge_second.msg"
 
     # -------------------------------------------------------
     # FORCE path — description drift warns without force
@@ -240,6 +368,12 @@
           - "'does not exist' in delete_second.msg"
 
   always:
+    - name: Ensure cleanup of the secondary model package group if it still exists
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ secondary_model_package_group_name }}"
+      ignore_errors: true
+
     - name: Ensure cleanup of the model package group if it still exists
       amazon.ai.sagemaker_model_package_group:
         state: absent
