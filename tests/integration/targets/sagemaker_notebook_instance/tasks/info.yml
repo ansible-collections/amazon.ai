@@ -1,0 +1,42 @@
+---
+- name: Get the notebook instance by name and tag
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Environment: integration
+  register: notebook_instance_info
+
+
+- name: Display notebook info
+  ansible.builtin.debug:
+    var: notebook_instance_info
+
+- name: Assert named notebook instance lookup
+  ansible.builtin.assert:
+    that:
+      - not notebook_instance_info.changed
+      - notebook_instance_info.notebook_instance.notebook_instance_name == notebook_instance_name
+      - notebook_instance_info.notebook_instance.notebook_instance_status == 'InService'
+      - notebook_instance_info.notebook_instance.tags.Environment == 'integration'
+
+- name: List notebook instances matching the unique name
+  amazon.ai.sagemaker_notebook_instance_info:
+    name_contains: "{{ notebook_instance_name }}"
+  register: notebook_instance_list
+
+- name: Assert the named instance appears in list mode
+  ansible.builtin.assert:
+    that:
+      - not notebook_instance_list.changed
+      - notebook_instance_list.notebook_instances | selectattr('notebook_instance_name', 'equalto', notebook_instance_name) | list | length == 1
+
+- name: List using a non-matching name filter
+  amazon.ai.sagemaker_notebook_instance_info:
+    name_contains: "{{ notebook_instance_name_no_match }}"
+  register: notebook_instance_no_match
+
+- name: Assert the non-matching name filter returns no instances
+  ansible.builtin.assert:
+    that:
+      - not notebook_instance_no_match.changed
+      - notebook_instance_no_match.notebook_instances == []

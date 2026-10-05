@@ -1,0 +1,14 @@
+---
+- name: Delete notebook instance even after an earlier test failure
+  amazon.ai.sagemaker_notebook_instance:
+    state: absent
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    wait_timeout: 1800
+  ignore_errors: true
+
+- name: Delete IAM role even after an earlier test failure
+  amazon.aws.iam_role:
+    name: "{{ notebook_instance_role_name }}"
+    state: absent
+    delete_instance_profile: true
+  ignore_errors: true
