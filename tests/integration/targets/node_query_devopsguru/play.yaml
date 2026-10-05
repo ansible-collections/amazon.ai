@@ -1,0 +1,41 @@
+- hosts: localhost
+  gather_facts: true
+
+  roles:
+    - role: setup_node_query
+
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+
+  vars:
+    devopsguru_facts:
+      device_type: "monitoring"
+      infra_bucket: "monitoring"
+      infra_type: "public_cloud"
+
+  tasks:
+    - block:
+        - name: Get DevOps Guru resource collection info
+          amazon.ai.devopsguru_resource_collection_info:
+          register: _resource_collection
+
+        - name: Run jq query on resource collection result data
+          ansible.builtin.set_fact:
+            dg_node_count: "{{ _resource_collection | to_json | aws_jq(event_node_queries.devopsguru_resource_collection_info) }}"
+
+        - name: Validate DevOps Guru node query result
+          ansible.builtin.assert:
+            that:
+              - dg_node_count | length == 1
+              - dg_node_count[0].canonical_facts.id == "devopsguru_resource_collection"
+              - dg_node_count[0].canonical_facts.name == "devopsguru_resource_collection"
+              - dg_node_count[0].facts == devopsguru_facts
