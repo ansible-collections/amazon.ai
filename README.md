@@ -92,6 +92,8 @@ Name | Description
 [amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
 [amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
 [amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
+[amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
 
 <!--end collection content-->
 

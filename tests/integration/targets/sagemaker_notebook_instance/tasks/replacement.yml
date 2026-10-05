@@ -1,0 +1,29 @@
+---
+- name: Attempt to change a create-only notebook setting
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    root_access: Disabled
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: replacement_drift
+  ignore_errors: true
+
+- name: Assert create-only drift fails with replacement guidance
+  ansible.builtin.assert:
+    that:
+      - replacement_drift is failed
+      - "'create-only configuration drift' in replacement_drift.msg"
+      - "'recreate the notebook instance' in replacement_drift.msg"
+
+- name: Verify create-only drift did not delete or replace the instance
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: replacement_info
+
+- name: Assert the original notebook instance remains
+  ansible.builtin.assert:
+    that:
+      - replacement_info.notebook_instance.notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
+      - replacement_info.notebook_instance.notebook_instance_status == 'InService'
