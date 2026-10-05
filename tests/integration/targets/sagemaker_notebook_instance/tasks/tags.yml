@@ -1,0 +1,168 @@
+---
+- name: Check adding a tag without purging unmanaged tags
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  check_mode: true
+  register: tag_add_check
+
+- name: Assert tag addition check mode
+  ansible.builtin.assert:
+    that:
+      - tag_add_check.changed
+      - "'Check mode: would have' in tag_add_check.msg"
+
+- name: Add a tag and preserve the existing tag
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_add_real
+
+- name: Assert the new and unmanaged tags are present
+  ansible.builtin.assert:
+    that:
+      - tag_add_real.changed
+      - tag_add_real.tags.Environment == 'integration'
+      - tag_add_real.tags.Team == 'ml'
+
+- name: Re-run tag addition
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_add_rerun
+
+- name: Assert tag addition idempotency
+  ansible.builtin.assert:
+    that:
+      - not tag_add_rerun.changed
+      - tag_add_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' is already up to date.'
+
+- name: Check updating a tag value
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: research
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  check_mode: true
+  register: tag_update_check
+
+- name: Assert tag update check mode
+  ansible.builtin.assert:
+    that:
+      - tag_update_check.changed
+      - "'Check mode: would have' in tag_update_check.msg"
+
+- name: Update the tag value
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: research
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_update_real
+
+- name: Assert tag update preserves unrelated tags
+  ansible.builtin.assert:
+    that:
+      - tag_update_real.changed
+      - tag_update_real.tags.Environment == 'integration'
+      - tag_update_real.tags.Team == 'research'
+
+- name: Re-run the tag update
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Team: research
+    purge_tags: false
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_update_rerun
+
+- name: Assert tag update idempotency
+  ansible.builtin.assert:
+    that:
+      - not tag_update_rerun.changed
+      - tag_update_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' is already up to date.'
+
+- name: Check purging tags not declared as desired
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  check_mode: true
+  register: tag_purge_check
+
+- name: Assert tag purge check mode
+  ansible.builtin.assert:
+    that:
+      - tag_purge_check.changed
+      - "'Check mode: would have' in tag_purge_check.msg"
+
+- name: Purge the unmanaged Team tag
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_purge_real
+
+- name: Assert tag purge removes only the unmanaged tag
+  ansible.builtin.assert:
+    that:
+      - tag_purge_real.changed
+      - tag_purge_real.tags.Environment == 'integration'
+      - "'Team' not in tag_purge_real.tags"
+
+- name: Re-run tag purge
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    tags:
+      Environment: integration
+    purge_tags: true
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+  register: tag_purge_rerun
+
+- name: Assert tag purge idempotency
+  ansible.builtin.assert:
+    that:
+      - not tag_purge_rerun.changed
+      - tag_purge_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' is already up to date.'

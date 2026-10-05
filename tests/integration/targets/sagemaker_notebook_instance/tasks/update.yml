@@ -1,0 +1,73 @@
+---
+- name: Check notebook volume increase
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+    wait_timeout: 1800
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+  check_mode: true
+  register: update_check
+
+- name: Assert notebook volume update check mode
+  ansible.builtin.assert:
+    that:
+      - update_check.changed
+      - "'Check mode: would have' in update_check.msg"
+
+- name: Verify check mode left the notebook volume unchanged
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: update_check_info
+
+- name: Assert the original volume remains after check mode
+  ansible.builtin.assert:
+    that:
+      - update_check_info.notebook_instance.volume_size_in_gb == notebook_volume_initial
+
+- name: Increase notebook volume while restoring its running state
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+    wait_timeout: 1800
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+  register: update_real
+
+- name: Assert the notebook was updated and returned to service
+  ansible.builtin.assert:
+    that:
+      - update_real.changed
+      - update_real.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' updated successfully.'
+      - update_real.notebook_instance.notebook_instance_status == 'InService'
+      - update_real.notebook_instance.volume_size_in_gb == notebook_volume_updated
+
+- name: Re-query the notebook to prove the update was in place
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: update_info
+
+- name: Assert the updated instance retains its identity
+  ansible.builtin.assert:
+    that:
+      - update_info.notebook_instance.notebook_instance_status == 'InService'
+      - update_info.notebook_instance.volume_size_in_gb == notebook_volume_updated
+      - update_info.notebook_instance.notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
+
+- name: Re-run the notebook volume update
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    volume_size_in_gb: "{{ notebook_volume_updated }}"
+    wait_timeout: 1800
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+  register: update_rerun
+
+- name: Assert notebook volume update idempotency
+  ansible.builtin.assert:
+    that:
+      - not update_rerun.changed
+      - update_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' is already up to date.'
