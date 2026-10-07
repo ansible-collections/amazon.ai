@@ -1,0 +1,81 @@
+---
+- name: Check-mode delete the completed training job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ training_job_name }}"
+  check_mode: true
+  register: delete_check
+
+- name: Assert delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check.changed
+      - "delete_check.msg.startswith('Check mode: would have deleted')"
+
+- name: Delete the completed training job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ training_job_name }}"
+    wait_timeout: 600
+  register: delete_real
+
+- name: Assert the job was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_real.changed
+
+- name: Verify the deleted job is absent
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ training_job_name }}"
+  register: delete_info
+
+- name: Assert the info lookup no longer returns the job
+  ansible.builtin.assert:
+    that:
+      - delete_info.training_job is not defined
+
+- name: Re-run deletion for the absent job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ training_job_name }}"
+  register: delete_rerun
+
+- name: Assert delete idempotency
+  ansible.builtin.assert:
+    that:
+      - not delete_rerun.changed
+
+- name: Check-mode delete the stopped job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ stoppable_training_job_name }}"
+  check_mode: true
+  register: stopped_delete_check
+
+- name: Assert stopped-job delete check mode
+  ansible.builtin.assert:
+    that:
+      - stopped_delete_check.changed
+      - "stopped_delete_check.msg.startswith('Check mode: would have deleted')"
+
+- name: Delete the stopped job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ stoppable_training_job_name }}"
+    wait_timeout: 600
+  register: stopped_delete
+
+- name: Assert stopped job was deleted
+  ansible.builtin.assert:
+    that:
+      - stopped_delete.changed
+
+- name: Assert stopped job is absent
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ stoppable_training_job_name }}"
+  register: stopped_delete_info
+
+- name: Verify stopped job deletion
+  ansible.builtin.assert:
+    that:
+      - stopped_delete_info.training_job is not defined

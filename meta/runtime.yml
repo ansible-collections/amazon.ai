@@ -52,6 +52,8 @@ action_groups:
     - sagemaker_notebook_instance_lifecycle_config_info
     - sagemaker_space
     - sagemaker_space_info
+    - sagemaker_training_job
+    - sagemaker_training_job_info
 plugin_routing:
   modules:
     bedrock_agent:

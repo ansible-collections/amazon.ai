@@ -1,0 +1,190 @@
+---
+- name: Wait for the job's managed warm pool to become available
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ training_job_name }}"
+  register: warm_pool_info
+  until:
+    - warm_pool_info.training_job is defined
+    - warm_pool_info.training_job.warm_pool_status.status | default('') in ['Available', 'Terminated']
+  retries: 60
+  delay: 15
+
+- name: Verify the warm-pool state
+  ansible.builtin.assert:
+    that:
+      - warm_pool_info.training_job.warm_pool_status.status in ['Available', 'Terminated']
+
+- name: Report warm-pool capacity was unavailable
+  ansible.builtin.debug:
+    msg: AWS terminated the warm pool due to resource limits; skipping retention update checks.
+  when: warm_pool_info.training_job.warm_pool_status.status == 'Terminated'
+
+- name: Update warm-pool retention when AWS retains capacity
+  when: (warm_pool_info.training_job.warm_pool_status.status | default('')) == 'Available'
+  block:
+    - name: Check-mode update of warm-pool retention
+      amazon.ai.sagemaker_training_job:
+        training_job_name: "{{ training_job_name }}"
+        resource_config:
+          keep_alive_period_in_seconds: 0
+      check_mode: true
+      register: warm_pool_update_check
+
+    - name: Assert warm-pool update check mode
+      ansible.builtin.assert:
+        that:
+          - warm_pool_update_check.changed
+          - "warm_pool_update_check.msg.startswith('Check mode: would have ')"
+
+    - name: Update warm-pool retention
+      amazon.ai.sagemaker_training_job:
+        training_job_name: "{{ training_job_name }}"
+        resource_config:
+          keep_alive_period_in_seconds: 0
+        wait_timeout: 600
+      register: warm_pool_update
+
+    - name: Assert warm-pool retention was updated
+      ansible.builtin.assert:
+        that:
+          - warm_pool_update.changed
+          - warm_pool_update.training_job.resource_config.keep_alive_period_in_seconds == 0
+
+    - name: Re-run warm-pool retention update
+      amazon.ai.sagemaker_training_job:
+        training_job_name: "{{ training_job_name }}"
+        resource_config:
+          keep_alive_period_in_seconds: 0
+      register: warm_pool_update_rerun
+
+    - name: Assert warm-pool update idempotency
+      ansible.builtin.assert:
+        that:
+          - not warm_pool_update_rerun.changed
+
+- name: Check-mode tag addition
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  check_mode: true
+  register: tag_add_check
+
+- name: Assert tag-add check mode
+  ansible.builtin.assert:
+    that:
+      - tag_add_check.changed
+      - "tag_add_check.msg.startswith('Check mode: would have ')"
+
+- name: Add a tag while retaining existing tags
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  register: tag_add
+
+- name: Assert tag addition
+  ansible.builtin.assert:
+    that:
+      - tag_add.changed
+      - tag_add.training_job.tags.Team == 'ml'
+      - tag_add.training_job.tags.Environment == 'integration'
+
+- name: Re-run tag addition
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      Team: ml
+    purge_tags: false
+  register: tag_add_rerun
+
+- name: Assert tag-add idempotency
+  ansible.builtin.assert:
+    that:
+      - not tag_add_rerun.changed
+
+- name: Check-mode exact tag reconciliation
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    purge_tags: true
+  check_mode: true
+  register: tag_purge_check
+
+- name: Assert tag-purge check mode
+  ansible.builtin.assert:
+    that:
+      - tag_purge_check.changed
+
+- name: Remove tags omitted from the desired set
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    purge_tags: true
+  register: tag_purge
+
+- name: Assert omitted tag was removed
+  ansible.builtin.assert:
+    that:
+      - tag_purge.changed
+      - "'Team' not in tag_purge.training_job.tags"
+      - tag_purge.training_job.tags.TestId == test_id
+
+- name: Re-run exact tag reconciliation
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    purge_tags: true
+  register: tag_purge_rerun
+
+- name: Assert tag-purge idempotency
+  ansible.builtin.assert:
+    that:
+      - not tag_purge_rerun.changed
+
+- name: Look up the job by name and include its tags
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ training_job_name }}"
+    include_tags: true
+  register: training_job_info
+
+- name: Assert named lookup returns the job and reconciled tags
+  ansible.builtin.assert:
+    that:
+      - training_job_info.training_job.training_job_name == training_job_name
+      - training_job_info.training_job.training_job_arn == create_real.training_job.training_job_arn
+      - training_job_info.training_job.tags.TestId == test_id
+
+- name: Look up a missing training job
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "missing-{{ test_id }}"
+  register: missing_job_info
+
+- name: Assert missing lookup is non-fatal
+  ansible.builtin.assert:
+    that:
+      - missing_job_info.training_job is not defined
+
+- name: List matching training jobs with status and ordering filters
+  amazon.ai.sagemaker_training_job_info:
+    name_contains: "{{ training_job_name }}"
+    status_equals: Completed
+    sort_by: CreationTime
+    sort_order: Descending
+    include_tags: true
+  register: training_jobs_info
+
+- name: Assert filtered list contains the completed job and its tags
+  ansible.builtin.assert:
+    that:
+      - training_jobs_info.training_jobs | length >= 1
+      - training_jobs_info.training_jobs | selectattr('training_job_name', 'equalto', training_job_name) | list | length == 1
+      - training_jobs_info.training_jobs | selectattr('tags.TestId', 'equalto', test_id) | list | length >= 1
