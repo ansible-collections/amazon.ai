@@ -7,7 +7,7 @@ model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
 # the ECR repo and pushes a Docker V2 image via skopeo (installed inside the test container)
 # at the start of the test run.
 # model_image is resolved at runtime from aws_account_id in tasks/main.yml.
-model_ecr_repository_name: "ansible-test-sagemaker-model"
+model_ecr_repository_name: "ansible-test-sagemaker-model-{{ test_id }}"
 model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
 model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
 model_data_url_updated: "s3://{{ model_bucket_name }}/model-v2.tar.gz"
