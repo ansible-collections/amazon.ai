@@ -1,0 +1,182 @@
+---
+- name: Create a training job without its required name
+  amazon.ai.sagemaker_training_job:
+    role_arn: "{{ training_role_arn }}"
+  register: missing_training_job_name
+  ignore_errors: true
+
+- name: Assert a missing training-job name is rejected locally
+  ansible.builtin.assert:
+    that:
+      - missing_training_job_name is failed
+      - "'training_job_name' in missing_training_job_name.msg"
+
+- name: Create a missing training job without create inputs
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "test-sm-training-missing-{{ test_id }}"
+  register: missing_create_inputs
+  ignore_errors: true
+
+- name: Assert create-only inputs are required
+  ansible.builtin.assert:
+    that:
+      - missing_create_inputs is failed
+      - "'role_arn' in missing_create_inputs.msg"
+
+- name: Create a job with an unusable execution role
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ invalid_role_training_job_name }}"
+    role_arn: "arn:aws:iam::000000000000:role/does-not-exist-{{ test_id }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}invalid-role/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+    stopping_condition:
+      max_runtime_in_seconds: 60
+    wait_timeout: 600
+  register: invalid_execution_role
+  ignore_errors: true
+
+- name: Assert the unusable role is rejected
+  ansible.builtin.assert:
+    that:
+      - invalid_execution_role is failed
+
+- name: Look up the invalid-role job
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ invalid_role_training_job_name }}"
+  register: invalid_role_info
+
+- name: Assert the invalid-role request did not leave a running job
+  ansible.builtin.assert:
+    that:
+      - invalid_role_info.training_job is not defined or invalid_role_info.training_job.training_job_status in ['Failed', 'Stopped']
+
+- name: Check-mode create training job
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}initial/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: "{{ training_warm_pool_seconds }}"
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+  check_mode: true
+  register: create_check
+
+- name: Assert create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check.changed
+      - "create_check.msg.startswith('Check mode: would have created')"
+
+- name: Verify check mode did not create the training job
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ training_job_name }}"
+  register: create_check_info
+
+- name: Assert the training job is absent after check mode
+  ansible.builtin.assert:
+    that:
+      - create_check_info.training_job is not defined
+
+- name: Create the training job
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}initial/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: "{{ training_warm_pool_seconds }}"
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    wait_timeout: 3600
+  register: create_real
+
+- name: Assert the training job reached a terminal state
+  ansible.builtin.assert:
+    that:
+      - create_real.changed
+      - create_real.training_job.training_job_arn is defined
+      - create_real.training_job.training_job_status in ['Completed', 'Stopped']
+
+- name: Re-run identical training-job declaration
+  amazon.ai.sagemaker_training_job:
+    state: started
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}initial/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: "{{ training_warm_pool_seconds }}"
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    wait_timeout: 3600
+  register: create_rerun
+
+- name: Assert terminal job rerun is idempotent
+  ansible.builtin.assert:
+    that:
+      - not create_rerun.changed
+      - create_rerun.training_job.training_job_arn == create_real.training_job.training_job_arn

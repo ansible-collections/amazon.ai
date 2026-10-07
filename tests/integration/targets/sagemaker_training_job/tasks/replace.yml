@@ -1,0 +1,154 @@
+---
+- name: Request an immutable runtime change without force
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}replacement/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: 0
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds - 1 }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    wait: false
+  register: immutable_without_force
+  ignore_errors: true
+
+- name: Assert immutable changes require force
+  ansible.builtin.assert:
+    that:
+      - immutable_without_force is failed
+      - "'force: true' in immutable_without_force.msg"
+
+- name: Check-mode forced replacement
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}replacement/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: 0
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds - 1 }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    force: true
+  check_mode: true
+  register: replacement_check
+
+- name: Assert forced replacement check mode
+  ansible.builtin.assert:
+    that:
+      - replacement_check.changed
+      - "replacement_check.msg.startswith('Check mode: would have replaced')"
+
+- name: Force a new execution after changing an immutable option
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}replacement/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: 0
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds - 1 }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+    force: true
+    wait_timeout: 3600
+  register: replacement_real
+
+- name: Assert replacement created a new terminal execution
+  ansible.builtin.assert:
+    that:
+      - replacement_real.changed
+      - replacement_real.training_job.training_job_status == 'Completed'
+      - replacement_real.training_job.creation_time != create_real.training_job.creation_time
+
+- name: Re-query the replaced job
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ training_job_name }}"
+  register: replacement_info
+
+- name: Assert replacement is visible through the info module
+  ansible.builtin.assert:
+    that:
+      - replacement_info.training_job.training_job_status == 'Completed'
+      - replacement_info.training_job.output_data_config.s3_output_path == training_output_s3_uri ~ 'replacement/'
+
+- name: Re-run the replacement declaration without force
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}replacement/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+      keep_alive_period_in_seconds: 0
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds - 1 }}"
+    tags:
+      TestId: "{{ test_id }}"
+      Environment: integration
+  register: replacement_rerun
+
+- name: Assert replacement rerun is idempotent
+  ansible.builtin.assert:
+    that:
+      - not replacement_rerun.changed
+      - replacement_rerun.training_job.training_job_arn == replacement_real.training_job.training_job_arn

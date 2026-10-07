@@ -1,0 +1,111 @@
+---
+- name: Start a separate long-running training job without waiting
+  amazon.ai.sagemaker_training_job:
+    training_job_name: "{{ stoppable_training_job_name }}"
+    role_arn: "{{ training_role_arn }}"
+    algorithm_specification:
+      training_input_mode: File
+      training_image: "{{ training_image }}"
+    input_data_config:
+      - channel_name: train
+        data_source:
+          s3_data_source:
+            s3_data_type: S3Prefix
+            s3_uri: "{{ training_input_s3_uri }}"
+            s3_data_distribution_type: FullyReplicated
+    output_data_config:
+      s3_output_path: "{{ training_output_s3_uri }}stoppable/"
+    resource_config:
+      instance_type: "{{ training_instance_type }}"
+      instance_count: 1
+      volume_size_in_gb: 10
+    stopping_condition:
+      max_runtime_in_seconds: "{{ training_max_runtime_seconds }}"
+    environment:
+      SAGEMAKER_TEST_SLEEP_SECONDS: "{{ training_stop_sleep_seconds | string }}"
+    wait: false
+    wait_timeout: 3600
+  register: stoppable_create
+
+- name: Wait until the long-running job is active
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ stoppable_training_job_name }}"
+  register: stoppable_info
+  until:
+    - stoppable_info.training_job is defined
+    - stoppable_info.training_job.training_job_status == 'InProgress'
+  retries: 60
+  delay: 10
+
+- name: List training jobs by name in descending order
+  amazon.ai.sagemaker_training_job_info:
+    name_contains: "{{ test_id }}"
+    sort_by: Name
+    sort_order: Descending
+  register: sorted_training_jobs
+
+- name: Assert list filtering and sort order
+  ansible.builtin.assert:
+    that:
+      - sorted_training_jobs.training_jobs | length >= 2
+      - >-
+        (sorted_training_jobs.training_jobs | map(attribute='training_job_name') | list)
+        == (sorted_training_jobs.training_jobs | map(attribute='training_job_name') | list | sort(reverse=true))
+
+- name: Check-mode stop while retaining job metadata
+  amazon.ai.sagemaker_training_job:
+    state: stopped
+    training_job_name: "{{ stoppable_training_job_name }}"
+  check_mode: true
+  register: stop_check
+
+- name: Assert stop check mode
+  ansible.builtin.assert:
+    that:
+      - stop_check.changed
+      - "stop_check.msg.startswith('Check mode: would have stopped')"
+
+- name: Verify check mode did not stop the job
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ stoppable_training_job_name }}"
+  register: stop_check_info
+
+- name: Assert job is still active after check mode
+  ansible.builtin.assert:
+    that:
+      - stop_check_info.training_job.training_job_status == 'InProgress'
+
+- name: Stop the training job
+  amazon.ai.sagemaker_training_job:
+    state: stopped
+    training_job_name: "{{ stoppable_training_job_name }}"
+    wait_timeout: 600
+  register: stop_real
+
+- name: Assert the job stopped and remains queryable
+  ansible.builtin.assert:
+    that:
+      - stop_real.changed
+      - stop_real.training_job.training_job_status == 'Stopped'
+
+- name: Re-run stop for the already-stopped job
+  amazon.ai.sagemaker_training_job:
+    state: stopped
+    training_job_name: "{{ stoppable_training_job_name }}"
+  register: stop_rerun
+
+- name: Assert stop idempotency and retained metadata
+  ansible.builtin.assert:
+    that:
+      - not stop_rerun.changed
+      - stop_rerun.training_job.training_job_status == 'Stopped'
+
+- name: Query the stopped job with the info module
+  amazon.ai.sagemaker_training_job_info:
+    training_job_name: "{{ stoppable_training_job_name }}"
+  register: stopped_job_info
+
+- name: Assert stopped job is retained
+  ansible.builtin.assert:
+    that:
+      - stopped_job_info.training_job.training_job_status == 'Stopped'

@@ -1,0 +1,125 @@
+---
+- name: SageMaker training job integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Get the AWS account for unique test resources
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Create a dedicated S3 bucket for input and output data
+      amazon.aws.s3_bucket:
+        name: "{{ training_output_bucket }}"
+        state: present
+
+    - name: Upload a tiny training input file
+      amazon.aws.s3_object:
+        bucket: "{{ training_output_bucket }}"
+        object: input/train.txt
+        content: "integration test data\n"
+        mode: put
+
+    - name: Build and push the temporary SageMaker training image
+      ansible.builtin.command:
+        argv:
+          - "{{ ansible_playbook_python }}"
+          - "{{ training_image_script }}"
+          - create
+          - "{{ training_ecr_repository_name }}"
+          - "{{ training_image_context }}"
+          - "{{ training_image_tag }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default(omit) }}"
+        AWS_DEFAULT_REGION: "{{ aws_region }}"
+      register: training_image_setup
+      no_log: true
+
+    - name: Save the temporary training image URI
+      ansible.builtin.set_fact:
+        training_image: "{{ training_image_setup.stdout }}"
+
+    - name: Create a temporary SageMaker execution role
+      amazon.aws.iam_role:
+        name: "{{ training_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'files/assume_role_sagemaker.json') }}"
+        create_instance_profile: false
+        state: present
+      register: training_execution_role
+
+    - name: Save the temporary execution role ARN
+      ansible.builtin.set_fact:
+        training_role_arn: "{{ training_execution_role.iam_role.arn }}"
+
+    - name: Grant the execution role access to the test data and image
+      amazon.aws.iam_policy:
+        iam_type: role
+        iam_name: "{{ training_role_name }}"
+        policy_name: "{{ training_role_policy_name }}"
+        policy_json: "{{ training_role_policy | to_json }}"
+        state: present
+      vars:
+        training_role_policy:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - ecr:GetAuthorizationToken
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - ecr:BatchCheckLayerAvailability
+                - ecr:GetDownloadUrlForLayer
+                - ecr:BatchGetImage
+              Resource: "arn:{{ caller_info.arn.split(':')[1] }}:ecr:{{ aws_region }}:{{ caller_info.account }}:repository/{{ training_ecr_repository_name }}"
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:DescribeLogStreams
+                - logs:PutLogEvents
+                - cloudwatch:PutMetricData
+              Resource: "*"
+            - Effect: Allow
+              Action:
+                - s3:ListBucket
+              Resource: "arn:aws:s3:::{{ training_output_bucket }}"
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:AbortMultipartUpload
+                - s3:ListMultipartUploadParts
+              Resource: "arn:aws:s3:::{{ training_output_bucket }}/*"
+
+    - name: Wait for the execution role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Exercise create and lookup behavior
+      ansible.builtin.include_tasks: create.yml
+
+    - name: Exercise warm-pool update and tag reconciliation
+      ansible.builtin.include_tasks: update.yml
+
+    - name: Exercise forced replacement
+      ansible.builtin.include_tasks: replace.yml
+
+    - name: Exercise stop while retaining job metadata
+      ansible.builtin.include_tasks: stop.yml
+
+    - name: Exercise deletion and absent idempotency
+      ansible.builtin.include_tasks: delete.yml
+  always:
+    - name: Tear down training jobs and the dedicated output bucket
+      ansible.builtin.include_tasks: teardown.yml

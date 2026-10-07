@@ -6,22 +6,315 @@
 
 """Unit tests for sagemaker module_utils."""
 
+from unittest.mock import DEFAULT
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_absent
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_present
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _replace_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import training_job_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_training_job
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_training_job import _validate_nested_params
 from botocore.exceptions import ClientError
+
+
+def test_describe_training_job_returns_none_when_missing():
+    client = MagicMock()
+    client.describe_training_job.side_effect = ClientError(
+        {"Error": {"Code": "ValidationException", "Message": "Requested resource not found."}},
+        "DescribeTrainingJob",
+    )
+
+    assert describe_training_job(client, "missing-job") is None
+
+
+def test_describe_training_job_reraises_other_validation_errors():
+    client = MagicMock()
+    client.describe_training_job.side_effect = ClientError(
+        {"Error": {"Code": "ValidationException", "Message": "Some other validation problem."}},
+        "DescribeTrainingJob",
+    )
+
+    with pytest.raises(ClientError):
+        describe_training_job(client, "bad-job")
+
+
+def test_training_job_params_uses_sagemaker_volume_size_casing():
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "role_arn": "arn:aws:iam::123456789012:role/test-role",
+        "resource_config": {
+            "instance_type": "ml.m5.large",
+            "instance_count": 1,
+            "volume_size_in_gb": 10,
+        },
+    }
+
+    resource_config = training_job_params(module)["ResourceConfig"]
+
+    assert resource_config == {
+        "InstanceType": "ml.m5.large",
+        "InstanceCount": 1,
+        "VolumeSizeInGB": 10,
+    }
+
+
+def test_training_job_params_uses_sagemaker_profiler_rule_volume_size_casing():
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "profiler_rule_configurations": [
+            {
+                "rule_configuration_name": "test-rule",
+                "rule_evaluator_image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/rule:latest",
+                "volume_size_in_gb": 30,
+            }
+        ],
+    }
+
+    profiler_rule = training_job_params(module)["ProfilerRuleConfigurations"][0]
+
+    assert profiler_rule["VolumeSizeInGB"] == 30
+    assert "VolumeSizeInGb" not in profiler_rule
+
+
+def test_update_training_job_uses_sagemaker_profiler_rule_volume_size_casing():
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "profiler_rule_configurations": [
+            {
+                "rule_configuration_name": "test-rule",
+                "rule_evaluator_image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/rule:latest",
+                "volume_size_in_gb": 30,
+            }
+        ],
+    }
+    module.check_mode = False
+
+    assert update_training_job(client, module, {"ProfilerRuleConfigurations": []})
+    client.update_training_job.assert_called_once_with(
+        TrainingJobName="test-job",
+        ProfilerRuleConfigurations=[
+            {
+                "RuleConfigurationName": "test-rule",
+                "RuleEvaluatorImage": "123456789012.dkr.ecr.us-east-1.amazonaws.com/rule:latest",
+                "VolumeSizeInGB": 30,
+            }
+        ],
+    )
+
+
+def test_update_training_job_warm_pool_retention_check_mode():
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "resource_config": {"keep_alive_period_in_seconds": 600},
+        "wait": True,
+    }
+    module.check_mode = True
+    existing = {
+        "ResourceConfig": {"KeepAlivePeriodInSeconds": 300},
+        "WarmPoolStatus": {"Status": "Available"},
+    }
+
+    assert update_training_job(client, module, existing)
+    client.update_training_job.assert_not_called()
+
+
+def test_update_training_job_warm_pool_retention_updates_value():
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "resource_config": {"keep_alive_period_in_seconds": 600},
+        "wait": True,
+    }
+    module.check_mode = False
+    existing = {
+        "ResourceConfig": {"KeepAlivePeriodInSeconds": 300},
+        "WarmPoolStatus": {"Status": "Available"},
+    }
+
+    assert update_training_job(client, module, existing)
+    client.update_training_job.assert_called_once_with(
+        TrainingJobName="test-job",
+        ResourceConfig={"KeepAlivePeriodInSeconds": 600},
+    )
+
+
+def test_update_training_job_warm_pool_retention_is_idempotent():
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {
+        "training_job_name": "test-job",
+        "resource_config": {"keep_alive_period_in_seconds": 600},
+        "wait": True,
+    }
+    module.check_mode = False
+    existing = {
+        "ResourceConfig": {"KeepAlivePeriodInSeconds": 600},
+        "WarmPoolStatus": {"Status": "Available"},
+    }
+
+    assert not update_training_job(client, module, existing)
+    client.update_training_job.assert_not_called()
+
+
+@pytest.mark.parametrize("replace", [False, True])
+@pytest.mark.parametrize("status", ["InProgress", "Stopping"])
+def test_training_job_deletion_stops_before_proceeding_without_wait(replace, status):
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {"training_job_name": "test-job", "wait": False}
+    module.check_mode = False
+    existing = {"TrainingJobStatus": status}
+    purpose = "replacement" if replace else "deletion"
+    manage = _replace_training_job if replace else _manage_training_job_absent
+
+    with patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.stop_training_job") as stop:
+        with patch(
+            "ansible_collections.amazon.ai.plugins.module_utils.sagemaker.describe_training_job",
+            return_value=existing,
+        ):
+            job, changed, msg = manage(client, module, existing)
+
+    assert job == existing
+    assert changed == (status == "InProgress")
+    if status == "InProgress":
+        stop.assert_called_once_with(client, "test-job")
+        assert msg == f"Training job test-job is stopping before {purpose}."
+    else:
+        stop.assert_not_called()
+        assert msg == f"Training job test-job is already stopping before {purpose}."
+    client.delete_training_job.assert_not_called()
+
+
+@pytest.mark.parametrize("replace", [False, True])
+@pytest.mark.parametrize("wait", [False, True])
+def test_training_job_deletion_handles_warm_pool_and_replacement(replace, wait):
+    client = MagicMock()
+    module = MagicMock()
+    module.params = {"training_job_name": "test-job", "wait": wait}
+    module.check_mode = False
+    existing = {"TrainingJobStatus": "Completed", "WarmPoolStatus": {"Status": "Available"}}
+    final_job = {"TrainingJobStatus": "Completed"}
+    manage = _replace_training_job if replace else _manage_training_job_absent
+    with patch.multiple(
+        "ansible_collections.amazon.ai.plugins.module_utils.sagemaker",
+        _set_training_job_warm_pool_retention=DEFAULT,
+        _wait_for_warm_pool_termination=DEFAULT,
+        describe_training_job=DEFAULT,
+        delete_training_job=DEFAULT,
+        wait_for_training_job_deletion=DEFAULT,
+        create_training_job=DEFAULT,
+        _fresh_training_job=DEFAULT,
+    ) as helpers:
+        helpers["_wait_for_warm_pool_termination"].return_value = final_job
+        helpers["describe_training_job"].return_value = existing
+        helpers["_fresh_training_job"].return_value = final_job
+        job, changed, msg = manage(client, module, existing)
+
+    helpers["_set_training_job_warm_pool_retention"].assert_called_once_with(client, "test-job", 0)
+    assert changed
+    if not wait:
+        purpose = "replacement" if replace else "deletion"
+        assert job == existing
+        assert msg == f"Training job test-job warm pool is terminating before {purpose}."
+        helpers["_wait_for_warm_pool_termination"].assert_not_called()
+        helpers["delete_training_job"].assert_not_called()
+        helpers["create_training_job"].assert_not_called()
+        return
+    helpers["_wait_for_warm_pool_termination"].assert_called_once_with(client, module, "test-job")
+    helpers["delete_training_job"].assert_called_once_with(client, module, "test-job")
+    helpers["wait_for_training_job_deletion"].assert_called_once_with(client, module, "test-job")
+    assert job == final_job
+    if replace:
+        helpers["create_training_job"].assert_called_once_with(client, module)
+        assert msg == "Training job test-job replaced with a new execution."
+    else:
+        helpers["create_training_job"].assert_not_called()
+        assert msg == "Training job test-job deleted successfully."
+
+
+@pytest.mark.parametrize("changed", [False, True])
+@pytest.mark.parametrize("check_mode", [False, True])
+def test_training_job_present_preserves_update_results(changed, check_mode):
+    module = MagicMock()
+    module.params = {"training_job_name": "test-job", "force": False}
+    module.check_mode = check_mode
+    existing = {"TrainingJobStatus": "Completed"}
+    prefix = "ansible_collections.amazon.ai.plugins.module_utils.sagemaker."
+    with patch(prefix + "training_job_needs_replacement", return_value=[]):
+        with patch(prefix + "update_training_job", return_value=changed):
+            with patch(prefix + "reconcile_training_job_tags", return_value=False):
+                with patch(prefix + "describe_training_job", return_value=existing) as describe:
+                    job, result_changed, msg = _manage_training_job_present(MagicMock(), module, existing)
+    assert job == existing
+    assert result_changed == changed
+    assert describe.call_count == (0 if check_mode else 1)
+    if not changed:
+        assert msg == "Training job test-job is already up to date."
+    elif check_mode:
+        assert msg == "Check mode: would have updated training job test-job."
+    else:
+        assert msg == "Training job test-job updated successfully."
+
+
+@pytest.mark.parametrize(
+    "params,message",
+    [
+        ({"algorithm_specification": {}}, "algorithm_specification.training_input_mode is required."),
+        (
+            {"algorithm_specification": {"training_input_mode": "File"}},
+            "Exactly one of algorithm_specification.training_image and "
+            "algorithm_specification.algorithm_name must be specified.",
+        ),
+        ({"input_data_config": [{}]}, "input_data_config[0].channel_name is required."),
+        (
+            {"input_data_config": [{"channel_name": "train"}]},
+            "input_data_config[0].data_source.s3_data_source is required.",
+        ),
+        (
+            {
+                "input_data_config": [
+                    {"channel_name": "train", "data_source": {"s3_data_source": {"s3_uri": "s3://test"}}}
+                ]
+            },
+            "input_data_config[0].data_source.s3_data_source.s3_data_type is required.",
+        ),
+        ({"output_data_config": {}}, "output_data_config.s3_output_path is required."),
+        (
+            {"resource_config": {"instance_count": 1}},
+            "These resource_config options must be supplied together: instance_type, volume_size_in_gb.",
+        ),
+        ({"checkpoint_config": {}}, "checkpoint_config.s3_uri is required."),
+    ],
+)
+def test_training_job_nested_validation_preserves_errors(params, message):
+    module = MagicMock()
+    module.params = params
+    module.fail_json.side_effect = RuntimeError("validation failed")
+    with pytest.raises(RuntimeError, match="validation failed"):
+        _validate_nested_params(module)
+    module.fail_json.assert_called_once_with(msg=message)
 
 
 @pytest.mark.parametrize(
