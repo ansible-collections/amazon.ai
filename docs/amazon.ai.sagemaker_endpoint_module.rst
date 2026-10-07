@@ -583,7 +583,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td>on success when O(state=present) and tags are managed</td>
+                <td>on success when O(state=present)</td>
                 <td>
                             <div>A dictionary containing the endpoint tags.</div>
                     <br/>

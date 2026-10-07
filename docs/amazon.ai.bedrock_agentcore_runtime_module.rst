@@ -55,7 +55,7 @@ Parameters
                 </td>
                 <td>
                         <div>AWS access key ID.</div>
-                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>AWS Access Keys and Secret Access Keys</a>.</div>
+                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys</a>.</div>
                         <div>The <code>AWS_ACCESS_KEY_ID</code> or <code>AWS_ACCESS_KEY</code> environment variables may also be used in decreasing order of preference.</div>
                         <div>The <em>aws_access_key</em> and <em>profile</em> options are mutually exclusive.</div>
                         <div>The <em>aws_access_key_id</em> alias was added in release 5.1.0 for consistency with the AWS botocore SDK.</div>
@@ -188,7 +188,7 @@ Parameters
                 </td>
                 <td>
                         <div>A dictionary to modify the botocore configuration.</div>
-                        <div>Parameters can be found in the AWS documentation <a href='https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html#botocore.config.Config'>Botocore Config</a>.</div>
+                        <div>Parameters can be found in the AWS documentation <a href='https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html#botocore.config.Config'>https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html#botocore.config.Config</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -620,7 +620,7 @@ Parameters
                 </td>
                 <td>
                         <div>A named AWS profile to use for authentication.</div>
-                        <div>See the AWS documentation for more information about named profiles <a href='https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html'>CLI configure profiles</a>.</div>
+                        <div>See the AWS documentation for more information about named profiles <a href='https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html'>https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html</a>.</div>
                         <div>The <code>AWS_PROFILE</code> environment variable may also be used.</div>
                         <div>The <em>profile</em> option is mutually exclusive with the <em>aws_access_key</em>, <em>aws_secret_key</em> and <em>session_token</em> options.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: aws_profile</div>
@@ -662,7 +662,7 @@ Parameters
                         <div>The AWS region to use.</div>
                         <div>For global services such as IAM, Route53 and CloudFront, <em>region</em> is ignored.</div>
                         <div>The <code>AWS_REGION</code> environment variable may also be used.</div>
-                        <div>See the Amazon AWS documentation for more information <a href='http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region'>AWS EC2 region</a>.</div>
+                        <div>See the Amazon AWS documentation for more information <a href='http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region'>http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region</a>.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: aws_region</div>
                 </td>
             </tr>
@@ -747,7 +747,7 @@ Parameters
                 </td>
                 <td>
                         <div>AWS secret access key.</div>
-                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>AWS Access Keys and Secret Access Keys</a>.</div>
+                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys</a>.</div>
                         <div>The <code>AWS_SECRET_ACCESS_KEY</code> or <code>AWS_SECRET_KEY</code> environment variables may also be used in decreasing order of preference.</div>
                         <div>The <em>secret_key</em> and <em>profile</em> options are mutually exclusive.</div>
                         <div>The <em>aws_secret_access_key</em> alias was added in release 5.1.0 for consistency with the AWS botocore SDK.</div>
@@ -803,7 +803,7 @@ Parameters
                 </td>
                 <td>
                         <div>AWS STS session token for use with temporary credentials.</div>
-                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>AWS Access Keys and Secret Access Keys</a>.</div>
+                        <div>See the AWS documentation for more information about access tokens <a href='https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys'>https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys</a>.</div>
                         <div>The <code>AWS_SESSION_TOKEN</code> environment variable may also be used.</div>
                         <div>The <em>session_token</em> and <em>profile</em> options are mutually exclusive.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: aws_session_token</div>
@@ -945,7 +945,7 @@ Examples
 
 Return Values
 -------------
-Common return values are documented in the `common return values section <https://docs.ansible.com/projects/ansible/latest/reference_appendices/common_return_values.html#common-return-values>`_ of the Ansible documentation, the following are the fields unique to this module:
+Common return values are documented `here <https://docs.ansible.com/projects/ansible/latest/reference_appendices/common_return_values.html#common-return-values>`_, the following are the fields unique to this module:
 
 .. raw:: html
 
