@@ -32,3 +32,5 @@ action_groups:
     - sagemaker_endpoint_config_info
     - sagemaker_endpoint
     - sagemaker_endpoint_info
+    - sagemaker_training_job
+    - sagemaker_training_job_info

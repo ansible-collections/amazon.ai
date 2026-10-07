@@ -1,0 +1,17 @@
+test_id: "{{ tiny_prefix | lower | regex_replace('[^a-z0-9-]', '-') }}"
+training_job_name: "test-sm-training-{{ test_id }}"
+stoppable_training_job_name: "test-sm-training-stop-{{ test_id }}"
+invalid_role_training_job_name: "test-sm-training-invalid-role-{{ test_id }}"
+training_role_name: "sm-training-job-{{ test_id }}"
+training_role_policy_name: "sm-training-job-access-{{ test_id }}"
+training_ecr_repository_name: "sagemaker-training-job-{{ test_id }}"
+training_instance_type: "{{ lookup('env', 'SAGEMAKER_TEST_INSTANCE_TYPE') | default('ml.m5.large', true) }}"
+training_max_runtime_seconds: 3600
+training_warm_pool_seconds: 300
+training_stop_sleep_seconds: 1800
+training_image_tag: "integration-{{ test_id }}"
+training_image_context: "{{ role_path }}/files/container"
+training_image_script: "{{ role_path }}/files/manage_training_image.py"
+training_output_bucket: "amazon-ai-sm-training-{{ caller_info.account }}-{{ test_id }}"
+training_input_s3_uri: "s3://{{ training_output_bucket }}/input/"
+training_output_s3_uri: "s3://{{ training_output_bucket }}/{{ test_id }}/"
