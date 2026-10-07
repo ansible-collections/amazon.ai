@@ -478,6 +478,7 @@ def wait_for_agent_runtime_endpoint_status(
     endpoint_name: str,
     status: str,
     sleep_time: int = 5,
+    fail_on_failed_status: bool = True,
 ) -> None:
     """
     Wait for an Amazon Bedrock Agent Runtime Endpoint to reach a specific status.
@@ -502,6 +503,11 @@ def wait_for_agent_runtime_endpoint_status(
                       (e.g., "PREPARED", "DELETED").
         sleep_time (int, optional): Number of seconds to sleep between polling
                                     attempts. Defaults to 5 seconds.
+        fail_on_failed_status (bool, optional): When True (default), a CREATE_FAILED or
+                                    UPDATE_FAILED status fails the module. When False, such
+                                    a terminal failed status is treated as "settled" and the
+                                    function returns so the caller can act on it (for example,
+                                    delete a failed endpoint). Defaults to True.
 
     Raises:
         ClientError: If AWS returns an unexpected error during polling.
@@ -525,10 +531,14 @@ def wait_for_agent_runtime_endpoint_status(
         if current_status == status:
             return
         if current_status in {AgentRuntimeEndpointStatus.CREATE_FAILED, AgentRuntimeEndpointStatus.UPDATE_FAILED}:
-            module.fail_json(
-                msg=f"Agent runtime endpoint {endpoint_name} failed with status '{current_status}': "
-                f"{endpoint.get('failure_reason', 'Unknown failure reason')}."
-            )
+            if fail_on_failed_status:
+                module.fail_json(
+                    msg=f"Agent runtime endpoint {endpoint_name} failed with status '{current_status}': "
+                    f"{endpoint.get('failure_reason', 'Unknown failure reason')}."
+                )
+            # Terminal failed state reached; let the caller decide what to do next
+            # (e.g. delete a CREATE_FAILED/UPDATE_FAILED endpoint for state=absent).
+            return
         if attempt < max_attempts - 1:
             time.sleep(sleep_time)
 
@@ -551,6 +561,16 @@ def _runtime_endpoint_case_sensitive_parameters(module: AnsibleAWSModule, params
     if module.params.get("tags"):
         params["tags"] = module.params.get("tags")
     return params
+
+
+# A freshly deleted endpoint name may not be immediately reusable: AWS can still
+# report the old resource until its deletion fully propagates, returning
+# ConflictException on an immediate re-create (e.g. state=present against an endpoint
+# that was mid-DELETING when the task started). Retry on ConflictException so the
+# re-create succeeds once the name is released.
+@AWSRetry.jittered_backoff(retries=5, delay=3, catch_extra_error_codes=["ConflictException"])
+def _create_agent_runtime_endpoint_api(client, **params) -> Dict[str, Any]:
+    return client.create_agent_runtime_endpoint(**params)
 
 
 def create_agent_runtime_endpoint(
@@ -581,7 +601,7 @@ def create_agent_runtime_endpoint(
     )
     params = snake_dict_to_camel_dict(scrub_none_parameters(params))
     params = _runtime_endpoint_case_sensitive_parameters(module, params)
-    response = client.create_agent_runtime_endpoint(**params)
+    response = _create_agent_runtime_endpoint_api(client, **params)
 
     endpoint_name_resp: str = response.get("name", endpoint_name)
     # User has an option to wait for the endpoint to be ready, default is True
