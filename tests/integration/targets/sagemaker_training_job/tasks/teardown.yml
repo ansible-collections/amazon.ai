@@ -1,0 +1,60 @@
+---
+- name: Clean up the invalid-role training job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ invalid_role_training_job_name }}"
+    wait_timeout: 3600
+  ignore_errors: true
+
+- name: Clean up the primary training job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ training_job_name }}"
+    wait_timeout: 3600
+  ignore_errors: true
+
+- name: Clean up the stoppable training job
+  amazon.ai.sagemaker_training_job:
+    state: absent
+    training_job_name: "{{ stoppable_training_job_name }}"
+    wait_timeout: 3600
+  ignore_errors: true
+
+- name: Remove the temporary execution-role policy
+  amazon.aws.iam_policy:
+    iam_type: role
+    iam_name: "{{ training_role_name }}"
+    policy_name: "{{ training_role_policy_name }}"
+    state: absent
+  ignore_errors: true
+
+- name: Remove the temporary execution role
+  amazon.aws.iam_role:
+    name: "{{ training_role_name }}"
+    create_instance_profile: false
+    state: absent
+  ignore_errors: true
+
+- name: Remove the temporary ECR image and repository
+  ansible.builtin.command:
+    argv:
+      - "{{ ansible_playbook_python }}"
+      - "{{ training_image_script }}"
+      - delete
+      - "{{ training_ecr_repository_name }}"
+      - "{{ training_image }}"
+  environment:
+    AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+    AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+    AWS_SESSION_TOKEN: "{{ security_token | default(omit) }}"
+    AWS_DEFAULT_REGION: "{{ aws_region }}"
+  when: training_image_setup is defined and not training_image_setup.failed
+  no_log: true
+  ignore_errors: true
+
+- name: Remove the dedicated training output bucket and its objects
+  amazon.aws.s3_bucket:
+    name: "{{ training_output_bucket }}"
+    state: absent
+    force: true
+  ignore_errors: true
