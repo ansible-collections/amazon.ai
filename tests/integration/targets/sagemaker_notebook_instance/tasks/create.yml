@@ -1,0 +1,70 @@
+---
+- name: Check notebook instance creation
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_initial }}"
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    tags:
+      Environment: integration
+  check_mode: true
+  register: create_check
+
+- name: Assert notebook instance creation check mode
+  ansible.builtin.assert:
+    that:
+      - create_check.changed
+      - "'Check mode: would have created notebook instance' in create_check.msg"
+
+- name: Confirm check mode did not create the notebook instance
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: create_check_info
+
+- name: Assert the notebook instance is still absent
+  ansible.builtin.assert:
+    that:
+      - not create_check_info.changed
+      - create_check_info.notebook_instance == []
+
+- name: Create the notebook instance
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_initial }}"
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    tags:
+      Environment: integration
+    wait_timeout: 1800
+  register: create_real
+
+- name: Assert the notebook instance was created and is in service
+  ansible.builtin.assert:
+    that:
+      - create_real.changed
+      - create_real.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' created successfully.'
+      - create_real.notebook_instance.notebook_instance_name == notebook_instance_name
+      - create_real.notebook_instance.notebook_instance_status == 'InService'
+      - create_real.notebook_instance.instance_type == notebook_instance_type
+      - create_real.notebook_instance.volume_size_in_gb == notebook_volume_initial
+      - create_real.tags.Environment == 'integration'
+
+- name: Re-run notebook instance creation
+  amazon.ai.sagemaker_notebook_instance:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    instance_type: "{{ notebook_instance_type }}"
+    role_arn: "{{ notebook_instance_role_arn }}"
+    volume_size_in_gb: "{{ notebook_volume_initial }}"
+    ip_address_type: "{{ notebook_ip_address_type }}"
+    tags:
+      Environment: integration
+    wait_timeout: 1800
+  register: create_rerun
+
+- name: Assert notebook instance creation idempotency
+  ansible.builtin.assert:
+    that:
+      - not create_rerun.changed
+      - create_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' is already up to date.'

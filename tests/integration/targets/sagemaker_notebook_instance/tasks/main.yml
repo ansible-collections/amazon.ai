@@ -1,0 +1,53 @@
+---
+- name: SageMaker notebook instance integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for SageMaker notebook instance
+      amazon.aws.iam_role:
+        name: "{{ notebook_instance_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      register: notebook_instance_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        notebook_instance_role_arn: "{{ notebook_instance_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Waiting for IAM role to be fully propagated."
+
+    - name: Test notebook instance creation
+      ansible.builtin.include_tasks: create.yml
+
+    - name: Test notebook instance info lookups
+      ansible.builtin.include_tasks: info.yml
+
+    - name: Test notebook instance update
+      ansible.builtin.include_tasks: update.yml
+
+    - name: Test notebook instance tag reconciliation
+      ansible.builtin.include_tasks: tags.yml
+
+    - name: Test create-only drift protection
+      ansible.builtin.include_tasks: replacement.yml
+
+    - name: Test notebook instance deletion
+      ansible.builtin.include_tasks: delete.yml
+  always:
+    - name: Tear down the notebook instance
+      ansible.builtin.include_tasks: teardown.yml
+      when: notebook_instance_role_arn | default('') | length > 0

@@ -64,9 +64,9 @@ Name | Description
 [amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
 [amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
 [amazon.ai.bedrock_agentcore_runtime](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_module.rst)|Manage Amazon Bedrock AgentCore runtimes
-[amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
 [amazon.ai.bedrock_agentcore_runtime_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_module.rst)|Manage Amazon Bedrock AgentCore runtime endpoints
 [amazon.ai.bedrock_agentcore_runtime_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_info_module.rst)|Gather information about Bedrock AgentCore runtime endpoints
+[amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
 [amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
 [amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
 [amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models
@@ -85,6 +85,8 @@ Name | Description
 [amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
 [amazon.ai.sagemaker_model_package_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_module.rst)|Manage Amazon SageMaker Model Package Groups
 [amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
+[amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
 
 <!--end collection content-->
 
