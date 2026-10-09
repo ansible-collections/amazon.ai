@@ -262,21 +262,6 @@ def _image_version_params(module, **extra: Any) -> Dict[str, Any]:
     return params
 
 
-@AWSRetry.jittered_backoff(retries=10)
-def _create_image_version_call(client, **params: Any) -> Dict[str, Any]:
-    return client.create_image_version(**params)
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _update_image_version_call(client, **params: Any) -> Dict[str, Any]:
-    return client.update_image_version(**params)
-
-
-@AWSRetry.jittered_backoff(retries=10)
-def _delete_image_version_call(client, **params: Any) -> Dict[str, Any]:
-    return client.delete_image_version(**params)
-
-
 def wait_for_image_version_created(client, module, image_name: str, version: int) -> None:
     """Wait for a SageMaker image version to reach CREATED using the botocore waiter."""
     if not module.params.get("wait", True):
@@ -317,7 +302,7 @@ def create_image_version(client, module) -> Tuple[bool, str, Optional[int]]:
         base_image=module.params["base_image"],
         aliases=module.params.get("aliases"),
     )
-    response = _create_image_version_call(client, **params)
+    response = client.create_image_version(aws_retry=True, **params)
     # ImageVersionArn ends in "image-version/<name>/<version>"
     version = int(response["ImageVersionArn"].rsplit("/", 1)[-1])
     wait_for_image_version_created(client, module, image_name, version)
@@ -389,7 +374,7 @@ def update_image_version(client, module, existing: Dict[str, Any]) -> Tuple[bool
         capitalize_first=True,
     )
     params.update(properties_to_update)
-    _update_image_version_call(client, **params)
+    client.update_image_version(aws_retry=True, **params)
     updated = get_image_version(client, image_name, version) or existing
     return True, f"SageMaker image version {image_name}:{version} updated successfully.", updated
 
@@ -414,7 +399,7 @@ def delete_image_version(client, module, existing: Optional[Dict[str, Any]]) -> 
     if module.check_mode:
         return True, f"Check mode: would have deleted SageMaker image version {image_name}:{version}."
 
-    _delete_image_version_call(client, ImageName=image_name, Version=version)
+    client.delete_image_version(ImageName=image_name, Version=version, aws_retry=True)
     wait_for_image_version_deletion(client, module, image_name, version, wait_timeout=wait_timeout)
     return True, f"SageMaker image version {image_name}:{version} deleted successfully."
 
