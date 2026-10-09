@@ -24,6 +24,8 @@ action_groups:
     - sagemaker_endpoint_config_info
     - sagemaker_image
     - sagemaker_image_info
+    - sagemaker_image_version
+    - sagemaker_image_version_info
     - sagemaker_model
     - sagemaker_model_info
     - sagemaker_model_package_group

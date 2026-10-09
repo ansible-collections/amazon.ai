@@ -19,7 +19,8 @@ Synopsis
 --------
 - Create and delete Amazon SageMaker model package groups.
 - Reconcile tags on an existing model package group.
-- Replace a group when a create-only field changes and force is enabled.
+- Replace a group when a create-only field changes and O(force=true) is enabled.
+- This replacement is destructive: AWS deletes the current group and recreates it, and the group must be empty before deletion succeeds.
 
 
 
@@ -149,6 +150,8 @@ Parameters
                 </td>
                 <td>
                         <div>Whether to delete and recreate the model package group when O(model_package_group_description) differs from the existing resource.</div>
+                        <div>This is destructive and permanently removes the existing group before creating a new one.</div>
+                        <div>AWS requires the group to be empty before deletion succeeds; if model versions are still attached, the delete fails and the replacement is not performed.</div>
                 </td>
             </tr>
             <tr>
@@ -332,6 +335,41 @@ Parameters
                 <td>
                         <div>When set to <code>false</code>, SSL certificates will not be validated for communication with the AWS APIs.</div>
                         <div>Setting <em>validate_certs=false</em> is strongly discouraged, as an alternative, consider setting <em>aws_ca_bundle</em> instead.</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>wait</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">boolean</span>
+                    </div>
+                </td>
+                <td>
+                        <ul style="margin: 0; padding: 0"><b>Choices:</b>
+                                    <li>no</li>
+                                    <li><div style="color: blue"><b>yes</b>&nbsp;&larr;</div></li>
+                        </ul>
+                </td>
+                <td>
+                        <div>Whether to wait for the delete operation to complete before returning.</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>wait_timeout</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">integer</span>
+                    </div>
+                </td>
+                <td>
+                        <b>Default:</b><br/><div style="color: blue">600</div>
+                </td>
+                <td>
+                        <div>The number of seconds to wait for a delete to complete when O(wait=true).</div>
                 </td>
             </tr>
     </table>
@@ -543,6 +581,23 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">Model package group example-model-package-group created successfully.</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>tags</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td>when O(state=present)</td>
+                <td>
+                            <div>A dictionary of tags assigned to the model package group.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;project&#x27;: &#x27;demo&#x27;}</div>
                 </td>
             </tr>
     </table>

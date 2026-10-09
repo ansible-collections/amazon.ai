@@ -12,6 +12,7 @@ try:
 except ImportError:
     pass
 
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
@@ -131,6 +132,276 @@ def list_images(client, **params: Any) -> List[Dict[str, Any]]:
     """
     paginator = client.get_paginator("list_images")
     return paginator.paginate(**params).build_full_result()["Images"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_image_version(
+    client, image_name: str, version: Optional[int] = None, alias: Optional[str] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a SageMaker Image Version.
+
+    Args:
+        client: The boto3 SageMaker client.
+        image_name: The name of the parent SageMaker Image.
+        version: The version number. Without version or alias the latest version is described.
+        alias: An alias of the version.
+
+    Returns:
+        A dictionary with the image version details if found, otherwise None.
+    """
+    params = scrub_none_parameters({"ImageName": image_name, "Version": version, "Alias": alias})
+    try:
+        return client.describe_image_version(**params)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_image_versions(client, image_name: str, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve the versions of a SageMaker Image using pagination.
+
+    Returns:
+        A list of image version summary dictionaries, empty when the image does not exist.
+    """
+    paginator = client.get_paginator("list_image_versions")
+    try:
+        return paginator.paginate(ImageName=image_name, **params).build_full_result()["ImageVersions"]
+    except is_boto3_error_code("ResourceNotFound"):
+        return []
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_image_version_aliases(client, image_name: str, version: Optional[int] = None) -> List[str]:
+    """
+    Retrieve the aliases of a SageMaker Image Version, or of all its versions when version is None.
+
+    Returns:
+        A list of aliases, empty when the image does not exist.
+    """
+    params = scrub_none_parameters({"ImageName": image_name, "Version": version})
+    paginator = client.get_paginator("list_aliases")
+    try:
+        return paginator.paginate(**params).build_full_result()["SageMakerImageVersionAliases"]
+    except is_boto3_error_code("ResourceNotFound"):
+        return []
+
+
+def _attach_image_version_aliases(client, image_name: str, image_version: Dict[str, Any]) -> Dict[str, Any]:
+    """Add the 'Aliases' key to a describe_image_version response."""
+    image_version["Aliases"] = list_image_version_aliases(client, image_name, version=image_version["Version"])
+    return image_version
+
+
+def get_image_version(client, image_name: str, version: int) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a SageMaker Image Version together with its aliases.
+
+    Returns:
+        The describe response with an added 'Aliases' key, or None if the version does not exist.
+    """
+    image_version = describe_image_version(client, image_name, version=version)
+    if image_version is None:
+        return None
+    return _attach_image_version_aliases(client, image_name, image_version)
+
+
+def find_image_versions(
+    client, image_name: str, version: Optional[int] = None, alias: Optional[str] = None, **list_params: Any
+) -> List[Dict[str, Any]]:
+    """
+    Find the versions of a SageMaker Image, each together with its aliases.
+
+    Args:
+        client: The boto3 SageMaker client.
+        image_name: The name of the parent SageMaker Image.
+        version: Return only this version.
+        alias: Return only the version carrying this alias.
+        **list_params: Extra ListImageVersions parameters (PascalCase), used when neither
+            version nor alias is given.
+
+    Returns:
+        A list of describe responses, empty when nothing matched.
+    """
+    if version is not None or alias is not None:
+        image_version = describe_image_version(client, image_name, version=version, alias=alias)
+        if image_version is None:
+            return []
+        return [_attach_image_version_aliases(client, image_name, image_version)]
+
+    image_versions = (
+        get_image_version(client, image_name, summary["Version"])
+        for summary in list_image_versions(client, image_name, **list_params)
+    )
+    return [image_version for image_version in image_versions if image_version is not None]
+
+
+IMAGE_VERSION_PROPERTIES = (
+    "horovod",
+    "job_type",
+    "ml_framework",
+    "processor",
+    "programming_lang",
+    "release_notes",
+    "vendor_guidance",
+)
+
+
+def _image_version_params(module, **extra: Any) -> Dict[str, Any]:
+    """
+    Convert the image version option values, plus extra snake_case keys, to API parameters.
+
+    Keys whose value is None are dropped.
+    """
+    values = {name: module.params.get(name) for name in IMAGE_VERSION_PROPERTIES}
+    params = snake_dict_to_camel_dict(scrub_none_parameters(dict(values, **extra)), capitalize_first=True)
+    # The generic conversion spells the key "MlFramework"; the API expects "MLFramework".
+    if "MlFramework" in params:
+        params["MLFramework"] = params.pop("MlFramework")
+    return params
+
+
+def wait_for_image_version_created(client, module, image_name: str, version: int) -> None:
+    """Wait for a SageMaker image version to reach CREATED using the botocore waiter."""
+    if not module.params.get("wait", True):
+        return
+
+    wait_timeout: int = module.params.get("wait_timeout", 600)
+    delay = max(1, min(60, wait_timeout))
+    waiter = client.get_waiter("image_version_created")
+    try:
+        waiter.wait(
+            ImageName=image_name,
+            Version=version,
+            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, wait_timeout // delay)),
+        )
+    except WaiterError as e:
+        image_version = describe_image_version(client, image_name, version=version) or {}
+        reason = image_version.get("FailureReason", "")
+        module.fail_json(
+            msg=f"Error waiting for SageMaker image version {image_name}:{version} to be created: {reason or e}"
+        )
+
+
+def create_image_version(client, module) -> Tuple[bool, str, Optional[int]]:
+    """
+    Create a SageMaker image version and wait for it to be created.
+
+    Returns:
+        A tuple (changed, message, version) where version is the number assigned by the service,
+        or None in check mode.
+    """
+    image_name = module.params["image_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created a version of SageMaker image {image_name}.", None
+
+    params = _image_version_params(
+        module,
+        image_name=image_name,
+        base_image=module.params["base_image"],
+        aliases=module.params.get("aliases"),
+    )
+    response = client.create_image_version(aws_retry=True, **params)
+    # ImageVersionArn ends in "image-version/<name>/<version>"
+    version = int(response["ImageVersionArn"].rsplit("/", 1)[-1])
+    wait_for_image_version_created(client, module, image_name, version)
+    return True, f"SageMaker image version {image_name}:{version} created successfully.", version
+
+
+def image_version_needs_update(existing: Dict[str, Any], module) -> Tuple[Dict[str, Any], List[str], List[str]]:
+    """
+    Compare the supplied options with an existing image version.
+
+    Returns:
+        A tuple (properties_to_update, aliases_to_add, aliases_to_delete).
+    """
+    base_image = module.params.get("base_image")
+    if base_image is not None and base_image != existing.get("BaseImage"):
+        module.fail_json(
+            msg=(
+                "base_image cannot be changed on an existing image version. "
+                f"Current: {existing.get('BaseImage')}. Create a new version instead."
+            )
+        )
+
+    desired = _image_version_params(module)
+    properties_to_update = {key: value for key, value in desired.items() if existing.get(key) != value}
+
+    aliases_to_add: List[str] = []
+    aliases_to_delete: List[str] = []
+    if module.params.get("aliases") is not None:
+        desired_aliases = set(module.params["aliases"])
+        existing_aliases = set(existing.get("Aliases", []))
+        aliases_to_add = sorted(desired_aliases - existing_aliases)
+        aliases_to_delete = sorted(existing_aliases - desired_aliases)
+
+    return properties_to_update, aliases_to_add, aliases_to_delete
+
+
+def update_image_version(client, module, existing: Dict[str, Any]) -> Tuple[bool, str, Dict[str, Any]]:
+    """
+    Update the properties and aliases of an existing SageMaker image version.
+
+    A version still in CREATING is first waited on (when wait is enabled).
+
+    Returns:
+        A tuple (changed, message, image_version) with the image version as it is after the call.
+    """
+    image_name = module.params["image_name"]
+    version = module.params["version"]
+
+    if existing.get("ImageVersionStatus") == "CREATING" and module.params.get("wait", True):
+        wait_for_image_version_created(client, module, image_name, version)
+        existing = get_image_version(client, image_name, version) or existing
+
+    properties_to_update, aliases_to_add, aliases_to_delete = image_version_needs_update(existing, module)
+    if not (properties_to_update or aliases_to_add or aliases_to_delete):
+        return False, f"SageMaker image version {image_name}:{version} already matches the desired state.", existing
+
+    if module.check_mode:
+        return True, f"Check mode: would have updated SageMaker image version {image_name}:{version}.", existing
+
+    params = snake_dict_to_camel_dict(
+        scrub_none_parameters(
+            dict(
+                image_name=image_name,
+                version=version,
+                aliases_to_add=aliases_to_add or None,
+                aliases_to_delete=aliases_to_delete or None,
+            )
+        ),
+        capitalize_first=True,
+    )
+    params.update(properties_to_update)
+    client.update_image_version(aws_retry=True, **params)
+    updated = get_image_version(client, image_name, version) or existing
+    return True, f"SageMaker image version {image_name}:{version} updated successfully.", updated
+
+
+def delete_image_version(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, str]:
+    """
+    Delete a SageMaker image version and wait until it is gone.
+
+    Args:
+        existing: The described image version, or None when it does not exist.
+    """
+    image_name = module.params["image_name"]
+    version = module.params["version"]
+    if existing is None:
+        return False, f"SageMaker image version {image_name}:{version} does not exist."
+
+    wait_timeout: int = module.params.get("wait_timeout", 600)
+    if existing.get("ImageVersionStatus") == "DELETING":
+        wait_for_image_version_deletion(client, module, image_name, version, wait_timeout=wait_timeout)
+        return False, f"SageMaker image version {image_name}:{version} is already being deleted."
+
+    if module.check_mode:
+        return True, f"Check mode: would have deleted SageMaker image version {image_name}:{version}."
+
+    client.delete_image_version(ImageName=image_name, Version=version, aws_retry=True)
+    wait_for_image_version_deletion(client, module, image_name, version, wait_timeout=wait_timeout)
+    return True, f"SageMaker image version {image_name}:{version} deleted successfully."
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -588,7 +859,7 @@ def wait_for_endpoint(client, module, deleted: bool = False) -> None:
     """
     endpoint_name = module.params["endpoint_name"]
     wait_timeout = module.params["wait_timeout"]
-    delay = min(30, wait_timeout)
+    delay = max(1, min(30, wait_timeout))
     waiter = client.get_waiter("endpoint_deleted" if deleted else "endpoint_in_service")
     try:
         waiter.wait(

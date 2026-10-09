@@ -1,0 +1,546 @@
+---
+- name: SageMaker Image Version integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Get AWS caller info
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Save account ID
+      ansible.builtin.set_fact:
+        aws_account_id: "{{ caller_info.account }}"
+
+    - name: Save container image URI
+      ansible.builtin.set_fact:
+        image_version_base_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ image_version_ecr_repository_name }}:latest"
+
+    # -------------------------------------------------------
+    # ECR — create the repo and push a Docker V2 image
+    # skopeo is installed inside the test container so no
+    # host-side dependency is needed for local or CI runs
+    # -------------------------------------------------------
+    - name: Ensure ECR repository exists
+      community.aws.ecs_ecr:
+        name: "{{ image_version_ecr_repository_name }}"
+        state: present
+
+    - name: Install skopeo
+      ansible.builtin.package:
+        name: skopeo
+        state: present
+
+    - name: Install awscli
+      ansible.builtin.pip:
+        name: awscli
+        state: present
+
+    - name: Get ECR login password
+      ansible.builtin.command: aws ecr get-login-password --region {{ aws_region }}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default('') }}"
+      register: ecr_token
+      no_log: true
+
+    - name: Push Docker V2 image to ECR
+      ansible.builtin.command: >-
+        skopeo copy
+        --format v2s2
+        --dest-creds AWS:{{ ecr_token.stdout }}
+        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ image_version_base_image }}
+      no_log: true
+
+    # -------------------------------------------------------
+    # SETUP — IAM role and parent image
+    # -------------------------------------------------------
+    - name: Create IAM role for SageMaker Image
+      amazon.aws.iam_role:
+        name: "{{ image_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      register: image_role
+
+    - name: Save role ARN
+      ansible.builtin.set_fact:
+        image_role_arn: "{{ image_role.iam_role.arn }}"
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+        prompt: "Waiting for IAM role to be fully propagated."
+
+    - name: Create the parent SageMaker Image
+      amazon.ai.sagemaker_image:
+        state: present
+        image_name: "{{ image_name }}"
+        role_arn: "{{ image_role_arn }}"
+
+    # -------------------------------------------------------
+    # FAILURE PATHS
+    # -------------------------------------------------------
+    - name: Create image version without version and base_image (expected failure)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+      register: version_no_base_image
+      ignore_errors: true
+
+    - name: Assert missing base_image fails
+      ansible.builtin.assert:
+        that:
+          - version_no_base_image.failed
+          - "'base_image' in version_no_base_image.msg"
+
+    - name: Delete image version without version (expected failure)
+      amazon.ai.sagemaker_image_version:
+        state: absent
+        image_name: "{{ image_name }}"
+      register: version_absent_no_version
+      ignore_errors: true
+
+    - name: Assert absent without version fails
+      ansible.builtin.assert:
+        that:
+          - version_absent_no_version.failed
+
+    - name: Create image version in a non-existent image (expected failure)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}-missing"
+        base_image: "{{ image_version_base_image }}"
+      register: version_no_image
+      ignore_errors: true
+
+    - name: Assert missing parent image fails
+      ansible.builtin.assert:
+        that:
+          - version_no_image.failed
+          - "'does not exist' in version_no_image.msg"
+
+    # -------------------------------------------------------
+    # CREATE — check_mode
+    # -------------------------------------------------------
+    - name: Create SageMaker Image Version (check_mode)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        base_image: "{{ image_version_base_image }}"
+      check_mode: true
+      register: version_create_check
+
+    - name: Assert check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - version_create_check.changed
+          - "'Check mode: would have created' in version_create_check.msg"
+
+    - name: Confirm no version was created
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+      register: version_info_none
+
+    - name: Assert no versions exist after check_mode create
+      ansible.builtin.assert:
+        that:
+          - version_info_none.image_versions | length == 0
+
+    # -------------------------------------------------------
+    # CREATE — real
+    # -------------------------------------------------------
+    - name: Create SageMaker Image Version
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        base_image: "{{ image_version_base_image }}"
+        aliases:
+          - first
+        release_notes: "integration test"
+        job_type: TRAINING
+        processor: CPU
+        ml_framework: "PyTorch 1.0"
+        wait_timeout: 900
+      register: version_create
+
+    - name: Assert version was created
+      ansible.builtin.assert:
+        that:
+          - version_create.changed
+          - version_create.image_version.version is defined
+          - version_create.image_version.image_version_arn is defined
+          - version_create.image_version.image_version_status == 'CREATED'
+          - version_create.image_version.aliases == ['first']
+          - version_create.image_version.release_notes == 'integration test'
+          - version_create.image_version.ml_framework == 'PyTorch 1.0'
+
+    - name: Save the first version number
+      ansible.builtin.set_fact:
+        version_one: "{{ version_create.image_version.version }}"
+
+    # -------------------------------------------------------
+    # INFO — list, by version, by alias, by name alias, missing
+    # -------------------------------------------------------
+    - name: List versions of the image
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+      register: version_info_list
+
+    - name: Assert the list holds the version with the same shape as describe
+      ansible.builtin.assert:
+        that:
+          - version_info_list.image_versions | length == 1
+          - version_info_list.image_versions[0].version == version_one
+          - version_info_list.image_versions[0].image_version_status == 'CREATED'
+          - version_info_list.image_versions[0].aliases == ['first']
+          - version_info_list.image_versions[0].base_image is defined
+
+    - name: Get the version by version number
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_info_by_version
+
+    - name: Get the version by alias
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        alias: first
+      register: version_info_by_alias
+
+    - name: Get the version using the name alias of image_name
+      amazon.ai.sagemaker_image_version_info:
+        name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_info_by_name
+
+    - name: Assert all lookups return the same version
+      ansible.builtin.assert:
+        that:
+          - version_info_by_version.image_versions | length == 1
+          - version_info_by_alias.image_versions | length == 1
+          - version_info_by_name.image_versions | length == 1
+          - version_info_by_alias.image_versions[0].image_version_arn == version_info_by_version.image_versions[0].image_version_arn
+          - version_info_by_name.image_versions[0].image_version_arn == version_info_by_version.image_versions[0].image_version_arn
+          - version_info_by_version.image_versions[0].aliases == ['first']
+
+    - name: Get a version that does not exist
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: 999
+      register: version_info_missing_version
+
+    - name: Get versions of an image that does not exist
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}-missing"
+      register: version_info_missing_image
+
+    - name: Assert missing resources give an empty list
+      ansible.builtin.assert:
+        that:
+          - not version_info_missing_version.failed
+          - version_info_missing_version.image_versions == []
+          - not version_info_missing_image.failed
+          - version_info_missing_image.image_versions == []
+          - version_info_missing_image.changed is not defined or not version_info_missing_image.changed
+
+    # -------------------------------------------------------
+    # CREATE — without version creates another version
+    # -------------------------------------------------------
+    - name: Create a second SageMaker Image Version (no version given)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        base_image: "{{ image_version_base_image }}"
+        wait_timeout: 900
+      register: version_create_second
+
+    - name: Assert a new, higher version was created
+      ansible.builtin.assert:
+        that:
+          - version_create_second.changed
+          - version_create_second.image_version.version | int > version_one | int
+          - version_create_second.image_version.image_version_status == 'CREATED'
+
+    - name: Save the second version number
+      ansible.builtin.set_fact:
+        version_two: "{{ version_create_second.image_version.version }}"
+
+    # -------------------------------------------------------
+    # INFO — sorting and mutual exclusion
+    # -------------------------------------------------------
+    - name: List versions sorted by version, descending
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        sort_by: VERSION
+        sort_order: DESCENDING
+      register: version_info_desc
+
+    - name: List versions sorted by version, ascending
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        sort_by: VERSION
+        sort_order: ASCENDING
+      register: version_info_asc
+
+    - name: Assert sort order flips the result
+      ansible.builtin.assert:
+        that:
+          - version_info_desc.image_versions | length == 2
+          - version_info_desc.image_versions[0].version == version_two
+          - version_info_asc.image_versions[0].version == version_one
+
+    - name: Combine version with sort_by (expected failure)
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        sort_by: VERSION
+      register: version_info_exclusive
+      ignore_errors: true
+
+    - name: Assert mutual exclusion fails
+      ansible.builtin.assert:
+        that:
+          - version_info_exclusive.failed
+
+    # -------------------------------------------------------
+    # UPDATE — check_mode
+    # -------------------------------------------------------
+    - name: Update SageMaker Image Version (check_mode)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        release_notes: "updated"
+        horovod: false
+        vendor_guidance: STABLE
+        job_type: INFERENCE
+        aliases:
+          - second
+      check_mode: true
+      register: version_update_check
+
+    - name: Assert update check_mode reports changed and changes nothing
+      ansible.builtin.assert:
+        that:
+          - version_update_check.changed
+          - "'Check mode: would have updated' in version_update_check.msg"
+
+    - name: Get the version after the check_mode update
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_info_after_check
+
+    - name: Assert the version is unchanged
+      ansible.builtin.assert:
+        that:
+          - version_info_after_check.image_versions[0].release_notes == 'integration test'
+          - version_info_after_check.image_versions[0].aliases == ['first']
+          - version_info_after_check.image_versions[0].job_type == 'TRAINING'
+
+    # -------------------------------------------------------
+    # UPDATE — real
+    # -------------------------------------------------------
+    - name: Update SageMaker Image Version
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        release_notes: "updated"
+        horovod: false
+        vendor_guidance: STABLE
+        job_type: INFERENCE
+        aliases:
+          - second
+      register: version_update
+
+    - name: Assert update changed the version
+      ansible.builtin.assert:
+        that:
+          - version_update.changed
+          - version_update.image_version.version == version_one
+          - version_update.image_version.release_notes == 'updated'
+          - version_update.image_version.horovod == false
+          - version_update.image_version.vendor_guidance == 'STABLE'
+          - version_update.image_version.job_type == 'INFERENCE'
+          - version_update.image_version.aliases == ['second']
+
+    - name: Get the version after the update
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_info_after_update
+
+    - name: Assert the update is persisted
+      ansible.builtin.assert:
+        that:
+          - version_info_after_update.image_versions | length == 1
+          - version_info_after_update.image_versions[0].image_version_arn == version_create.image_version.image_version_arn
+          - version_info_after_update.image_versions[0].release_notes == 'updated'
+          - version_info_after_update.image_versions[0].vendor_guidance == 'STABLE'
+          - version_info_after_update.image_versions[0].job_type == 'INFERENCE'
+          - version_info_after_update.image_versions[0].aliases == ['second']
+
+    # -------------------------------------------------------
+    # UPDATE — rerun (idempotency)
+    # -------------------------------------------------------
+    - name: Update SageMaker Image Version (Second Run - Idempotency)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        release_notes: "updated"
+        horovod: false
+        vendor_guidance: STABLE
+        job_type: INFERENCE
+        aliases:
+          - second
+      register: version_update_second
+
+    - name: Assert update idempotency
+      ansible.builtin.assert:
+        that:
+          - not version_update_second.changed
+          - "'already matches' in version_update_second.msg"
+          - version_update_second.image_version.version == version_one
+
+    # -------------------------------------------------------
+    # UPDATE — failure paths
+    # -------------------------------------------------------
+    - name: Change base_image of an existing version (expected failure)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        base_image: "{{ image_version_base_image }}-other"
+      register: version_base_image_change
+      ignore_errors: true
+
+    - name: Assert changing base_image fails
+      ansible.builtin.assert:
+        that:
+          - version_base_image_change.failed
+          - "'base_image' in version_base_image_change.msg"
+
+    - name: Update a version that does not exist (expected failure)
+      amazon.ai.sagemaker_image_version:
+        state: present
+        image_name: "{{ image_name }}"
+        version: 999
+        release_notes: "nope"
+      register: version_update_missing
+      ignore_errors: true
+
+    - name: Assert updating a missing version fails
+      ansible.builtin.assert:
+        that:
+          - version_update_missing.failed
+          - "'does not exist' in version_update_missing.msg"
+
+    # -------------------------------------------------------
+    # DELETE — check_mode
+    # -------------------------------------------------------
+    - name: Delete SageMaker Image Version (check_mode)
+      amazon.ai.sagemaker_image_version:
+        state: absent
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      check_mode: true
+      register: version_delete_check
+
+    - name: Assert delete check_mode reports changed
+      ansible.builtin.assert:
+        that:
+          - version_delete_check.changed
+          - "'Check mode: would have deleted' in version_delete_check.msg"
+
+    # -------------------------------------------------------
+    # DELETE — real
+    # -------------------------------------------------------
+    - name: Delete SageMaker Image Version
+      amazon.ai.sagemaker_image_version:
+        state: absent
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+        wait_timeout: 900
+      register: version_delete
+
+    - name: Assert delete changed
+      ansible.builtin.assert:
+        that:
+          - version_delete.changed
+
+    - name: Confirm the version is gone
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_info_deleted
+
+    - name: Assert the version no longer exists
+      ansible.builtin.assert:
+        that:
+          - version_info_deleted.image_versions == []
+
+    # -------------------------------------------------------
+    # DELETE — rerun (idempotency)
+    # -------------------------------------------------------
+    - name: Delete SageMaker Image Version (Second Run - Idempotency)
+      amazon.ai.sagemaker_image_version:
+        state: absent
+        image_name: "{{ image_name }}"
+        version: "{{ version_one }}"
+      register: version_delete_second
+
+    - name: Assert delete idempotency
+      ansible.builtin.assert:
+        that:
+          - not version_delete_second.changed
+          - "'does not exist' in version_delete_second.msg"
+
+  always:
+    - name: Cleanup - List remaining SageMaker Image Versions
+      amazon.ai.sagemaker_image_version_info:
+        image_name: "{{ image_name }}"
+      register: cleanup_versions
+      ignore_errors: true
+
+    - name: Cleanup - Delete remaining SageMaker Image Versions
+      amazon.ai.sagemaker_image_version:
+        state: absent
+        image_name: "{{ image_name }}"
+        version: "{{ item.version }}"
+        wait_timeout: 900
+      loop: "{{ cleanup_versions.image_versions | default([]) }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete parent SageMaker Image
+      amazon.ai.sagemaker_image:
+        state: absent
+        image_name: "{{ image_name }}"
+      ignore_errors: true
+
+    - name: Cleanup - Delete IAM role for SageMaker Image
+      amazon.aws.iam_role:
+        name: "{{ image_role_name }}"
+        state: absent
+        delete_instance_profile: true
+      ignore_errors: true
+
+    - name: Cleanup - Delete ECR repository
+      community.aws.ecs_ecr:
+        name: "{{ image_version_ecr_repository_name }}"
+        state: absent
+        force_absent: true
+      ignore_errors: true

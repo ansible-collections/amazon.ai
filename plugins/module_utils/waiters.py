@@ -39,9 +39,41 @@ model_package_group_data = {
     },
 }
 
+# botocore ships an ImageVersionDeleted waiter, but its success acceptor expects the error code
+# ResourceNotFoundException, while DescribeImageVersion raises ResourceNotFound. The native waiter
+# therefore reports a completed delete as a WaiterError, so this copy fixes the error code.
+image_version_data = {
+    "version": 2,
+    "waiters": {
+        "ImageVersionDeleted": {
+            "description": "Wait until a SageMaker image version is deleted",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeImageVersion",
+            "acceptors": [
+                {
+                    "matcher": "error",
+                    "expected": "ResourceNotFound",
+                    "state": "success",
+                },
+                {
+                    "matcher": "path",
+                    "argument": "ImageVersionStatus",
+                    "expected": "DELETE_FAILED",
+                    "state": "failure",
+                },
+            ],
+        }
+    },
+}
+
 
 def model_package_group_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=model_package_group_data).get_waiter(name)
+
+
+def image_version_model(name: str) -> Any:
+    return core_waiter.WaiterModel(waiter_config=image_version_data).get_waiter(name)
 
 
 waiters_by_name = {
@@ -52,6 +84,14 @@ waiters_by_name = {
         "model_package_group_deleted",
         model_package_group_model("ModelPackageGroupDeleted"),
         core_waiter.NormalizedOperationMethod(sagemaker.describe_model_package_group),
+    ),
+    (
+        "SageMaker",
+        "image_version_deleted",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "image_version_deleted",
+        image_version_model("ImageVersionDeleted"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_image_version),
     ),
 }
 
@@ -93,3 +133,29 @@ def wait_for_model_package_group_deletion(
                 "The resource still exists after the configured wait timeout."
             )
         )
+
+
+def wait_for_image_version_deletion(client, module, image_name: str, version: int, wait_timeout: int = 600) -> None:
+    """Wait until a SageMaker image version is actually gone."""
+    if not module.params.get("wait", True):
+        return
+
+    delay = 15
+    max_attempts = max(1, wait_timeout // delay)
+    waiter = get_waiter(client, "image_version_deleted")
+    try:
+        waiter.wait(
+            ImageName=image_name,
+            Version=version,
+            WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
+        )
+    except WaiterError as e:
+        last_response = e.last_response or {}
+        if last_response.get("ImageVersionStatus") == "DELETE_FAILED":
+            module.fail_json(
+                msg=(
+                    f"SageMaker image version {image_name}:{version} entered DELETE_FAILED state: "
+                    f"{last_response.get('FailureReason', 'no reason reported')}"
+                )
+            )
+        module.fail_json(msg=f"Error waiting for SageMaker image version {image_name}:{version} to be deleted: {e}")
