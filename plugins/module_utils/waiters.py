@@ -39,6 +39,9 @@ model_package_group_data = {
     },
 }
 
+# botocore ships an ImageVersionDeleted waiter, but its success acceptor expects the error code
+# ResourceNotFoundException, while DescribeImageVersion raises ResourceNotFound. The native waiter
+# therefore reports a completed delete as a WaiterError, so this copy fixes the error code.
 image_version_data = {
     "version": 2,
     "waiters": {
