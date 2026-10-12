@@ -1,0 +1,13 @@
+---
+test_id: "{{ tiny_prefix }}"
+lifecycle_config_name: "sagemaker-lifecycle-{{ test_id }}-primary"
+lifecycle_config_second_name: "sagemaker-lifecycle-{{ test_id }}-secondary"
+lifecycle_config_on_create: |
+  #!/bin/bash
+  echo 'Preparing notebook'
+lifecycle_config_on_start: |
+  #!/bin/bash
+  echo 'Starting notebook'
+lifecycle_config_on_start_updated: |
+  #!/bin/bash
+  echo 'Updated notebook startup'
