@@ -13,7 +13,11 @@ try:
 except ImportError:
     pass
 
+from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_to_snake_dict_keeping
+from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
+from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_to_camel_dict_keeping
+from ansible_collections.amazon.ai.plugins.module_utils.utils import stringify_values
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
@@ -161,6 +165,27 @@ def describe_image_version(
     params = scrub_none_parameters({"ImageName": image_name, "Version": version, "Alias": alias})
     try:
         return client.describe_image_version(**params)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_app_image_config(client, app_image_config_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific SageMaker AppImageConfig.
+
+    Args:
+        client: The boto3 SageMaker client.
+        app_image_config_name: The name of the SageMaker AppImageConfig.
+
+    Returns:
+        A dictionary with the AppImageConfig details if found, otherwise None.
+
+    Raises:
+        ClientError: If AWS returns an error other than 'ResourceNotFound'.
+    """
+    try:
+        return client.describe_app_image_config(AppImageConfigName=app_image_config_name)
     except is_boto3_error_code("ResourceNotFound"):
         return None
 
@@ -470,6 +495,147 @@ def delete_image_version(client, module, existing: Optional[Dict[str, Any]]) -> 
         return False, f"SageMaker image version {image_name}:{version} does not exist."
     wait_for_image_version_deletion(client, module)
     return True, f"SageMaker image version {image_name}:{version} deleted successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_app_image_configs(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve a list of SageMaker AppImageConfigs using pagination.
+
+    Args:
+        client: The boto3 SageMaker client.
+        **params: Additional filter parameters for the list operation.
+
+    Returns:
+        A list of AppImageConfig dictionaries, each carrying its full configuration blocks.
+    """
+    paginator = client.get_paginator("list_app_image_configs")
+    return paginator.paginate(**params).build_full_result()["AppImageConfigs"]
+
+
+APP_IMAGE_CONFIG_BLOCK_OPTIONS: Tuple[str, ...] = (
+    "kernel_gateway_image_config",
+    "jupyter_lab_app_image_config",
+    "code_editor_app_image_config",
+)
+
+# Free-form maps whose keys are user data, not option names, so key conversion must not touch them.
+_APP_IMAGE_CONFIG_FREE_FORM_KEYS: List[str] = ["container_environment_variables", "tags"]
+
+
+def app_image_config_to_snake_dict(app_image_config: Dict[str, Any]) -> Dict[str, Any]:
+    """Convert a described AppImageConfig to snake_case, keeping environment variable names and tag keys as given."""
+    config: Dict[str, Any] = {k: v for k, v in app_image_config.items() if k != "ResponseMetadata"}
+    return camel_dict_to_snake_dict_keeping(config, _APP_IMAGE_CONFIG_FREE_FORM_KEYS)
+
+
+def _desired_app_image_config_blocks(module) -> Dict[str, Any]:
+    blocks: Dict[str, Any] = scrub_none_parameters({o: module.params.get(o) for o in APP_IMAGE_CONFIG_BLOCK_OPTIONS})
+    # YAML turns ``PORT: 8080`` into an int, but the API only accepts string values.
+    for block in blocks.values():
+        env_vars: Optional[Dict[str, Any]] = block.get("container_config", {}).get("container_environment_variables")
+        if env_vars:
+            block["container_config"]["container_environment_variables"] = stringify_values(env_vars)
+    return snake_dict_to_camel_dict_keeping(blocks, _APP_IMAGE_CONFIG_FREE_FORM_KEYS)
+
+
+def create_app_image_config(client, module) -> Tuple[bool, str]:
+    """
+    Create a SageMaker AppImageConfig.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple of changed state and message.
+    """
+    name: str = module.params["app_image_config_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created SageMaker AppImageConfig {name}."
+
+    params: Dict[str, Any] = _desired_app_image_config_blocks(module)
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if tags:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(tags)
+    client.create_app_image_config(AppImageConfigName=name, **params)
+    return True, f"SageMaker AppImageConfig {name} created successfully."
+
+
+def update_app_image_config(
+    client, module, existing: Dict[str, Any], current_tags: Optional[Dict[str, str]] = None
+) -> Tuple[bool, str]:
+    """
+    Update a SageMaker AppImageConfig in place.
+
+    A supplied block replaces the block of the same kind wholesale, so it is compared for exact
+    equality; blocks the user did not supply are left alone.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The described AppImageConfig.
+        current_tags: The tags of the AppImageConfig when the caller has already read them; they are
+            read here when O(tags) is set and this is None.
+
+    Returns:
+        A tuple of changed state and message.
+    """
+    name: str = existing["AppImageConfigName"]
+    blocks_to_update: Dict[str, Any] = {
+        key: block
+        for key, block in _desired_app_image_config_blocks(module).items()
+        if config_block_differs(existing.get(key), block)
+    }
+
+    tags_to_add: Dict[str, str] = dict()
+    tags_to_remove: List[str] = list()
+    desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if desired_tags is not None:
+        if current_tags is None:
+            current_tags = list_tags(client, existing["AppImageConfigArn"])
+        tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, module.params["purge_tags"])
+
+    if not blocks_to_update and not tags_to_add and not tags_to_remove:
+        return False, f"SageMaker AppImageConfig {name} is already up to date."
+
+    if module.check_mode:
+        return True, f"Check mode: would have updated SageMaker AppImageConfig {name}."
+
+    if blocks_to_update:
+        try:
+            client.update_app_image_config(AppImageConfigName=name, **blocks_to_update)
+        except is_boto3_error_code("ResourceNotFound"):
+            # Deleted by someone else between the describe and this call.
+            module.fail_json(msg=f"SageMaker AppImageConfig {name} was deleted while it was being updated.")
+    if tags_to_add:
+        client.add_tags(ResourceArn=existing["AppImageConfigArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=existing["AppImageConfigArn"], TagKeys=tags_to_remove)
+    return True, f"SageMaker AppImageConfig {name} updated successfully."
+
+
+def delete_app_image_config(client, module) -> Tuple[bool, str]:
+    """
+    Delete a SageMaker AppImageConfig. The API is synchronous, so there is nothing to wait for.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple of changed state and message.
+    """
+    name: str = module.params["app_image_config_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted SageMaker AppImageConfig {name}."
+
+    try:
+        client.delete_app_image_config(AppImageConfigName=name)
+    except is_boto3_error_code("ResourceNotFound"):
+        # Deleted by someone else between the describe and this call.
+        return False, f"SageMaker AppImageConfig {name} does not exist."
+    return True, f"SageMaker AppImageConfig {name} deleted successfully."
 
 
 @AWSRetry.jittered_backoff(retries=10)
