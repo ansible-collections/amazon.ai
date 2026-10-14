@@ -116,8 +116,8 @@
 - name: Assert replacement is visible through the info module
   ansible.builtin.assert:
     that:
-      - replacement_info.training_job.training_job_status == 'Completed'
-      - replacement_info.training_job.output_data_config.s3_output_path == training_output_s3_uri ~ 'replacement/'
+      - replacement_info.training_jobs[0].training_job_status == 'Completed'
+      - replacement_info.training_jobs[0].output_data_config.s3_output_path == training_output_s3_uri ~ 'replacement/'
 
 - name: Re-run the replacement declaration without force
   amazon.ai.sagemaker_training_job:

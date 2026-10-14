@@ -3,7 +3,7 @@
 The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
 - **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
 - **Amazon Bedrock**: interact with foundation models for AI/ML applications.
-- **Amazon SageMaker**: manage SageMaker Code Repositories and training jobs.
+- **Amazon SageMaker**: manage SageMaker Code Repositories, endpoints, model package groups, and training jobs.
 
 The collection is designed to be extensible and will grow to support additional services such as Rekognition, Comprehend, Translate, and Textract.
 
