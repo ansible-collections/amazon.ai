@@ -62,7 +62,7 @@
 - name: Assert the invalid-role request did not leave a running job
   ansible.builtin.assert:
     that:
-      - invalid_role_info.training_job is not defined or invalid_role_info.training_job.training_job_status in ['Failed', 'Stopped']
+      - invalid_role_info.training_jobs | length == 0 or invalid_role_info.training_jobs[0].training_job_status in ['Failed', 'Stopped']
 
 - name: Check-mode create training job
   amazon.ai.sagemaker_training_job:
@@ -107,7 +107,7 @@
 - name: Assert the training job is absent after check mode
   ansible.builtin.assert:
     that:
-      - create_check_info.training_job is not defined
+      - create_check_info.training_jobs | length == 0
 
 - name: Create the training job
   amazon.ai.sagemaker_training_job:
@@ -147,7 +147,6 @@
 
 - name: Re-run identical training-job declaration
   amazon.ai.sagemaker_training_job:
-    state: started
     training_job_name: "{{ training_job_name }}"
     role_arn: "{{ training_role_arn }}"
     algorithm_specification:

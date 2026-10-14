@@ -32,8 +32,7 @@
     training_job_name: "{{ stoppable_training_job_name }}"
   register: stoppable_info
   until:
-    - stoppable_info.training_job is defined
-    - stoppable_info.training_job.training_job_status == 'InProgress'
+    - stoppable_info.training_jobs | length > 0 and stoppable_info.training_jobs[0].training_job_status == 'InProgress'
   retries: 60
   delay: 10
 
@@ -73,7 +72,7 @@
 - name: Assert job is still active after check mode
   ansible.builtin.assert:
     that:
-      - stop_check_info.training_job.training_job_status == 'InProgress'
+      - stop_check_info.training_jobs[0].training_job_status == 'InProgress'
 
 - name: Stop the training job
   amazon.ai.sagemaker_training_job:
@@ -108,4 +107,4 @@
 - name: Assert stopped job is retained
   ansible.builtin.assert:
     that:
-      - stopped_job_info.training_job.training_job_status == 'Stopped'
+      - stopped_job_info.training_jobs[0].training_job_status == 'Stopped'

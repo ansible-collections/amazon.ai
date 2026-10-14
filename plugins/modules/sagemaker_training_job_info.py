@@ -55,13 +55,9 @@ options:
     training_plan_arn_equals:
         description: Only include jobs associated with this training plan ARN.
         type: str
-    include_tags:
-        description: Whether to retrieve and include each job's tags.
-        type: bool
-        default: false
 notes:
-    - Required IAM actions include sagemaker:DescribeTrainingJob and sagemaker:ListTrainingJobs.
-    - Retrieving tags additionally requires sagemaker:ListTags.
+    - Required IAM actions include sagemaker:DescribeTrainingJob, sagemaker:ListTrainingJobs, and
+      sagemaker:ListTags.
 attributes:
     check_mode:
         description: Can run in check mode without changing the target.
@@ -80,59 +76,25 @@ EXAMPLES = r"""
   amazon.ai.sagemaker_training_job_info:
     training_job_name: example-training-job
 
-- name: List completed training jobs and include their tags
+- name: List completed training jobs
   amazon.ai.sagemaker_training_job_info:
     status_equals: Completed
     sort_by: CreationTime
     sort_order: Descending
-    include_tags: true
 """
 
 RETURN = r"""
-training_job:
-    description: The detailed training job when a named job is found.
-    type: dict
-    returned: when O(training_job_name) is specified and the job exists
-    contains:
-        training_job_name:
-            description: The name of the training job.
-            type: str
-            returned: always
-            sample: example-training-job
-        training_job_arn:
-            description: The Amazon Resource Name of the training job.
-            type: str
-            returned: when returned by SageMaker
-            sample: arn:aws:sagemaker:us-east-1:123456789012:training-job/example-training-job
-        training_job_status:
-            description: The current execution status.
-            type: str
-            returned: when returned by SageMaker
-            sample: Completed
-        secondary_status:
-            description: The current secondary execution status.
-            type: str
-            returned: when returned by SageMaker
-            sample: Completed
-        tags:
-            description: The training job tags when O(include_tags=true).
-            type: dict
-            returned: when O(include_tags=true)
-            sample: {project: demo}
-    sample:
-        training_job_name: example-training-job
-        training_job_status: Completed
 training_jobs:
-    description: Matching training job summaries when listing jobs.
+    description: The job found by name or matching jobs when listing.
     type: list
     elements: dict
-    returned: when O(training_job_name) is not specified
+    returned: always
     contains:
         training_job_name:
             description: The name of the training job.
             type: str
             returned: always
-            sample: example-training-job
+            sample: "example-training-job"
         training_job_arn:
             description: The Amazon Resource Name of the training job.
             type: str
@@ -154,9 +116,9 @@ training_jobs:
             returned: when returned by SageMaker
             sample: {status: Available}
         tags:
-            description: The training job tags when O(include_tags=true).
+            description: The training job tags.
             type: dict
-            returned: when O(include_tags=true)
+            returned: always
             sample: {project: demo}
     sample:
         - training_job_name: example-training-job
@@ -203,7 +165,6 @@ def main() -> None:
         sort_order=dict(type="str", choices=["Ascending", "Descending"], default="Ascending"),
         warm_pool_status_equals=dict(type="str", choices=["Available", "Terminated", "Reused", "InUse"]),
         training_plan_arn_equals=dict(type="str"),
-        include_tags=dict(type="bool", default=False),
     )
     list_filters = (
         "creation_time_after",
@@ -228,19 +189,18 @@ def main() -> None:
 
         if module.params.get("training_job_name"):
             job = describe_training_job(client, module.params["training_job_name"])
-            if job is not None and module.params["include_tags"]:
+            if job is not None:
                 job = _include_tags(client, job)
             if job is not None:
-                module.exit_json(training_job=normalize_training_job(job))
-            module.exit_json()
+                module.exit_json(training_jobs=[normalize_training_job(job)])
+            module.exit_json(training_jobs=[])
 
         raw_filters = {key: module.params.get(key) for key in list_filters}
         raw_filters["sort_by"] = module.params["sort_by"]
         raw_filters["sort_order"] = module.params["sort_order"]
         filters = snake_dict_to_camel_dict(scrub_none_parameters(raw_filters), capitalize_first=True)
         jobs = list_training_jobs(client, **filters)
-        if module.params["include_tags"]:
-            jobs = [_include_tags(client, job) for job in jobs]
+        jobs = [_include_tags(client, job) for job in jobs]
         module.exit_json(training_jobs=[normalize_training_job(job) for job in jobs])
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)

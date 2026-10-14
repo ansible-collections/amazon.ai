@@ -410,8 +410,9 @@ Parameters
                         </ul>
                 </td>
                 <td>
-                        <div>Replace a job when a create-only setting differs or when restarting a terminal job.</div>
-                        <div>Replacement stops an active execution, removes eligible warm-pool capacity, deletes the job, and starts a new billable execution with the same name.</div>
+                        <div>Replace an existing job when a create-only setting differs or when creating a new execution with the same name as a terminal job.</div>
+                        <div>Replacement deletes the existing job and creates a new billable execution.</div>
+                        <div>This does not resume or restart the previous job; all training starts fresh.</div>
                 </td>
             </tr>
             <tr>
@@ -1264,14 +1265,12 @@ Parameters
                 <td>
                         <ul style="margin: 0; padding: 0"><b>Choices:</b>
                                     <li><div style="color: blue"><b>present</b>&nbsp;&larr;</div></li>
-                                    <li>started</li>
                                     <li>stopped</li>
                                     <li>absent</li>
                         </ul>
                 </td>
                 <td>
                         <div>The desired state of the training job.</div>
-                        <div>V(started) is synonymous with V(present) and does not resume a previous execution.</div>
                         <div>V(stopped) stops an active execution while retaining its metadata.</div>
                 </td>
             </tr>
@@ -1487,6 +1486,7 @@ Notes
 .. note::
    - Required IAM actions include sagemaker:CreateTrainingJob, sagemaker:DescribeTrainingJob, sagemaker:UpdateTrainingJob, sagemaker:StopTrainingJob, sagemaker:DeleteTrainingJob, sagemaker:AddTags, sagemaker:DeleteTags, and sagemaker:ListTags.
    - Creating a job requires iam:PassRole for the execution role, constrained where possible with iam:PassedToService=sagemaker.amazonaws.com.
+   - Deleting a job with O(state)=V(absent) or replacing a job with O(force)=V(true) requires botocore >= 1.40.61.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 
@@ -1507,7 +1507,7 @@ Examples
 
     - name: Create a SageMaker training job
       amazon.ai.sagemaker_training_job:
-        training_job_name: example-training-job
+        training_job_name: "example-training-job"
         role_arn: arn:aws:iam::123456789012:role/SageMakerExecutionRole
         algorithm_specification:
           training_input_mode: File
