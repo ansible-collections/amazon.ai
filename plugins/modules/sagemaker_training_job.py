@@ -19,10 +19,9 @@ options:
     state:
         description:
             - The desired state of the training job.
-            - V(started) is synonymous with V(present) and does not resume a previous execution.
             - V(stopped) stops an active execution while retaining its metadata.
         type: str
-        choices: [present, started, stopped, absent]
+        choices: [present, stopped, absent]
         default: present
     training_job_name:
         description: The name of the training job.
@@ -289,9 +288,10 @@ options:
         default: true
     force:
         description:
-            - Replace a job when a create-only setting differs or when restarting a terminal job.
-            - Replacement stops an active execution, removes eligible warm-pool capacity, deletes the job,
-              and starts a new billable execution with the same name.
+            - Replace an existing job when a create-only setting differs or when creating a new execution with
+              the same name as a terminal job.
+            - Replacement deletes the existing job and creates a new billable execution.
+            - This does not resume or restart the previous job; all training starts fresh.
         type: bool
         default: false
     wait:
@@ -308,6 +308,7 @@ notes:
       sagemaker:AddTags, sagemaker:DeleteTags, and sagemaker:ListTags.
     - Creating a job requires iam:PassRole for the execution role, constrained where possible with
       iam:PassedToService=sagemaker.amazonaws.com.
+    - Deleting a job with O(state)=V(absent) or replacing a job with O(force)=V(true) requires botocore >= 1.40.61.
 attributes:
     check_mode:
         description: Can run in check mode and report what would change without changing the target.
@@ -324,7 +325,7 @@ extends_documentation_fragment:
 EXAMPLES = r"""
 - name: Create a SageMaker training job
   amazon.ai.sagemaker_training_job:
-    training_job_name: example-training-job
+    training_job_name: "example-training-job"
     role_arn: arn:aws:iam::123456789012:role/SageMakerExecutionRole
     algorithm_specification:
       training_input_mode: File
@@ -447,7 +448,7 @@ try:
 except ImportError:
     pass
 
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import find_training_job
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import manage_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_training_job
@@ -457,57 +458,9 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def _validate_algorithm_specification(module: AnsibleAWSModule) -> None:
-    algorithm = module.params.get("algorithm_specification")
-    if algorithm is not None:
-        if not algorithm.get("training_input_mode"):
-            module.fail_json(msg="algorithm_specification.training_input_mode is required.")
-        image = algorithm.get("training_image")
-        name = algorithm.get("algorithm_name")
-        if bool(image) == bool(name):
-            module.fail_json(
-                msg=(
-                    "Exactly one of algorithm_specification.training_image and "
-                    "algorithm_specification.algorithm_name must be specified."
-                )
-            )
-
-
-def _validate_input_data_config(module: AnsibleAWSModule) -> None:
-    for index, channel in enumerate(module.params.get("input_data_config") or []):
-        if not channel.get("channel_name"):
-            module.fail_json(msg=f"input_data_config[{index}].channel_name is required.")
-        data_source = channel.get("data_source")
-        if not data_source or not data_source.get("s3_data_source"):
-            module.fail_json(msg=f"input_data_config[{index}].data_source.s3_data_source is required.")
-        s3_data_source = data_source["s3_data_source"]
-        for field in ("s3_data_type", "s3_uri"):
-            if not s3_data_source.get(field):
-                module.fail_json(msg=f"input_data_config[{index}].data_source.s3_data_source.{field} is required.")
-
-
-def _validate_nested_params(module: AnsibleAWSModule) -> None:
-    _validate_algorithm_specification(module)
-    _validate_input_data_config(module)
-    output_config = module.params.get("output_data_config")
-    if output_config is not None and not output_config.get("s3_output_path"):
-        module.fail_json(msg="output_data_config.s3_output_path is required.")
-
-    resource_config = module.params.get("resource_config")
-    create_resource_fields = ("instance_type", "instance_count", "volume_size_in_gb")
-    if resource_config and any(resource_config.get(field) is not None for field in create_resource_fields):
-        missing = [field for field in create_resource_fields if resource_config.get(field) is None]
-        if missing:
-            module.fail_json(msg=f"These resource_config options must be supplied together: {', '.join(missing)}.")
-
-    checkpoint_config = module.params.get("checkpoint_config")
-    if checkpoint_config is not None and not checkpoint_config.get("s3_uri"):
-        module.fail_json(msg="checkpoint_config.s3_uri is required.")
-
-
 def main() -> None:
     argument_spec = dict(
-        state=dict(type="str", default="present", choices=["present", "started", "stopped", "absent"]),
+        state=dict(type="str", default="present", choices=["present", "stopped", "absent"]),
         training_job_name=dict(type="str", required=True, aliases=["name"]),
         role_arn=dict(type="str"),
         algorithm_specification=dict(
@@ -523,6 +476,8 @@ def main() -> None:
                 ),
                 enable_sage_maker_metrics_time_series=dict(type="bool"),
             ),
+            required_one_of=[("training_image", "algorithm_name")],
+            mutually_exclusive=[("training_image", "algorithm_name")],
         ),
         input_data_config=dict(
             type="list",
@@ -570,6 +525,7 @@ def main() -> None:
                 volume_kms_key_id=dict(type="str"),
                 keep_alive_period_in_seconds=dict(type="int"),
             ),
+            required_together=[("instance_type", "instance_count", "volume_size_in_gb")],
         ),
         stopping_condition=dict(
             type="dict",
@@ -625,7 +581,6 @@ def main() -> None:
         wait_timeout=dict(type="int", default=600),
     )
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
-    _validate_nested_params(module)
     name = module.params["training_job_name"]
     try:
         try:
@@ -633,7 +588,7 @@ def main() -> None:
         except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
             module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-        existing = find_training_job(client, name)
+        existing = describe_training_job(client, name)
         job, changed, msg = manage_training_job(client, module, existing)
         if job is not None and module.params.get("tags") is not None and module.params["state"] != "absent":
             job = dict(job)

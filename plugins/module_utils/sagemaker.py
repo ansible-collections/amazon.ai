@@ -33,6 +33,39 @@ def list_tags(client, resource_arn: str) -> Dict[str, str]:
     return {t["Key"]: t["Value"] for t in tags}
 
 
+@AWSRetry.jittered_backoff(retries=10)
+def reconcile_sagemaker_tags(client, module, resource_arn: str) -> bool:
+    """Reconcile SageMaker resource tags using the shared ResourceArn tagging API."""
+    desired_tags = module.params.get("tags")
+    if desired_tags is None:
+        return False
+
+    current_tags = list_tags(client, resource_arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        desired_tags,
+        purge_tags=module.params.get("purge_tags", True),
+    )
+    if not tags_to_add and not tags_to_remove:
+        return False
+
+    if module.check_mode:
+        return True
+
+    if tags_to_add:
+        client.add_tags(
+            ResourceArn=resource_arn,
+            Tags=ansible_dict_to_boto3_tag_list(tags_to_add),
+        )
+    if tags_to_remove:
+        client.delete_tags(
+            ResourceArn=resource_arn,
+            TagKeys=tags_to_remove,
+        )
+
+    return True
+
+
 def _build_model_params(module) -> Dict[str, Any]:
     """
     Build the boto3 CreateModel request parameters from module params.
@@ -243,26 +276,13 @@ def delete_model_package_group(client, module) -> Tuple[bool, str]:
     return True, f"Model package group {name} deleted successfully."
 
 
-def update_model_package_group_tags(
-    client, module, model_package_group_arn: str, desired_tags: Dict[str, str], purge_tags: bool = True
-) -> Tuple[bool, str]:
+def update_model_package_group_tags(client, module, model_package_group_arn: str) -> Tuple[bool, str]:
     """Reconcile SageMaker model package group tags in place."""
-    current_tags: Dict[str, str] = list_tags(client, model_package_group_arn)
-    tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, purge_tags)
-
-    if not tags_to_add and not tags_to_remove:
+    changed = reconcile_sagemaker_tags(client, module, model_package_group_arn)
+    if not changed:
         return False, "No updates needed."
-
     if module.check_mode:
         return True, "Check mode: would have updated model package group tags."
-
-    if tags_to_add:
-        client.add_tags(
-            ResourceArn=model_package_group_arn,
-            Tags=ansible_dict_to_boto3_tag_list(tags_to_add),
-        )
-    if tags_to_remove:
-        client.delete_tags(ResourceArn=model_package_group_arn, TagKeys=tags_to_remove)
 
     return True, "Model package group tags updated successfully."
 
@@ -456,16 +476,18 @@ def _variants_differ(desired_variants: List[Dict[str, Any]], existing_variants: 
     existing_by_name = {variant.get("VariantName"): variant for variant in existing_variants}
     for desired_variant in desired_variants:
         variant_name = desired_variant.get("VariantName")
-        if variant_name not in existing_by_name or _mapping_differs(desired_variant, existing_by_name[variant_name]):
+        if variant_name not in existing_by_name or _endpoint_config_mapping_differs(
+            desired_variant, existing_by_name[variant_name]
+        ):
             return True
     return False
 
 
-def _mapping_differs(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
+def _endpoint_config_mapping_differs(desired: Dict[str, Any], existing: Dict[str, Any]) -> bool:
     for key, desired_value in desired.items():
         existing_value = existing.get(key)
         if isinstance(desired_value, dict):
-            if not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value):
+            if not isinstance(existing_value, dict) or _endpoint_config_mapping_differs(desired_value, existing_value):
                 return True
         elif key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
             continue
@@ -479,7 +501,7 @@ def _endpoint_config_property_differs(key: str, desired_value: Any, existing: Di
     if key in ("ProductionVariants", "ShadowProductionVariants"):
         return _variants_differ(desired_value, existing_value)
     if isinstance(desired_value, dict):
-        return not isinstance(existing_value, dict) or _mapping_differs(desired_value, existing_value)
+        return not isinstance(existing_value, dict) or _endpoint_config_mapping_differs(desired_value, existing_value)
     if key == "EnableNetworkIsolation" and desired_value is False and existing_value is None:
         return False
     return desired_value != existing_value
@@ -507,21 +529,7 @@ def delete_endpoint_config(client, endpoint_config_name: str) -> None:
 
 
 def reconcile_endpoint_config_tags(client, module, existing: Dict[str, Any]) -> bool:
-    if module.params.get("tags") is None:
-        return False
-    current_tags = list_tags(client, existing["EndpointConfigArn"])
-    tags_to_add, tags_to_remove = compare_aws_tags(
-        current_tags,
-        module.params["tags"],
-        module.params["purge_tags"],
-    )
-    if module.check_mode:
-        return bool(tags_to_add or tags_to_remove)
-    if tags_to_add:
-        client.add_tags(ResourceArn=existing["EndpointConfigArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
-    if tags_to_remove:
-        client.delete_tags(ResourceArn=existing["EndpointConfigArn"], TagKeys=tags_to_remove)
-    return bool(tags_to_add or tags_to_remove)
+    return reconcile_sagemaker_tags(client, module, existing["EndpointConfigArn"])
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -660,21 +668,7 @@ def reconcile_endpoint_tags(client, module, existing: Dict[str, Any]) -> bool:
     Returns:
         True if tags were (or would be, in check mode) changed.
     """
-    if module.params.get("tags") is None:
-        return False
-    current_tags = list_tags(client, existing["EndpointArn"])
-    tags_to_add, tags_to_remove = compare_aws_tags(
-        current_tags,
-        module.params["tags"],
-        module.params["purge_tags"],
-    )
-    if module.check_mode:
-        return bool(tags_to_add or tags_to_remove)
-    if tags_to_add:
-        client.add_tags(ResourceArn=existing["EndpointArn"], Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
-    if tags_to_remove:
-        client.delete_tags(ResourceArn=existing["EndpointArn"], TagKeys=tags_to_remove)
-    return bool(tags_to_add or tags_to_remove)
+    return reconcile_sagemaker_tags(client, module, existing["EndpointArn"])
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -688,11 +682,6 @@ def describe_training_job(client, training_job_name: str) -> Optional[Dict[str, 
         if e.response["Error"].get("Message") == "Requested resource not found.":
             return None
         raise
-
-
-def find_training_job(client, training_job_name: str) -> Optional[Dict[str, Any]]:
-    """Find a SageMaker training job by name."""
-    return describe_training_job(client, training_job_name)
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -782,14 +771,19 @@ def training_job_params(module) -> Dict[str, Any]:
     return params
 
 
-def _mapping_differs(desired: Any, existing: Any) -> bool:
+def _training_job_mapping_differs(desired: Any, existing: Any, _depth: int = 0) -> bool:
+    if _depth > 100:
+        raise ValueError("Maximum recursion depth exceeded in _training_job_mapping_differs")
     if isinstance(desired, dict):
         existing = existing if isinstance(existing, dict) else {}
-        return any(_mapping_differs(value, existing.get(key)) for key, value in desired.items())
+        return any(
+            _training_job_mapping_differs(value, existing.get(key), _depth + 1) for key, value in desired.items()
+        )
     if isinstance(desired, list):
         existing = existing if isinstance(existing, list) else []
         return len(desired) != len(existing) or any(
-            _mapping_differs(value, existing_value) for value, existing_value in zip(desired, existing)
+            _training_job_mapping_differs(value, existing_value, _depth + 1)
+            for value, existing_value in zip(desired, existing)
         )
     if desired is False and existing is None:
         return False
@@ -807,12 +801,12 @@ def training_job_needs_replacement(existing: Dict[str, Any], module) -> List[str
             desired_resource_config = {
                 field: item for field, item in value.items() if field != "KeepAlivePeriodInSeconds"
             }
-            if desired_resource_config and _mapping_differs(
+            if desired_resource_config and _training_job_mapping_differs(
                 desired_resource_config, existing.get("ResourceConfig", {})
             ):
                 differences.append("resource_config")
             continue
-        if _mapping_differs(value, existing.get(key)):
+        if _training_job_mapping_differs(value, existing.get(key)):
             differences.append(next(iter(camel_dict_to_snake_dict({key: None}))))
     return differences
 
@@ -824,8 +818,10 @@ def _training_job_update_params(existing: Dict[str, Any], module) -> Dict[str, A
         desired = module.params.get(field)
         if desired is not None:
             converted = _camelize_training_job_params({field: desired})
+            if not converted:
+                continue
             aws_field, aws_value = next(iter(converted.items()))
-            if _mapping_differs(aws_value, existing.get(aws_field)):
+            if _training_job_mapping_differs(aws_value, existing.get(aws_field)):
                 values[field] = desired
 
     resource_config = module.params.get("resource_config")
@@ -834,7 +830,7 @@ def _training_job_update_params(existing: Dict[str, Any], module) -> Dict[str, A
         current_retention = existing.get("ResourceConfig", {}).get("KeepAlivePeriodInSeconds")
         if desired_retention != current_retention:
             warm_pool_status = existing.get("WarmPoolStatus", {}).get("Status")
-            if warm_pool_status != "Available":
+            if desired_retention and warm_pool_status != "Available":
                 module.fail_json(
                     msg=(
                         f"Cannot update keep_alive_period_in_seconds for training job "
@@ -855,13 +851,6 @@ def _training_job_update_params(existing: Dict[str, Any], module) -> Dict[str, A
     return params
 
 
-@AWSRetry.jittered_backoff(retries=10)
-def create_training_job(client, module) -> Dict[str, Any]:
-    """Create a SageMaker training job."""
-    return client.create_training_job(**training_job_params(module))
-
-
-@AWSRetry.jittered_backoff(retries=10)
 def update_training_job(client, module, existing: Dict[str, Any]) -> bool:
     """Apply supported in-place training job updates when their values differ."""
     params = _training_job_update_params(existing, module)
@@ -875,7 +864,6 @@ def update_training_job(client, module, existing: Dict[str, Any]) -> bool:
     return True
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def stop_training_job(client, training_job_name: str) -> None:
     """Stop a running SageMaker training job."""
     try:
@@ -895,39 +883,31 @@ def _set_training_job_warm_pool_retention(client, training_job_name: str, retent
 @AWSRetry.jittered_backoff(retries=10)
 def delete_training_job(client, module, training_job_name: str) -> None:
     """Delete a terminal SageMaker training job."""
+    if not module.botocore_at_least("1.40.61"):
+        module.fail_json(
+            msg=(
+                f"Cannot delete training job {training_job_name}: deleting SageMaker training jobs "
+                "requires botocore >= 1.40.61."
+            )
+        )
     try:
         client.delete_training_job(TrainingJobName=training_job_name)
     except is_boto3_error_code("ResourceInUse") as e:
+        error_msg = e.response.get("Error", {}).get("Message", str(e))
         module.fail_json(
             msg=(
                 f"Cannot delete training job {training_job_name}; it must be Completed, Failed, or Stopped "
                 "and must not have an Available warm pool. "
-                f"AWS returned: {e}"
+                f"AWS returned: {error_msg}"
             )
         )
     except is_boto3_error_code("ResourceNotFound"):
         return
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def reconcile_training_job_tags(client, module, existing: Dict[str, Any]) -> bool:
     """Reconcile training job tags when the caller explicitly supplies tags."""
-    desired_tags = module.params.get("tags")
-    if desired_tags is None:
-        return False
-
-    current_tags = list_tags(client, existing["TrainingJobArn"])
-    tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, module.params["purge_tags"])
-    if module.check_mode:
-        return bool(tags_to_add or tags_to_remove)
-    if tags_to_add:
-        client.add_tags(
-            ResourceArn=existing["TrainingJobArn"],
-            Tags=ansible_dict_to_boto3_tag_list(tags_to_add),
-        )
-    if tags_to_remove:
-        client.delete_tags(ResourceArn=existing["TrainingJobArn"], TagKeys=tags_to_remove)
-    return bool(tags_to_add or tags_to_remove)
+    return reconcile_sagemaker_tags(client, module, existing["TrainingJobArn"])
 
 
 def wait_for_training_job(
@@ -944,16 +924,20 @@ def wait_for_training_job(
             WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
         )
     except WaiterError as e:
-        last_response = e.last_response or {}
+        last_response = e.last_response
+        if not isinstance(last_response, dict):
+            last_response = {}
         if allow_failed and last_response.get("TrainingJobStatus") == "Failed":
             return describe_training_job(client, training_job_name)
-        waiter_error = last_response.get("Error", {})
-        if waiter_error.get("Code") == "ResourceNotFound":
-            return None
-        if waiter_error.get("Code") == "ValidationException":
-            module.fail_json(
-                msg=f"Error waiting for training job {training_job_name}: {waiter_error.get('Message') or e}"
-            )
+        error_response = last_response.get("Error")
+        if isinstance(error_response, dict):
+            error_code = error_response.get("Code")
+            if error_code == "ResourceNotFound":
+                return None
+            if error_code == "ValidationException":
+                module.fail_json(
+                    msg=f"Error waiting for training job {training_job_name}: {error_response.get('Message') or e}"
+                )
         existing = describe_training_job(client, training_job_name)
         reason = existing.get("FailureReason", "") if existing else ""
         module.fail_json(msg=f"Error waiting for training job {training_job_name} to complete or stop: {reason or e}")
@@ -1014,15 +998,11 @@ def _validate_training_job_create_params(module) -> None:
         )
 
 
-def _fresh_training_job(client, module, create_response: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
+def _fresh_training_job(client, module) -> Optional[Dict[str, Any]]:
     name = module.params["training_job_name"]
     if module.params["wait"]:
-        existing = wait_for_training_job(client, module, name)
-    else:
-        existing = describe_training_job(client, name)
-    if existing is not None or create_response is None:
-        return existing
-    return {"TrainingJobName": name, "TrainingJobArn": create_response.get("TrainingJobArn")}
+        return wait_for_training_job(client, module, name)
+    return describe_training_job(client, name)
 
 
 def _stop_training_job_before_deletion(
@@ -1037,25 +1017,26 @@ def _stop_training_job_before_deletion(
     if status == "InProgress":
         stop_training_job(client, name)
     if module.params["wait"]:
-        existing = wait_for_training_job(client, module, name, allow_failed=True) or existing
+        existing = wait_for_training_job(client, module, name, allow_failed=True)
         return existing, changed, None
+    latest = describe_training_job(client, name) or existing
     if changed:
-        return (
-            describe_training_job(client, name) or existing,
-            changed,
-            f"Training job {name} is stopping before {purpose}.",
-        )
-    return existing, changed, f"Training job {name} is already stopping before {purpose}."
+        return latest, changed, f"Training job {name} is stopping before {purpose}."
+    return latest, changed, f"Training job {name} is already stopping before {purpose}."
 
 
 def _prepare_training_job_deletion(
     client, module, existing: Dict[str, Any], operation: str
-) -> Tuple[Dict[str, Any], bool, Optional[str]]:
+) -> Tuple[Optional[Dict[str, Any]], bool, Optional[str]]:
     name = module.params["training_job_name"]
     purpose = "replacement" if operation == "replace" else "deletion"
     existing, changed, msg = _stop_training_job_before_deletion(client, module, existing, purpose)
     if msg is not None:
         return existing, changed, msg
+
+    existing = describe_training_job(client, name)
+    if existing is None:
+        return None, changed, f"Training job {name} no longer exists before {purpose}."
 
     status = existing.get("TrainingJobStatus")
     if status not in ("Completed", "Failed", "Stopped"):
@@ -1071,6 +1052,13 @@ def _prepare_training_job_deletion(
                 f"Training job {name} warm pool is terminating before {purpose}.",
             )
         existing = _wait_for_warm_pool_termination(client, module, name) or existing
+
+    existing = describe_training_job(client, name)
+    if existing is None:
+        return None, changed, f"Training job {name} no longer exists before {purpose}."
+    status = existing.get("TrainingJobStatus")
+    if status not in ("Completed", "Failed", "Stopped"):
+        module.fail_json(msg=f"Cannot {operation} training job {name} while it is in state {status}.")
     return existing, changed, None
 
 
@@ -1089,8 +1077,8 @@ def _replace_training_job(client, module, existing: Dict[str, Any]) -> Tuple[Opt
         )
     wait_for_training_job_deletion(client, module, name)
 
-    create_response = create_training_job(client, module)
-    final_job = _fresh_training_job(client, module, create_response)
+    client.create_training_job(**training_job_params(module))
+    final_job = _fresh_training_job(client, module)
     return final_job, changed, f"Training job {name} replaced with a new execution."
 
 
@@ -1127,14 +1115,16 @@ def _manage_training_job_present(
         _validate_training_job_create_params(module)
         if module.check_mode:
             return None, True, f"Check mode: would have created training job {name}."
-        create_response = create_training_job(client, module)
-        job = _fresh_training_job(client, module, create_response)
+        client.create_training_job(**training_job_params(module))
+        job = _fresh_training_job(client, module)
         return job, True, f"Training job {name} created successfully."
 
     status = existing.get("TrainingJobStatus")
     if status in ("Completed", "Failed", "Stopped"):
         if module.params["force"]:
             return _replace_training_job_if_allowed(client, module, existing)
+    elif status == "Deleting":
+        module.fail_json(msg=f"Cannot manage training job {name} while it is being deleted.")
     elif status != "InProgress":
         module.fail_json(msg=f"Cannot manage training job {name} while it is in state {status}.")
 
@@ -1161,6 +1151,8 @@ def _manage_training_job_stopped(
     status = existing.get("TrainingJobStatus")
     if status in ("Completed", "Failed", "Stopped"):
         return existing, False, f"Training job {name} is already in terminal state {status}."
+    if status == "Deleting":
+        module.fail_json(msg=f"Cannot stop training job {name} while it is being deleted.")
     if status == "InProgress":
         if module.check_mode:
             return existing, True, f"Check mode: would have stopped training job {name}."
@@ -1216,7 +1208,7 @@ def manage_training_job(
 ) -> Tuple[Optional[Dict[str, Any]], bool, str]:
     """Reconcile a SageMaker training job to the requested state."""
     state = module.params["state"]
-    if state in ("present", "started"):
+    if state == "present":
         return _manage_training_job_present(client, module, existing)
     if state == "stopped":
         job, changed, msg = _manage_training_job_stopped(client, module, existing)

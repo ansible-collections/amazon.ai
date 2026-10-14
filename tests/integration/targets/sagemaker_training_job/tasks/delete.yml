@@ -32,7 +32,7 @@
 - name: Assert the info lookup no longer returns the job
   ansible.builtin.assert:
     that:
-      - delete_info.training_job is not defined
+      - delete_info.training_jobs | length == 0
 
 - name: Re-run deletion for the absent job
   amazon.ai.sagemaker_training_job:
@@ -78,4 +78,4 @@
 - name: Verify stopped job deletion
   ansible.builtin.assert:
     that:
-      - stopped_delete_info.training_job is not defined
+      - stopped_delete_info.training_jobs | length == 0
