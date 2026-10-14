@@ -1,0 +1,65 @@
+---
+- name: SageMaker Domain integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create IAM role for SageMaker Domain
+      amazon.aws.iam_role:
+        name: "{{ domain_role_name }}"
+        assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_domain.json') }}"
+        state: present
+        managed_policies:
+          - "arn:aws:iam::aws:policy/AmazonSageMakerFullAccess"
+      register: domain_role
+
+    - name: Wait for IAM role to propagate
+      ansible.builtin.pause:
+        seconds: 15
+  
+    - name: create a VPC
+      amazon.aws.ec2_vpc_net:
+        name: ansible-test-vpc
+        cidr_block: 10.10.0.0/16
+        region: "{{ aws_region }}"
+      register: vpc
+
+    - name: Wait for VPC to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Create subnet
+      amazon.aws.ec2_vpc_subnet:
+        state: present
+        vpc_id: "{{ vpc.vpc.id }}"
+        cidr: "{{ domain_subnet_cidr }}"
+      register: vpc_subnet
+
+    - name: Wait for subnet to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: example using security group rule descriptions
+      amazon.aws.ec2_security_group:
+        name: "ansible-test-sg"
+        description: sg with rule descriptions
+        vpc_id: "{{ vpc.vpc.id }}"
+      register: vpc_security_group
+
+    - name: Wait for security group to propagate
+      ansible.builtin.pause:
+        seconds: 15
+
+    - name: Exercise the SageMaker Domain modules
+      ansible.builtin.include_tasks: domain.yml
+  always:
+    - name: Tear down the SageMaker Domain
+      ansible.builtin.include_tasks: teardown.yml

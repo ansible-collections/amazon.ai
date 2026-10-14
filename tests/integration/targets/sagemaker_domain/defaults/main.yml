@@ -1,0 +1,32 @@
+---
+test_id: "{{ tiny_prefix }}"
+domain_role_name: "ansible-test-sagemaker-domain-role-{{ test_id }}"
+domain_name: "test-sagemaker-domain-{{ test_id }}"
+domain_execution_role_arn: "{{ lookup('env', 'SAGEMAKER_DOMAIN_EXECUTION_ROLE_ARN') }}"
+domain_vpc_id: "{{ lookup('env', 'SAGEMAKER_DOMAIN_VPC_ID') }}"
+domain_subnet_cidr: 10.10.1.0/24
+domain_subnet_ids: >-
+  {{ lookup('env', 'SAGEMAKER_DOMAIN_SUBNET_IDS').split(',')
+     | map('trim') | reject('equalto', '') | list }}
+domain_security_group_ids: >-
+  {{ lookup('env', 'SAGEMAKER_DOMAIN_SECURITY_GROUP_IDS').split(',')
+     | map('trim') | reject('equalto', '') | list }}
+domain_initial_tags:
+  Environment: integration
+  Owner: ansible-test
+  RemoveMe: undesired
+domain_expected_tags:
+  Environment: integration-updated
+  Team: ai
+domain_initial_tags_to_compare:
+  - Key: RemoveMe
+    Value: undesired
+  - Key: Environment
+    Value: integration
+  - Key: Owner
+    Value: ansible-test
+domain_expected_tags_to_compare:
+  - Key: Environment
+    Value: integration-updated
+  - Key: Team
+    Value: ai

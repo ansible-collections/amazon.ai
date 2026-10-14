@@ -1,6 +1,8 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+import time
+from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
@@ -24,11 +26,321 @@ from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
 
+class DomainStatus(str, Enum):
+    DELETING = "Deleting"
+    FAILED = "Failed"
+    IN_SERVICE = "InService"
+    PENDING = "Pending"
+    UPDATING = "Updating"
+    UPDATE_FAILED = "Update_Failed"
+    DELETE_FAILED = "Delete_Failed"
+    DELETED = "Deleted"
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def list_tags(client, resource_arn: str) -> Dict[str, str]:
     paginator = client.get_paginator("list_tags")
     tags = paginator.paginate(ResourceArn=resource_arn).build_full_result()["Tags"]
     return {t["Key"]: t["Value"] for t in tags}
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_domain(client, domain_id: str) -> Optional[Dict[str, Any]]:
+    """Retrieve details for a SageMaker Domain, or None if it does not exist."""
+    try:
+        return client.describe_domain(DomainId=domain_id)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_domains(client, **params: Any) -> List[Dict[str, Any]]:
+    """Retrieve SageMaker Domains, optionally capping the total number returned."""
+    max_results = params.pop("MaxResults", None)
+    if max_results is not None:
+        params["PaginationConfig"] = {"MaxItems": max_results}
+    paginator = client.get_paginator("list_domains")
+    return paginator.paginate(**params).build_full_result()["Domains"]
+
+
+def get_domain_by_name(client, domain_name: str) -> Optional[Dict[str, Any]]:
+    """Find a SageMaker Domain by an exact name match."""
+    for domain in list_domains(client):
+        if domain.get("DomainName") == domain_name:
+            return domain
+    return None
+
+
+def _build_domain_params(module) -> Dict[str, Any]:
+    """
+    Build the supported boto3 Domain request parameters from module options.
+
+    Args:
+        module: The Ansible module containing the parameters for the SageMaker Domain.
+
+    Returns:
+        A dictionary of parameters suitable for use with the boto3 SageMaker client.
+    """
+    params: Dict[str, Any] = {
+        field: module.params.get(field)
+        for field in (
+            "domain_name",
+            "auth_mode",
+            "default_user_settings",
+            "app_network_access_type",
+            "vpc_id",
+            "subnet_ids",
+            "home_efs_file_system_creation",
+            "kms_key_id",
+            "tag_propagation",
+        )
+    }
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    domain_params = snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
+    if tags is not None:
+        domain_params["Tags"] = ansible_dict_to_boto3_tag_list(tags)
+    return domain_params
+
+
+def domain_needs_update(existing: Dict[str, Any], module) -> bool:
+    """
+    Determine whether a Domain has drift in supported mutable settings.
+
+    Args:
+        existing: The existing domain information as a dictionary.
+        module: The Ansible module containing the desired parameters for the SageMaker Domain.
+
+    Returns:
+        True if the domain needs an update, False otherwise.
+    """
+    for option, aws_field in (
+        ("auth_mode", "AuthMode"),
+        ("kms_key_id", "KmsKeyId"),
+        ("vpc_id", "VpcId"),
+    ):
+        desired_value = module.params.get(option)
+        if desired_value is not None and existing.get(aws_field) != desired_value:
+            module.fail_json(
+                msg=(
+                    f"Cannot change {option} for an existing SageMaker Domain. "
+                    "Delete and recreate the Domain to apply this change."
+                )
+            )
+
+    desired_settings = module.params.get("default_user_settings")
+    existing_settings = existing.get("DefaultUserSettings") or {}
+    if desired_settings:
+        for option, aws_field in (("execution_role", "ExecutionRole"), ("security_groups", "SecurityGroups")):
+            desired_value = desired_settings.get(option)
+            if desired_value is not None:
+                current_value = existing_settings.get(aws_field)
+                if option == "security_groups":
+                    if set(desired_value) != set(current_value or []):
+                        return True
+                elif current_value != desired_value:
+                    return True
+
+    for option, aws_field in (
+        ("app_network_access_type", "AppNetworkAccessType"),
+        ("home_efs_file_system_creation", "HomeEfsFileSystemCreation"),
+        ("tag_propagation", "TagPropagation"),
+    ):
+        desired_value = module.params.get(option)
+        if desired_value is not None and existing.get(aws_field) != desired_value:
+            return True
+
+    desired_subnet_ids = module.params.get("subnet_ids")
+    if desired_subnet_ids is not None and set(desired_subnet_ids) != set(existing.get("SubnetIds") or []):
+        return True
+
+    return False
+
+
+def wait_for_domain_status(
+    client,
+    module,
+    domain_id: str,
+    status: DomainStatus,
+    sleep_time: int = 5,
+) -> None:
+    """Poll a SageMaker Domain until it reaches the requested status or disappears."""
+    wait_timeout = module.params.get("wait_timeout", 600)
+    max_attempts = max(1, wait_timeout // sleep_time)
+    last_status = None
+    failure_statuses = {DomainStatus.FAILED.value, DomainStatus.UPDATE_FAILED.value, DomainStatus.DELETE_FAILED.value}
+
+    for attempt in range(max_attempts):
+        domain = describe_domain(client, domain_id)
+        if status == DomainStatus.DELETED:
+            if domain is None:
+                return
+            last_status = domain.get("Status")
+            if last_status in (DomainStatus.DELETE_FAILED.value, DomainStatus.FAILED.value):
+                module.fail_json(
+                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for deletion."
+                )
+        else:
+            if domain is None:
+                module.fail_json(msg=f"Domain {domain_id} was not found while waiting for status {status.value}.")
+            last_status = domain.get("Status")
+            if last_status == status.value:
+                return
+            if last_status in failure_statuses or last_status == DomainStatus.DELETED.value:
+                module.fail_json(
+                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for {status.value}."
+                )
+        if attempt < max_attempts - 1:
+            time.sleep(sleep_time)
+    module.fail_json(
+        msg=(
+            f"Timeout waiting for Domain {domain_id} to reach "
+            f"{'absence' if status == DomainStatus.DELETED else status.value}. "
+            f"Last known status: {last_status or 'unknown'}."
+        )
+    )
+
+
+def create_domain(client, module) -> Tuple[bool, str]:
+    """
+    Create a SageMaker Domain.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple (changed, msg) indicating whether the domain was created and a message.
+    """
+    domain_name = module.params["domain_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created Domain {domain_name}."
+
+    try:
+        response = client.create_domain(**_build_domain_params(module))
+    except is_boto3_error_code("ResourceInUse") as e:
+        module.fail_json(
+            msg=(
+                f"Cannot create Domain {domain_name} because a conflicting resource operation is in progress. "
+                f"Wait for it to finish and retry. AWS error: {e}"
+            )
+        )
+    domain_id = response.get("DomainId")
+    if not domain_id:
+        module.fail_json(msg=f"CreateDomain did not return a DomainId for Domain {domain_name}.")
+    if module.params.get("wait", False):
+        wait_for_domain_status(client, module, domain_id, DomainStatus.IN_SERVICE)
+    return True, f"Domain {domain_name} created successfully."
+
+
+def update_domain(client, module, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Update mutable SageMaker Domain settings.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The existing domain information as a dictionary.
+
+    Returns:
+        A tuple (changed, msg) indicating whether the domain was updated and a message.
+    """
+    domain_id = existing["DomainId"]
+    domain_name = existing["DomainName"]
+    if not domain_needs_update(existing, module):
+        return False, f"Domain {domain_name} is already up to date."
+    if module.check_mode:
+        return True, f"Check mode: would have updated Domain {domain_name}."
+
+    params = _build_domain_params(module)
+    update_fields = {
+        "AppNetworkAccessType",
+        "DefaultUserSettings",
+        "HomeEfsFileSystemCreation",
+        "SubnetIds",
+        "TagPropagation",
+    }
+    update_params = {key: value for key, value in params.items() if key in update_fields}
+    update_params["DomainId"] = domain_id
+    try:
+        client.update_domain(**update_params)
+    except is_boto3_error_code("ResourceInUse") as e:
+        module.fail_json(
+            msg=(
+                f"Cannot update Domain {domain_id} while dependent apps are active. "
+                f"Stop or delete the apps before retrying. AWS error: {e}"
+            )
+        )
+    if module.params.get("wait", False):
+        wait_for_domain_status(client, module, domain_id, DomainStatus.IN_SERVICE)
+    return True, f"Domain {domain_name} updated successfully."
+
+
+def delete_domain(client, module, domain_id: str) -> Tuple[bool, str]:
+    """
+    Delete a SageMaker Domain.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        domain_id: The ID of the SageMaker Domain to delete.
+
+    Returns:
+        A tuple (changed, msg) indicating whether the domain was deleted and a message.
+    """
+    if module.check_mode:
+        return True, f"Check mode: would have deleted Domain {domain_id}."
+
+    params: Dict[str, Any] = {"DomainId": domain_id}
+    retention_policy = module.params.get("retention_policy")
+    if retention_policy is not None:
+        params["RetentionPolicy"] = dict(HomeEfsFileSystem=retention_policy)
+    try:
+        client.delete_domain(**params)
+    except is_boto3_error_code("ResourceNotFound"):
+        pass
+    except is_boto3_error_code("ResourceInUse") as e:
+        module.fail_json(
+            msg=(
+                f"Cannot delete Domain {domain_id} while child resources such as apps or user profiles remain. "
+                f"Delete those resources before retrying. AWS error: {e}"
+            )
+        )
+    wait_for_domain_status(client, module, domain_id, DomainStatus.DELETED)
+    return True, f"Domain {domain_id} deleted successfully."
+
+
+def reconcile_domain_tags(client, module, existing: Dict[str, Any]) -> bool:
+    """
+    Reconcile SageMaker Domain tags, honoring purge_tags and check mode.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The existing domain information as a dictionary.
+
+    Returns:
+        True if any tags were added or removed, False otherwise.
+    """
+    if module.params.get("tags") is None:
+        return False
+
+    resource_arn = existing["DomainArn"]
+    current_tags = list_tags(client, resource_arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if not tags_to_add and not tags_to_remove:
+        return False
+    if module.check_mode:
+        return True
+
+    if tags_to_add:
+        client.add_tags(ResourceArn=resource_arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=resource_arn, TagKeys=tags_to_remove)
+    return True
 
 
 def _build_model_params(module) -> Dict[str, Any]:
