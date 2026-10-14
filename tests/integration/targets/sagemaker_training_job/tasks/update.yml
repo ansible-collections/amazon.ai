@@ -4,23 +4,22 @@
     training_job_name: "{{ training_job_name }}"
   register: warm_pool_info
   until:
-    - warm_pool_info.training_job is defined
-    - warm_pool_info.training_job.warm_pool_status.status | default('') in ['Available', 'Terminated']
+    - warm_pool_info.training_jobs | length > 0 and (warm_pool_info.training_jobs[0].warm_pool_status.status | default('')) in ['Available', 'Terminated']
   retries: 60
   delay: 15
 
 - name: Verify the warm-pool state
   ansible.builtin.assert:
     that:
-      - warm_pool_info.training_job.warm_pool_status.status in ['Available', 'Terminated']
+      - warm_pool_info.training_jobs[0].warm_pool_status.status in ['Available', 'Terminated']
 
 - name: Report warm-pool capacity was unavailable
   ansible.builtin.debug:
     msg: AWS terminated the warm pool due to resource limits; skipping retention update checks.
-  when: warm_pool_info.training_job.warm_pool_status.status == 'Terminated'
+  when: warm_pool_info.training_jobs[0].warm_pool_status.status == 'Terminated'
 
 - name: Update warm-pool retention when AWS retains capacity
-  when: (warm_pool_info.training_job.warm_pool_status.status | default('')) == 'Available'
+  when: (warm_pool_info.training_jobs[0].warm_pool_status.status | default('')) == 'Available'
   block:
     - name: Check-mode update of warm-pool retention
       amazon.ai.sagemaker_training_job:
@@ -150,18 +149,17 @@
     that:
       - not tag_purge_rerun.changed
 
-- name: Look up the job by name and include its tags
+- name: Look up the job by name
   amazon.ai.sagemaker_training_job_info:
     training_job_name: "{{ training_job_name }}"
-    include_tags: true
   register: training_job_info
 
 - name: Assert named lookup returns the job and reconciled tags
   ansible.builtin.assert:
     that:
-      - training_job_info.training_job.training_job_name == training_job_name
-      - training_job_info.training_job.training_job_arn == create_real.training_job.training_job_arn
-      - training_job_info.training_job.tags.TestId == test_id
+      - training_job_info.training_jobs[0].training_job_name == training_job_name
+      - training_job_info.training_jobs[0].training_job_arn == create_real.training_job.training_job_arn
+      - training_job_info.training_jobs[0].tags.TestId == test_id
 
 - name: Look up a missing training job
   amazon.ai.sagemaker_training_job_info:
@@ -171,7 +169,7 @@
 - name: Assert missing lookup is non-fatal
   ansible.builtin.assert:
     that:
-      - missing_job_info.training_job is not defined
+      - missing_job_info.training_jobs | length == 0
 
 - name: List matching training jobs with status and ordering filters
   amazon.ai.sagemaker_training_job_info:
@@ -179,7 +177,6 @@
     status_equals: Completed
     sort_by: CreationTime
     sort_order: Descending
-    include_tags: true
   register: training_jobs_info
 
 - name: Assert filtered list contains the completed job and its tags
