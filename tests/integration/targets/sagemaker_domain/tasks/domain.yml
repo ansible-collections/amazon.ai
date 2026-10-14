@@ -1,0 +1,386 @@
+---
+# --- Info baseline ---
+- name: List Domains before creation
+  amazon.ai.sagemaker_domain_info:
+  register: baseline_domains
+
+- name: Look up a unique nonexistent Domain
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}-missing"
+  register: missing_domain
+
+- name: Assert baseline info responses are lists and missing names are non-fatal
+  ansible.builtin.assert:
+    that:
+      - baseline_domains.domains is defined
+      - baseline_domains.domains | type_debug == 'list'
+      - missing_domain.domains == []
+
+# --- Create ---
+- name: Create Domain in check mode
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    app_network_access_type: VpcOnly
+    vpc_id: "{{ vpc.vpc.id }}"
+    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: DISABLED
+    tags: "{{ domain_initial_tags }}"
+  check_mode: true
+  register: create_check
+
+- name: Assert create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check.changed
+      - "create_check.msg.startswith('Check mode: would have ')"
+
+- name: Confirm check mode did not create the Domain
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: create_check_info
+
+- name: Assert Domain is absent after create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check_info.domains == []
+
+- name: Allow the configured execution role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+
+- name: Create Domain
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    app_network_access_type: VpcOnly
+    vpc_id: "{{ vpc.vpc.id }}"
+    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: DISABLED
+    tags: "{{ domain_initial_tags }}"
+  register: create_real
+
+- name: Assert Domain was created and reached InService
+  ansible.builtin.assert:
+    that:
+      - create_real.changed
+      - create_real.msg == 'Domain ' ~ domain_name ~ ' created successfully.'
+      - create_real.domain.status == 'InService'
+
+- name: Re-run Domain creation
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    app_network_access_type: VpcOnly
+    vpc_id: "{{ vpc.vpc.id }}"
+    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: DISABLED
+    tags: "{{ domain_initial_tags }}"
+  register: create_rerun
+
+- name: Assert create idempotency
+  ansible.builtin.assert:
+    that:
+      - not create_rerun.changed
+      - create_rerun.msg == 'Domain ' ~ domain_name ~ ' is already up to date.'
+
+# --- Info assertions ---
+- name: Query Domain by ID
+  amazon.ai.sagemaker_domain_info:
+    domain_id: "{{ create_real.domain.domain_id }}"
+  register: domain_by_id
+
+- name: Query Domain by exact name
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: domain_by_name
+
+- name: List all Domains
+  amazon.ai.sagemaker_domain_info:
+  register: all_domains
+
+- name: Assert Domain info lookups and account list
+  ansible.builtin.assert:
+    that:
+      - domain_by_id.domains | length == 1
+      - domain_by_id.domains[0].domain_id == create_real.domain.domain_id
+      - domain_by_id.domains[0].domain_name == domain_name
+      - domain_by_id.domains[0].status == 'InService'
+      - domain_by_name.domains | length == 1
+      - domain_by_name.domains[0].domain_id == create_real.domain.domain_id
+      - domain_by_name.domains[0].domain_name == domain_name
+      - domain_by_name.domains[0].status == 'InService'
+      - all_domains.domains | type_debug == 'list'
+      - all_domains.domains | selectattr('domain_id', 'equalto', create_real.domain.domain_id) | list | length == 1
+
+# --- Update tag propagation ---
+- name: Update tag propagation in check mode
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: ENABLED
+  check_mode: true
+  register: update_check
+
+- name: Assert update check mode and unchanged state
+  ansible.builtin.assert:
+    that:
+      - update_check.changed
+      - "update_check.msg.startswith('Check mode: would have ')"
+
+- name: Confirm check mode did not update tag propagation
+  amazon.ai.sagemaker_domain_info:
+    domain_id: "{{ create_real.domain.domain_id }}"
+  register: update_check_info
+
+- name: Assert tag propagation remains disabled after check mode
+  ansible.builtin.assert:
+    that:
+      - update_check_info.domains | length == 1
+      - update_check_info.domains[0].tag_propagation == 'DISABLED'
+
+- name: Update tag propagation
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: ENABLED
+  register: update_real
+
+- name: Assert Domain update completed
+  ansible.builtin.assert:
+    that:
+      - update_real.changed
+      - update_real.msg == 'Domain ' ~ create_real.domain.domain_name ~ ' updated successfully.'
+      - update_real.domain.status == 'InService'
+
+- name: Re-query Domain after update
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: update_info
+
+- name: Assert in-place update preserved the Domain ARN
+  ansible.builtin.assert:
+    that:
+      - update_info.domains | length == 1
+      - update_info.domains[0].domain_id == create_real.domain.domain_id
+      - update_info.domains[0].domain_arn == create_real.domain.domain_arn
+      - update_info.domains[0].tag_propagation == 'ENABLED'
+
+- name: Re-run Domain update
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tag_propagation: ENABLED
+  register: update_rerun
+
+- name: Assert update idempotency
+  ansible.builtin.assert:
+    that:
+      - not update_rerun.changed
+      - update_rerun.msg == 'Domain ' ~ create_real.domain.domain_name ~ ' is already up to date.'
+
+# --- Tag reconciliation ---
+- name: Check tag add, update, and purge in check mode
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tags: "{{ domain_expected_tags }}"
+    purge_tags: true
+  check_mode: true
+  register: tags_check
+
+- name: Assert tag reconciliation check mode
+  ansible.builtin.assert:
+    that:
+      - tags_check.changed
+
+- name: Verify check mode preserved the original tag set
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: tags_check_info
+
+- name: Debug tags check info
+  ansible.builtin.debug:
+    var: tags_check_info
+
+- name: Debug tags check info
+  ansible.builtin.debug:
+    var: domain_initial_tags_to_compare
+
+- name: Assert original tags are preserved in check mode
+  ansible.builtin.assert:
+    that:
+      - tags_check_info.domains | length == 1
+      - tags_check_info.domains[0].tags == domain_initial_tags_to_compare
+
+- name: Reconcile Domain tags with purge enabled
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tags: "{{ domain_expected_tags }}"
+    purge_tags: true
+  register: tags_real
+
+- name: Assert added, updated, and removed tags
+  ansible.builtin.assert:
+    that:
+      - tags_real.changed
+      - "tags_real.msg == 'Domain ' ~ tags_real.domain.domain_name ~ ' tags updated successfully.'"
+
+- name: Verify the exact tag set and that only undesired tags were purged
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: tags_real_info
+
+- name: Assert the exact tag set and that only undesired tags were purged
+  ansible.builtin.assert:
+    that:
+      - tags_real_info.domains | length == 1
+      - tags_real_info.domains[0].tags == domain_expected_tags_to_compare
+
+- name: Re-run Domain tag reconciliation
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+    tags: "{{ domain_expected_tags }}"
+    purge_tags: true
+  register: tags_rerun
+
+- name: Assert tag reconciliation idempotency
+  ansible.builtin.assert:
+    that:
+      - not tags_rerun.changed
+      - tags_rerun.msg == 'Domain ' ~ domain_name ~ ' is already up to date.'
+
+# --- Create-only drift ---
+- name: Reject auth mode drift without replacing the Domain
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: SSO
+    default_user_settings:
+      execution_role: "{{ domain_role.iam_role.arn }}"
+      security_groups: "{{ vpc_security_group.group_id }}"
+  register: create_only_drift
+  ignore_errors: true
+
+- name: Assert create-only drift fails with replacement guidance
+  ansible.builtin.assert:
+    that:
+      - create_only_drift is failed
+      - "'Cannot change auth_mode' in create_only_drift.msg"
+      - "'Delete and recreate' in create_only_drift.msg"
+
+- name: Confirm create-only drift did not replace the Domain
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: drift_info
+
+- name: Assert the original Domain remains after create-only drift
+  ansible.builtin.assert:
+    that:
+      - drift_info.domains | length == 1
+      - drift_info.domains[0].domain_id == create_real.domain.domain_id
+      - drift_info.domains[0].domain_arn == create_real.domain.domain_arn
+
+# --- Delete ---
+- name: Delete Domain in check mode
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ domain_name }}"
+    retention_policy: Delete
+  check_mode: true
+  register: delete_check
+
+- name: Assert delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check.changed
+      - "delete_check.msg.startswith('Check mode: would have ')"
+
+- name: Confirm check mode left the Domain present
+  amazon.ai.sagemaker_domain_info:
+    domain_id: "{{ create_real.domain.domain_id }}"
+  register: delete_check_info
+
+- name: Assert Domain remains after delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check_info.domains | length == 1
+      - delete_check_info.domains[0].status == 'InService'
+
+- name: Delete Domain and its empty home file system
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ domain_name }}"
+    retention_policy: Delete
+  register: delete_real
+
+- name: Assert Domain deletion completed
+  ansible.builtin.assert:
+    that:
+      - delete_real.changed
+      - delete_real.msg == 'Domain ' ~ create_real.domain.domain_id ~ ' deleted successfully.'
+
+- name: Confirm Domain info lookup is empty after deletion
+  amazon.ai.sagemaker_domain_info:
+    domain_id: "{{ create_real.domain.domain_id }}"
+  register: delete_info
+
+- name: Assert Domain is absent
+  ansible.builtin.assert:
+    that:
+      - delete_info.domains == []
+
+- name: Re-run Domain deletion
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ domain_name }}"
+    retention_policy: Delete
+  register: delete_rerun
+
+- name: Assert delete idempotency
+  ansible.builtin.assert:
+    that:
+      - not delete_rerun.changed
+      - delete_rerun.msg == 'Domain ' ~ domain_name ~ ' does not exist.'
+
+# --- Missing required create options ---
+- name: Create Domain without required options
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+  register: missing_required_options
+  ignore_errors: true
+
+- name: Assert create argument validation fails before an AWS request
+  ansible.builtin.assert:
+    that:
+      - missing_required_options is failed
+      - "'auth_mode' in missing_required_options.msg"
+      - "'default_user_settings' in missing_required_options.msg"
