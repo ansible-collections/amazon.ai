@@ -262,11 +262,7 @@ def main() -> None:
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 
     try:
-        try:
-            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
-        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-            module.fail_json_aws(e, msg="Failed to connect to AWS.")
-
+        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
         existing: Optional[Dict[str, Any]] = describe_model_package_group(
             client, module.params["model_package_group_name"]
         )
@@ -279,6 +275,8 @@ def main() -> None:
 
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
+    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+        module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,421 @@
+---
+- name: SageMaker Model Package integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Get AWS caller info
+      amazon.aws.aws_caller_info:
+      register: caller_info
+
+    - name: Save account ID
+      ansible.builtin.set_fact:
+        aws_account_id: "{{ caller_info.account }}"
+
+    - name: Save container image URI
+      ansible.builtin.set_fact:
+        model_package_container_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_package_ecr_repository_name }}:latest"
+
+    - name: Create S3 bucket for the model package payload
+      amazon.aws.s3_bucket:
+        name: "{{ model_package_bucket_name }}"
+        state: present
+        region: "{{ aws_region }}"
+        force: true
+
+    - name: Upload a placeholder model payload to S3
+      amazon.aws.s3_object:
+        bucket: "{{ model_package_bucket_name }}"
+        object: "models/{{ test_id }}/model.tar.gz"
+        content: "placeholder-model-package"
+        mode: put
+
+    - name: Ensure ECR repository exists
+      community.aws.ecs_ecr:
+        name: "{{ model_package_ecr_repository_name }}"
+        state: present
+
+    - name: Install skopeo
+      ansible.builtin.package:
+        name: skopeo
+        state: present
+
+    - name: Install awscli
+      ansible.builtin.pip:
+        name: awscli
+        state: present
+
+    - name: Get ECR login password
+      ansible.builtin.command: aws ecr get-login-password --region {{ aws_region }}
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ aws_access_key }}"
+        AWS_SECRET_ACCESS_KEY: "{{ aws_secret_key }}"
+        AWS_SESSION_TOKEN: "{{ security_token | default('') }}"
+      register: ecr_token
+      changed_when: false
+      no_log: true
+
+    - name: Push Docker V2 image to ECR
+      ansible.builtin.command: >-
+        skopeo copy
+        --format v2s2
+        --dest-creds AWS:{{ ecr_token.stdout }}
+        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ model_package_container_image }}
+      changed_when: true
+      no_log: true
+
+    - name: Create SageMaker model package group
+      amazon.ai.sagemaker_model_package_group:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_group_description: "{{ model_package_group_description }}"
+        tags:
+          project: demo
+      register: model_package_group
+
+    - name: Assert the group exists and is returned
+      ansible.builtin.assert:
+        that:
+          - model_package_group.changed
+          - model_package_group.model_package_group.model_package_group_name == model_package_group_name
+
+    - name: Get info about a missing model package
+      amazon.ai.sagemaker_model_package_info:
+        model_package_name: "{{ model_package_name }}-missing"
+      register: missing_package_info
+
+    - name: Assert missing model package info returns an empty list
+      ansible.builtin.assert:
+        that:
+          - not missing_package_info.changed
+          - missing_package_info.model_packages == []
+
+    - name: Create model package (check_mode)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: PendingManualApproval
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      check_mode: true
+      register: package_create_check
+
+    - name: Assert create check_mode reports a pending change
+      ansible.builtin.assert:
+        that:
+          - package_create_check.changed
+          - "'Check mode' in package_create_check.msg"
+
+    - name: Create model package (first run)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: PendingManualApproval
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      register: package_create
+
+    - name: Save the created model package name for later assertions
+      ansible.builtin.set_fact:
+        model_package_name: "{{ package_create.model_package.model_package_name | default(package_create.model_package.model_package_arn) }}"
+
+    - name: Assert the package exists and has the expected state
+      ansible.builtin.assert:
+        that:
+          - package_create.changed
+          - "'created successfully' in package_create.msg"
+          - package_create.model_package.model_package_arn is defined
+          - package_create.model_package.model_package_description == model_package_description
+          - package_create.model_package.model_approval_status == 'PendingManualApproval'
+          - "'tags' not in package_create"
+
+    - name: Get info about the created model package
+      amazon.ai.sagemaker_model_package_info:
+        model_package_name: "{{ model_package_name }}"
+      register: package_info
+
+    - name: Assert info returns the created package
+      ansible.builtin.assert:
+        that:
+          - package_info.model_packages | length == 1
+          - package_info.model_packages[0].model_package_arn == model_package_name
+          - package_info.model_packages[0].model_approval_status == 'PendingManualApproval'
+          - "'tags' not in package_info.model_packages[0]"
+
+    - name: List model packages filtered by the group
+      amazon.ai.sagemaker_model_package_info:
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_type: Versioned
+        tags:
+          project: demo
+      register: package_list
+
+    - name: Assert the filtered list contains the package
+      ansible.builtin.assert:
+        that:
+          - package_list.model_packages | length >= 1
+          - model_package_name in (package_list.model_packages | map(attribute='model_package_arn') | list)
+
+    - name: Create model package (second run - idempotency check mode)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_name: "{{ model_package_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: PendingManualApproval
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      check_mode: true
+      register: package_create_second_check
+
+    - name: Assert second create check_mode is a no-op
+      ansible.builtin.assert:
+        that:
+          - not package_create_second_check.changed
+          - "'No updates needed' in package_create_second_check.msg"
+
+    - name: Create model package (second run - idempotency)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_name: "{{ model_package_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: PendingManualApproval
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      register: package_create_second
+
+    - name: Assert idempotent rerun is a no-op
+      ansible.builtin.assert:
+        that:
+          - not package_create_second.changed
+          - "'No updates needed' in package_create_second.msg"
+
+    - name: Update model package approval (check_mode)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_name: "{{ model_package_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: Approved
+        approval_description: Approved by the integration test.
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      check_mode: true
+      register: package_update_check
+
+    - name: Assert approval update check_mode reports a pending change
+      ansible.builtin.assert:
+        that:
+          - package_update_check.changed
+          - "package_update_check.msg is match('^Check mode: would have ')"
+
+    - name: Update model package approval
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_name: "{{ model_package_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: Approved
+        approval_description: Approved by the integration test.
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      register: package_update
+
+    - name: Assert approval update succeeded
+      ansible.builtin.assert:
+        that:
+          - package_update.changed
+          - package_update.model_package.model_approval_status == 'Approved'
+
+    - name: Query updated model package
+      amazon.ai.sagemaker_model_package_info:
+        model_package_name: "{{ model_package_name }}"
+      register: package_update_info
+
+    - name: Assert approval update persisted
+      ansible.builtin.assert:
+        that:
+          - package_update_info.model_packages | length == 1
+          - package_update_info.model_packages[0].model_package_arn == package_create.model_package.model_package_arn
+          - package_update_info.model_packages[0].model_approval_status == 'Approved'
+          - package_update_info.model_packages[0].approval_description == 'Approved by the integration test.'
+
+    - name: Update model package approval (idempotency)
+      amazon.ai.sagemaker_model_package:
+        state: present
+        model_package_name: "{{ model_package_name }}"
+        model_package_description: "{{ model_package_description }}"
+        model_approval_status: Approved
+        approval_description: Approved by the integration test.
+        inference_specification:
+          containers:
+            - image: "{{ model_package_container_image }}"
+              model_data_url: "{{ model_package_data_url }}"
+          supported_transform_instance_types:
+            - ml.m5.large
+          supported_realtime_inference_instance_types:
+            - ml.m5.large
+          supported_content_types:
+            - application/json
+          supported_response_mime_types:
+            - application/json
+      register: package_update_second
+
+    - name: Assert approval update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not package_update_second.changed
+          - "'No updates needed' in package_update_second.msg"
+
+    - name: Delete model package (check_mode)
+      amazon.ai.sagemaker_model_package:
+        state: absent
+        model_package_name: "{{ model_package_name }}"
+      check_mode: true
+      register: package_delete_check
+
+    - name: Assert delete check_mode reports a pending change
+      ansible.builtin.assert:
+        that:
+          - package_delete_check.changed
+          - "'Check mode' in package_delete_check.msg"
+
+    - name: Delete model package (first run)
+      amazon.ai.sagemaker_model_package:
+        state: absent
+        model_package_name: "{{ model_package_name }}"
+      register: package_delete
+
+    - name: Assert the package was deleted
+      ansible.builtin.assert:
+        that:
+          - package_delete.changed
+          - "'deleted successfully' in package_delete.msg"
+
+    - name: Delete model package (idempotency)
+      amazon.ai.sagemaker_model_package:
+        state: absent
+        model_package_name: "{{ model_package_name }}"
+      register: package_delete_second
+
+    - name: Assert the second delete is a no-op
+      ansible.builtin.assert:
+        that:
+          - not package_delete_second.changed
+          - "'does not exist' in package_delete_second.msg"
+
+  always:
+    - name: Delete model package if it still exists
+      amazon.ai.sagemaker_model_package:
+        state: absent
+        model_package_name: "{{ model_package_name }}"
+      ignore_errors: true
+
+    - name: List remaining model packages in the test group
+      amazon.ai.sagemaker_model_package_info:
+        model_package_group_name: "{{ model_package_group_name }}"
+        model_package_type: Versioned
+      register: cleanup_model_packages
+      ignore_errors: true
+
+    - name: Delete remaining model packages in the test group
+      amazon.ai.sagemaker_model_package:
+        state: absent
+        model_package_name: "{{ item.model_package_arn | default(item.model_package_name) }}"
+      loop: "{{ cleanup_model_packages.model_packages | default([]) }}"
+      ignore_errors: true
+
+    - name: Delete model package group if it still exists
+      amazon.ai.sagemaker_model_package_group:
+        state: absent
+        model_package_group_name: "{{ model_package_group_name }}"
+      ignore_errors: true
+
+    - name: Remove the ECR repository used for the model package image
+      community.aws.ecs_ecr:
+        name: "{{ model_package_ecr_repository_name }}"
+        state: absent
+        force_absent: true
+      ignore_errors: true
+
+    - name: Remove the generated model payload from S3
+      amazon.aws.s3_object:
+        bucket: "{{ model_package_bucket_name }}"
+        object: "models/{{ test_id }}/model.tar.gz"
+        mode: delobj
+      ignore_errors: true
+
+    - name: Remove the S3 bucket used for the model payload
+      amazon.aws.s3_bucket:
+        name: "{{ model_package_bucket_name }}"
+        state: absent
+        force: true
+      ignore_errors: true
