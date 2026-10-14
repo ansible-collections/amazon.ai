@@ -1,0 +1,60 @@
+---
+- name: Check notebook instance deletion
+  amazon.ai.sagemaker_notebook_instance:
+    state: absent
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    wait_timeout: 1800
+  check_mode: true
+  register: delete_check
+
+- name: Assert notebook instance deletion check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check.changed
+      - "'Check mode: would have' in delete_check.msg"
+
+- name: Verify check mode left the notebook instance present
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: delete_check_info
+
+- name: Assert the notebook remains before deletion
+  ansible.builtin.assert:
+    that:
+      - delete_check_info.notebook_instance.notebook_instance_name == notebook_instance_name
+
+- name: Delete the notebook instance
+  amazon.ai.sagemaker_notebook_instance:
+    state: absent
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    wait_timeout: 1800
+  register: delete_real
+
+- name: Assert the notebook instance was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_real.changed
+      - delete_real.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' deleted successfully.'
+
+- name: Verify the notebook instance is gone
+  amazon.ai.sagemaker_notebook_instance_info:
+    notebook_instance_name: "{{ notebook_instance_name }}"
+  register: delete_info
+
+- name: Assert no notebook instance remains after deletion
+  ansible.builtin.assert:
+    that:
+      - delete_info.notebook_instance == []
+
+- name: Re-run notebook instance deletion
+  amazon.ai.sagemaker_notebook_instance:
+    state: absent
+    notebook_instance_name: "{{ notebook_instance_name }}"
+    wait_timeout: 1800
+  register: delete_rerun
+
+- name: Assert notebook instance deletion idempotency
+  ansible.builtin.assert:
+    that:
+      - not delete_rerun.changed
+      - delete_rerun.msg == 'Notebook instance ' ~ notebook_instance_name ~ ' does not exist.'

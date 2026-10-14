@@ -28,6 +28,8 @@ action_groups:
     - sagemaker_model_info
     - sagemaker_model_package_group
     - sagemaker_model_package_group_info
+    - sagemaker_notebook_instance
+    - sagemaker_notebook_instance_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
     - sagemaker_endpoint
