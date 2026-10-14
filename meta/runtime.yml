@@ -22,6 +22,8 @@ action_groups:
     - sagemaker_app_image_config_info
     - sagemaker_code_repository
     - sagemaker_code_repository_info
+    - sagemaker_domain
+    - sagemaker_domain_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
     - sagemaker_image

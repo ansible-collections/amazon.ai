@@ -80,6 +80,8 @@ Name | Description
 [amazon.ai.sagemaker_app_image_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_app_image_config_info_module.rst)|Gather information about Amazon SageMaker AppImageConfigs
 [amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
 [amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
+[amazon.ai.sagemaker_domain](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_module.rst)|Manage Amazon SageMaker AI Domains
+[amazon.ai.sagemaker_domain_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_info_module.rst)|Gather information about SageMaker AI Domains
 [amazon.ai.sagemaker_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_module.rst)|Manage Amazon SageMaker endpoints
 [amazon.ai.sagemaker_endpoint_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_module.rst)|Manage Amazon SageMaker endpoint configurations
 [amazon.ai.sagemaker_endpoint_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_info_module.rst)|Gather information about SageMaker endpoint configurations
