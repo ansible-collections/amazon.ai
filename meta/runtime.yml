@@ -20,6 +20,8 @@ action_groups:
     - devopsguru_resource_collection_info
     - sagemaker_code_repository
     - sagemaker_code_repository_info
+    - sagemaker_domain
+    - sagemaker_domain_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
     - sagemaker_image
