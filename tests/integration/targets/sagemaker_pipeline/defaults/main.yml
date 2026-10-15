@@ -1,0 +1,8 @@
+---
+test_id: "{{ tiny_prefix }}"
+pipeline_name: "test-sagemaker-pipeline-{{ test_id }}-a"
+pipeline_s3_name: "test-sagemaker-pipeline-{{ test_id }}-b"
+pipeline_bucket_name: "test-sagemaker-pipeline-{{ test_id }}"
+pipeline_object_key: "definitions/pipeline.json"
+pipeline_role_name: "ansible-test-sagemaker-pipeline-role-{{ test_id }}"
+missing_pipeline_name: "test-sagemaker-pipeline-missing-{{ test_id }}"

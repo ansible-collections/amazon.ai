@@ -1,0 +1,151 @@
+  - name: Upload S3 pipeline definition
+    amazon.aws.s3_object:
+      bucket: "{{ pipeline_bucket_name }}"
+      object: "{{ pipeline_object_key }}"
+      content: "{{ pipeline_definition_v1 }}"
+      mode: put
+
+  - name: Attempt to use both pipeline definition sources
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ missing_pipeline_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition: "{{ pipeline_definition_v1 }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    register: pipeline_both_sources
+    ignore_errors: true
+
+  - name: Assert pipeline definition sources are mutually exclusive
+    ansible.builtin.assert:
+      that:
+        - pipeline_both_sources.failed
+
+  - name: Create S3-backed SageMaker Pipeline in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    check_mode: true
+    register: pipeline_s3_create_check
+
+  - name: Assert S3-backed pipeline check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_create_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_s3_create_check.msg is search('^Check mode: would have') }}"
+
+  - name: Create S3-backed SageMaker Pipeline
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    register: pipeline_s3_create
+
+  - name: Assert S3-backed pipeline was created
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_create.changed
+        - "'created successfully' in pipeline_s3_create.msg"
+        - pipeline_s3_create.pipeline.pipeline_status == 'Active'
+
+  - name: Re-run S3-backed pipeline creation
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    register: pipeline_s3_rerun
+
+  - name: Assert S3-backed pipeline definition is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_s3_rerun.changed
+        - "'No updates needed' in pipeline_s3_rerun.msg"
+
+  - name: Replace S3 pipeline definition object
+    amazon.aws.s3_object:
+      bucket: "{{ pipeline_bucket_name }}"
+      object: "{{ pipeline_object_key }}"
+      content: "{{ pipeline_definition_v2 }}"
+      mode: put
+
+  - name: Update S3-backed pipeline definition in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    check_mode: true
+    register: pipeline_s3_update_check
+
+  - name: Assert S3 definition check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_update_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_s3_update_check.msg is search('^Check mode: would have') }}"
+
+  - name: Update S3-backed pipeline definition
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    register: pipeline_s3_update
+
+  - name: Assert S3-backed pipeline update
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_update.changed
+        - "'updated successfully' in pipeline_s3_update.msg"
+        - pipeline_s3_update.pipeline.pipeline_arn == pipeline_s3_create.pipeline.pipeline_arn
+        - (pipeline_s3_update.pipeline.pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'second version'
+
+  - name: Re-query S3-backed pipeline after update
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_s3_name }}"
+    register: pipeline_s3_update_info
+
+  - name: Assert S3-backed update is visible in info
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_update_info.pipelines[0].pipeline_arn == pipeline_s3_create.pipeline.pipeline_arn
+        - (pipeline_s3_update_info.pipelines[0].pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'second version'
+
+  - name: Re-run S3-backed pipeline update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: "{{ pipeline_object_key }}"
+    register: pipeline_s3_update_rerun
+
+  - name: Assert S3-backed pipeline update is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_s3_update_rerun.changed
+        - "'No updates needed' in pipeline_s3_update_rerun.msg"
+
+  - name: Attempt S3-backed update from a missing object
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_s3_name }}"
+      pipeline_definition_s3_location:
+        bucket: "{{ pipeline_bucket_name }}"
+        object_key: definitions/does-not-exist.json
+    register: pipeline_missing_s3_object
+    ignore_errors: true
+
+  - name: Assert missing S3 definition object is reported
+    ansible.builtin.assert:
+      that:
+        - pipeline_missing_s3_object.failed
+        - "'S3 pipeline definition object does not exist' in pipeline_missing_s3_object.msg"

@@ -1,0 +1,220 @@
+  - name: Update inline pipeline definition in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+    check_mode: true
+    register: pipeline_update_check
+
+  - name: Assert inline definition update check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_update_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_update_check.msg is search('^Check mode: would have') }}"
+
+  - name: Update inline pipeline definition
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+    register: pipeline_update
+
+  - name: Assert inline definition update
+    ansible.builtin.assert:
+      that:
+        - pipeline_update.changed
+        - "'updated successfully' in pipeline_update.msg"
+        - pipeline_update.pipeline.pipeline_arn == pipeline_create.pipeline.pipeline_arn
+        - (pipeline_update.pipeline.pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'second version'
+
+  - name: Re-query inline pipeline after update
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_after_update_info
+
+  - name: Assert inline update is visible in info
+    ansible.builtin.assert:
+      that:
+        - pipeline_after_update_info.pipelines[0].pipeline_arn == pipeline_create.pipeline.pipeline_arn
+        - (pipeline_after_update_info.pipelines[0].pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'second version'
+
+  - name: Re-run inline definition update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+    register: pipeline_update_rerun
+
+  - name: Assert inline definition update is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_update_rerun.changed
+        - "'No updates needed' in pipeline_update_rerun.msg"
+
+  - name: Get the original version after definition update
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_version_id: 1
+    register: pipeline_original_version
+
+  - name: Assert the historical definition is preserved
+    ansible.builtin.assert:
+      that:
+        - pipeline_original_version.pipelines[0].pipeline_arn == pipeline_create.pipeline.pipeline_arn
+        - (pipeline_original_version.pipelines[0].pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'first version'
+
+  - name: Update pipeline parallelism configuration
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 2
+    check_mode: true
+    register: pipeline_parallelism_check
+
+  - name: Assert parallelism configuration check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_parallelism_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_parallelism_check.msg is search('^Check mode: would have') }}"
+
+  - name: Apply pipeline parallelism configuration
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 2
+    register: pipeline_parallelism_update
+
+  - name: Assert parallelism configuration update
+    ansible.builtin.assert:
+      that:
+        - pipeline_parallelism_update.changed
+        - "'updated successfully' in pipeline_parallelism_update.msg"
+        - pipeline_parallelism_update.pipeline.parallelism_configuration.max_parallel_execution_steps == 2
+
+  - name: Re-query pipeline after parallelism update
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_parallelism_info
+
+  - name: Assert parallelism update is visible in info
+    ansible.builtin.assert:
+      that:
+        - pipeline_parallelism_info.pipelines[0].pipeline_arn == pipeline_create.pipeline.pipeline_arn
+        - pipeline_parallelism_info.pipelines[0].parallelism_configuration.max_parallel_execution_steps == 2
+
+  - name: Re-run parallelism configuration update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 2
+    register: pipeline_parallelism_rerun
+
+  - name: Assert parallelism configuration is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_parallelism_rerun.changed
+        - "'No updates needed' in pipeline_parallelism_rerun.msg"
+
+  - name: Update pipeline description in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      pipeline_description: Updated by integration test
+    check_mode: true
+    register: pipeline_description_check
+
+  - name: Assert pipeline description check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_description_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_description_check.msg is search('^Check mode: would have') }}"
+
+  - name: Apply pipeline description update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      pipeline_description: Updated by integration test
+    register: pipeline_description_update
+
+  - name: Assert pipeline description update
+    ansible.builtin.assert:
+      that:
+        - pipeline_description_update.changed
+        - "'updated successfully' in pipeline_description_update.msg"
+        - pipeline_description_update.pipeline.pipeline_description == 'Updated by integration test'
+
+  - name: Re-query pipeline after description update
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_description_info
+
+  - name: Assert description update is visible in info
+    ansible.builtin.assert:
+      that:
+        - pipeline_description_info.pipelines[0].pipeline_arn == pipeline_create.pipeline.pipeline_arn
+        - pipeline_description_info.pipelines[0].pipeline_description == 'Updated by integration test'
+
+  - name: Re-run pipeline description update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      pipeline_description: Updated by integration test
+    register: pipeline_description_rerun
+
+  - name: Assert pipeline description update is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_description_rerun.changed
+        - "'No updates needed' in pipeline_description_rerun.msg"
+
+  - name: Update tags in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      tags:
+        team: ai
+    check_mode: true
+    register: pipeline_tags_check
+
+  - name: Assert tag update check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_tags_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_tags_check.msg is search('^Check mode: would have') }}"
+
+  - name: Update and purge pipeline tags
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      tags:
+        team: ai
+    register: pipeline_tags_update
+
+  - name: Assert pipeline tags were updated
+    ansible.builtin.assert:
+      that:
+        - pipeline_tags_update.changed
+        - "'updated successfully' in pipeline_tags_update.msg"
+        - "pipeline_tags_update.pipeline.tags == {'team': 'ai'}"
+
+  - name: Re-run pipeline tag update
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v2 }}"
+      tags:
+        team: ai
+    register: pipeline_tags_rerun
+
+  - name: Assert pipeline tags are idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_tags_rerun.changed
+        - "'No updates needed' in pipeline_tags_rerun.msg"

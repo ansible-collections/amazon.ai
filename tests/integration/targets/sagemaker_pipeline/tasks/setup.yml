@@ -1,0 +1,51 @@
+  - name: Create IAM role for SageMaker Pipeline
+    amazon.aws.iam_role:
+      name: "{{ pipeline_role_name }}"
+      assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_pipeline.json') }}"
+      state: present
+    register: pipeline_role
+
+  - name: Save pipeline role ARN
+    ansible.builtin.set_fact:
+      pipeline_role_arn: "{{ pipeline_role.iam_role.arn }}"
+
+  - name: Wait for IAM role propagation
+    ansible.builtin.pause:
+      seconds: 15
+
+  - name: Create S3 bucket for pipeline definitions
+    amazon.aws.s3_bucket:
+      name: "{{ pipeline_bucket_name }}"
+      state: present
+
+  - name: Set valid pipeline definitions
+    ansible.builtin.set_fact:
+      pipeline_definition_v1: '{"Version":"2020-12-01","Steps":[{"Name":"FailForTest","Type":"Fail","Arguments":{"ErrorMessage":"first version"}},{"Name":"FailForTestParallel","Type":"Fail","Arguments":{"ErrorMessage":"parallel step"}}]}'
+      pipeline_definition_v2: '{"Version":"2020-12-01","Steps":[{"Name":"FailForTest","Type":"Fail","Arguments":{"ErrorMessage":"second version"}},{"Name":"FailForTestParallel","Type":"Fail","Arguments":{"ErrorMessage":"parallel step"}}]}'
+
+  - name: Attempt to create a pipeline without a definition source
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ missing_pipeline_name }}"
+    register: pipeline_missing_source
+    ignore_errors: true
+
+  - name: Assert missing definition source is rejected
+    ansible.builtin.assert:
+      that:
+        - pipeline_missing_source.failed
+        - "'following are missing: pipeline_definition, pipeline_definition_s3_location' in pipeline_missing_source.msg"
+
+  - name: Attempt to set invalid pipeline parallelism
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ missing_pipeline_name }}"
+      pipeline_definition: "{{ pipeline_definition_v1 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 0
+    register: pipeline_invalid_parallelism
+    ignore_errors: true
+
+  - name: Assert invalid pipeline parallelism is rejected
+    ansible.builtin.assert:
+      that:
+        - pipeline_invalid_parallelism.failed
+        - "'max_parallel_execution_steps must be at least 1' in pipeline_invalid_parallelism.msg"

@@ -1,0 +1,52 @@
+---
+- name: SageMaker Pipeline integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Run SageMaker Pipeline setup scenarios
+      ansible.builtin.include_tasks: setup.yml
+    - name: Run SageMaker Pipeline create scenarios
+      ansible.builtin.include_tasks: create.yml
+    - name: Run SageMaker Pipeline update scenarios
+      ansible.builtin.include_tasks: update.yml
+    - name: Run SageMaker Pipeline s3 scenarios
+      ansible.builtin.include_tasks: s3.yml
+    - name: Run SageMaker Pipeline info scenarios
+      ansible.builtin.include_tasks: info.yml
+    - name: Run SageMaker Pipeline delete scenarios
+      ansible.builtin.include_tasks: delete.yml
+
+  always:
+    - name: Cleanup inline pipeline
+      amazon.ai.sagemaker_pipeline:
+        state: absent
+        pipeline_name: "{{ pipeline_name }}"
+      ignore_errors: true
+
+    - name: Cleanup S3-backed pipeline
+      amazon.ai.sagemaker_pipeline:
+        state: absent
+        pipeline_name: "{{ pipeline_s3_name }}"
+      ignore_errors: true
+
+    - name: Cleanup pipeline definition bucket
+      amazon.aws.s3_bucket:
+        name: "{{ pipeline_bucket_name }}"
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Cleanup SageMaker Pipeline IAM role
+      amazon.aws.iam_role:
+        name: "{{ pipeline_role_name }}"
+        state: absent
+      ignore_errors: true

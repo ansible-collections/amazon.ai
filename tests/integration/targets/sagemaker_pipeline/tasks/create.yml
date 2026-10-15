@@ -1,0 +1,78 @@
+  - name: Create inline SageMaker Pipeline in check mode
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition: "{{ pipeline_definition_v1 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 1
+    check_mode: true
+    register: pipeline_create_check
+
+  - name: Assert inline pipeline check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_create_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_create_check.msg is search('^Check mode: would have') }}"
+
+  - name: Create inline SageMaker Pipeline
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition: "{{ pipeline_definition_v1 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 1
+      tags:
+        suite: pipeline
+    register: pipeline_create
+
+  - name: Assert inline pipeline was created
+    ansible.builtin.assert:
+      that:
+        - pipeline_create.changed
+        - "'created successfully' in pipeline_create.msg"
+        - pipeline_create.pipeline.pipeline_name == pipeline_name
+        - pipeline_create.pipeline.pipeline_status == 'Active'
+        - pipeline_create.pipeline.tags.suite == 'pipeline'
+
+  - name: Get inline pipeline details
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_info
+
+  - name: Assert inline pipeline information
+    ansible.builtin.assert:
+      that:
+        - pipeline_info.pipelines[0].pipeline_name == pipeline_name
+        - pipeline_info.pipelines[0].pipeline_status == 'Active'
+        - (pipeline_info.pipelines[0].pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'first version'
+
+  - name: Get a specific inline pipeline version
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+      pipeline_version_id: 1
+    register: pipeline_version_info
+
+  - name: Assert historical pipeline version lookup
+    ansible.builtin.assert:
+      that:
+        - pipeline_version_info.pipelines[0].pipeline_name == pipeline_name
+        - (pipeline_version_info.pipelines[0].pipeline_definition | from_json).Steps[0].Arguments.ErrorMessage == 'first version'
+
+  - name: Re-run inline pipeline creation
+    amazon.ai.sagemaker_pipeline:
+      pipeline_name: "{{ pipeline_name }}"
+      role_arn: "{{ pipeline_role_arn }}"
+      pipeline_definition: "{{ pipeline_definition_v1 }}"
+      parallelism_configuration:
+        max_parallel_execution_steps: 1
+      tags:
+        suite: pipeline
+    register: pipeline_create_rerun
+
+  - name: Assert inline pipeline creation is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_create_rerun.changed
+        - "'No updates needed' in pipeline_create_rerun.msg"

@@ -13,6 +13,14 @@ from urllib.parse import urlparse
 from urllib.parse import urlunparse
 
 
+def parse_json(value: str, module, option: str) -> Any:
+    """Parse an option's JSON value, reporting malformed input through the module."""
+    try:
+        return json.loads(value)
+    except (TypeError, json.JSONDecodeError) as e:
+        module.fail_json(msg=f"Option {option} must contain valid JSON: {e}")
+
+
 def encode_body(body: Union[dict, list, str]) -> bytes:
     """
     Convert the body into bytes for invoke_model.

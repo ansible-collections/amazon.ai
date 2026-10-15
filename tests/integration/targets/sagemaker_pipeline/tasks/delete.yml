@@ -1,0 +1,88 @@
+  - name: Check mode delete inline pipeline
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_name }}"
+    check_mode: true
+    register: pipeline_delete_check
+
+  - name: Assert pipeline delete check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_delete_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_delete_check.msg is search('^Check mode: would have') }}"
+
+  - name: Delete inline pipeline
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_delete
+
+  - name: Assert inline pipeline was deleted
+    ansible.builtin.assert:
+      that:
+        - pipeline_delete.changed
+        - "'deleted successfully' in pipeline_delete.msg"
+
+  - name: Assert deleted pipeline lookup is empty
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_deleted_info
+
+  - name: Assert deleted pipeline lookup is non-fatal and empty
+    ansible.builtin.assert:
+      that:
+        - not pipeline_deleted_info.failed
+        - pipeline_deleted_info.pipelines == []
+
+  - name: Re-run inline pipeline deletion
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_name }}"
+    register: pipeline_delete_rerun
+
+  - name: Assert inline pipeline deletion is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_delete_rerun.changed
+        - "'does not exist' in pipeline_delete_rerun.msg"
+
+  - name: Check mode delete S3-backed pipeline
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_s3_name }}"
+    check_mode: true
+    register: pipeline_s3_delete_check
+
+  - name: Assert S3 pipeline delete check mode
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_delete_check.changed
+        - check_mode_msg_is_correct
+    vars:
+      check_mode_msg_is_correct: "{{ pipeline_s3_delete_check.msg is search('^Check mode: would have') }}"
+
+  - name: Delete S3-backed pipeline
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_s3_name }}"
+    register: pipeline_s3_delete
+
+  - name: Assert S3-backed pipeline was deleted
+    ansible.builtin.assert:
+      that:
+        - pipeline_s3_delete.changed
+        - "'deleted successfully' in pipeline_s3_delete.msg"
+
+  - name: Re-run delete for idempotency
+    amazon.ai.sagemaker_pipeline:
+      state: absent
+      pipeline_name: "{{ pipeline_s3_name }}"
+    register: pipeline_s3_delete_rerun
+
+  - name: Assert pipeline deletion is idempotent
+    ansible.builtin.assert:
+      that:
+        - not pipeline_s3_delete_rerun.changed
+        - "'does not exist' in pipeline_s3_delete_rerun.msg"

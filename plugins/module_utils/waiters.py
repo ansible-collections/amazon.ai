@@ -18,8 +18,6 @@ except ImportError:
         )
     except ImportError:
         RetryingBotoClientWrapper = None
-
-
 model_package_group_data = {
     "version": 2,
     "waiters": {

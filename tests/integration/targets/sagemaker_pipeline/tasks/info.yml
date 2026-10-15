@@ -1,0 +1,43 @@
+  - name: List pipelines by name prefix
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name_prefix: "test-sagemaker-pipeline-{{ test_id }}"
+      sort_by: Name
+      sort_order: Ascending
+      max_items: 2
+    register: pipeline_list
+
+  - name: Assert pipeline list includes both test pipelines in sort order
+    ansible.builtin.assert:
+      that:
+        - pipeline_list.pipelines | length == 2
+        - pipeline_list.pipelines[0].pipeline_name == pipeline_name
+        - pipeline_list.pipelines[1].pipeline_name == pipeline_s3_name
+
+  - name: List pipelines in descending creation order in check mode
+    amazon.ai.sagemaker_pipeline_info:
+      sort_by: CreationTime
+      sort_order: Descending
+      max_items: 100
+    check_mode: true
+    register: pipeline_list_descending
+
+  - name: Assert pipeline creation-time sorting and read-only check mode
+    ansible.builtin.assert:
+      that:
+        - not pipeline_list_descending.changed
+        - creation_times_are_descending
+        - test_pipeline_names == [pipeline_s3_name, pipeline_name]
+    vars:
+      test_pipeline_names: "{{ pipeline_list_descending.pipelines | selectattr('pipeline_name', 'in', [pipeline_name, pipeline_s3_name]) | map(attribute='pipeline_name') | list }}"
+      creation_times_are_descending: "{{ (pipeline_list_descending.pipelines | map(attribute='creation_time') | list) == (pipeline_list_descending.pipelines | map(attribute='creation_time') | sort(reverse=true) | list) }}"
+
+  - name: Assert missing pipeline lookup returns an empty result
+    amazon.ai.sagemaker_pipeline_info:
+      pipeline_name: "{{ missing_pipeline_name }}"
+    register: pipeline_missing
+
+  - name: Assert missing pipeline lookup is non-fatal
+    ansible.builtin.assert:
+      that:
+        - not pipeline_missing.failed
+        - pipeline_missing.pipelines == []
