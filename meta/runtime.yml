@@ -32,3 +32,29 @@ action_groups:
     - sagemaker_endpoint_config_info
     - sagemaker_endpoint
     - sagemaker_endpoint_info
+plugin_routing:
+  modules:
+    bedrock_agent:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+    bedrock_agent_info:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+    bedrock_agent_alias:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+    bedrock_agent_alias_info:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+    bedrock_agent_action_group:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+    bedrock_agent_action_group_info:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
