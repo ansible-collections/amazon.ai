@@ -20,6 +20,8 @@ action_groups:
     - devopsguru_resource_collection_info
     - sagemaker_code_repository
     - sagemaker_code_repository_info
+    - sagemaker_endpoint
+    - sagemaker_endpoint_info
     - sagemaker_endpoint_config
     - sagemaker_endpoint_config_info
     - sagemaker_image
@@ -28,7 +30,5 @@ action_groups:
     - sagemaker_model_info
     - sagemaker_model_package_group
     - sagemaker_model_package_group_info
-    - sagemaker_endpoint_config
-    - sagemaker_endpoint_config_info
-    - sagemaker_endpoint
-    - sagemaker_endpoint_info
+    - sagemaker_training_job
+    - sagemaker_training_job_info
