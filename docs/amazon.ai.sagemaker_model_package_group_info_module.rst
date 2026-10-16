@@ -26,8 +26,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
@@ -165,7 +165,7 @@ Parameters
             <tr>
                 <td colspan="1">
                     <div class="ansibleOptionAnchor" id="parameter-"></div>
-                    <b>max_results</b>
+                    <b>max_items</b>
                     <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
                     <div style="font-size: small">
                         <span style="color: purple">integer</span>
@@ -175,6 +175,7 @@ Parameters
                 </td>
                 <td>
                         <div>The maximum number of model package groups to return.</div>
+                        <div>When O(tags) is set, this limit is applied before tag filtering, so fewer matching groups may be returned.</div>
                         <div>Ignored when O(model_package_group_name) is provided.</div>
                 </td>
             </tr>

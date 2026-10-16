@@ -8,7 +8,7 @@ amazon.ai.sagemaker_model_info
 **Gather information about Amazon SageMaker Models**
 
 
-Version added: 1.1.0
+Version added: 2.0.0
 
 .. contents::
    :local:
@@ -26,8 +26,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
