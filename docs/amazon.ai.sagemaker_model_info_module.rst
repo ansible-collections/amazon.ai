@@ -8,7 +8,7 @@ amazon.ai.sagemaker_model_info
 **Gather information about Amazon SageMaker Models**
 
 
-Version added: 1.1.0
+Version added: 2.0.0
 
 .. contents::
    :local:
