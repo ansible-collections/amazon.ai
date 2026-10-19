@@ -31,7 +31,6 @@
 - name: Remove the temporary execution role
   amazon.aws.iam_role:
     name: "{{ training_role_name }}"
-    create_instance_profile: false
     state: absent
   ignore_errors: true
 

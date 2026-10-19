@@ -189,11 +189,10 @@ def main() -> None:
 
         if module.params.get("training_job_name"):
             job = describe_training_job(client, module.params["training_job_name"])
-            if job is not None:
-                job = _include_tags(client, job)
-            if job is not None:
-                module.exit_json(training_jobs=[normalize_training_job(job)])
-            module.exit_json(training_jobs=[])
+            if job is None:
+                module.exit_json(training_jobs=[])
+            job = _include_tags(client, job)
+            module.exit_json(training_jobs=[normalize_training_job(job)])
 
         raw_filters = {key: module.params.get(key) for key in list_filters}
         raw_filters["sort_by"] = module.params["sort_by"]

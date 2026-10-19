@@ -40,7 +40,6 @@ def list_tags(client, resource_arn: str) -> Dict[str, str]:
     return {t["Key"]: t["Value"] for t in tags}
 
 
-@AWSRetry.jittered_backoff(retries=10)
 def reconcile_sagemaker_tags(client, module, resource_arn: str) -> bool:
     """Reconcile SageMaker resource tags using the shared ResourceArn tagging API."""
     desired_tags = module.params.get("tags")
@@ -1297,8 +1296,7 @@ def normalize_training_job(training_job: Dict[str, Any]) -> Dict[str, Any]:
         if "RuleParameters" in aws_rule:
             normalized_rule["rule_parameters"] = dict(aws_rule["RuleParameters"])
 
-    if isinstance(training_job.get("Tags"), dict):
-        normalized["tags"] = dict(training_job["Tags"])
+    normalized["tags"] = training_job.get("Tags", {})
     return normalized
 
 

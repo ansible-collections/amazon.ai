@@ -423,9 +423,9 @@ training_job:
             returned: when returned by SageMaker
             sample: '2025-01-01T12:30:00+00:00'
         tags:
-            description: The training job tags when tag management was requested.
+            description: The training job tags.
             type: dict
-            returned: when tags were requested
+            returned: always
             sample: {project: demo}
     sample:
         training_job_name: example-training-job
@@ -590,7 +590,7 @@ def main() -> None:
 
         existing = describe_training_job(client, name)
         job, changed, msg = manage_training_job(client, module, existing)
-        if job is not None and module.params.get("tags") is not None and module.params["state"] != "absent":
+        if job is not None and module.params["state"] != "absent":
             job = dict(job)
             job["Tags"] = list_tags(client, job["TrainingJobArn"])
         module.exit_json(

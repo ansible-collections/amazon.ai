@@ -53,7 +53,6 @@
       amazon.aws.iam_role:
         name: "{{ training_role_name }}"
         assume_role_policy_document: "{{ lookup('file', 'files/assume_role_sagemaker.json') }}"
-        create_instance_profile: false
         state: present
       register: training_execution_role
 
