@@ -51,6 +51,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_p
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_values_match
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package_compare_value
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package
@@ -78,6 +79,18 @@ from botocore.exceptions import EndpointConnectionError
 from botocore.exceptions import WaiterError
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
+
+
+@pytest.mark.parametrize(
+    ("training_job", "expected"),
+    [
+        ({"TrainingJobName": "test-job"}, {}),
+        ({"TrainingJobName": "test-job", "Tags": {}}, {}),
+        ({"TrainingJobName": "test-job", "Tags": {"project": "demo"}}, {"project": "demo"}),
+    ],
+)
+def test_normalize_training_job_always_returns_tags_dict(training_job, expected):
+    assert normalize_training_job(training_job)["tags"] == expected
 
 
 @pytest.mark.parametrize("wait", [False, True])
