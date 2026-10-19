@@ -3241,8 +3241,7 @@ def normalize_training_job(training_job: Dict[str, Any]) -> Dict[str, Any]:
         if "RuleParameters" in aws_rule:
             normalized_rule["rule_parameters"] = dict(aws_rule["RuleParameters"])
 
-    if isinstance(training_job.get("Tags"), dict):
-        normalized["tags"] = dict(training_job["Tags"])
+    normalized["tags"] = training_job.get("Tags", {})
     return normalized
 
 

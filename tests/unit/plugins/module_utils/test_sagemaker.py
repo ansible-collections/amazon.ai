@@ -71,6 +71,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_p
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package_compare_value
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_domain_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_update
@@ -716,6 +717,18 @@ class TestReconcileDomainTags:
         assert reconcile_domain_tags(client, module, _existing_domain()) is True
         client.add_tags.assert_not_called()
         client.delete_tags.assert_not_called()
+@pytest.mark.parametrize(
+    ("training_job", "expected"),
+    [
+        ({"TrainingJobName": "test-job"}, {}),
+        ({"TrainingJobName": "test-job", "Tags": {}}, {}),
+        ({"TrainingJobName": "test-job", "Tags": {"project": "demo"}}, {"project": "demo"}),
+    ],
+)
+def test_normalize_training_job_always_returns_tags_dict(training_job, expected):
+    assert normalize_training_job(training_job)["tags"] == expected
+
+
 @pytest.mark.parametrize("wait", [False, True])
 def test_fresh_training_job_returns_none_when_not_found(wait):
     client = MagicMock()
