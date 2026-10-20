@@ -1,0 +1,2 @@
+deprecated_features:
+  - bedrock_invoke_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/82).

@@ -16,3 +16,8 @@ action_groups:
     - devopsguru_resource_collection_info
     - sagemaker_code_repository
     - sagemaker_code_repository_info
+plugin_routing:
+    bedrock_invoke_agent:
+      deprecation:
+        removal_version: "3.0.0"
+        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
