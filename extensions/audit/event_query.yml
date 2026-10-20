@@ -1,0 +1,86 @@
+---
+# AI/ML
+
+amazon.ai.bedrock_agent_info:
+  query: >-
+    .agents[] | select(. != null) |
+    {
+      canonical_facts: {
+        id: .agent_id,
+        name: .agent_name,
+        tags: (.tags // {}),
+        status: .agent_status
+      },
+      facts: {
+        infra_type: "public_cloud",
+        infra_bucket: "machine_learning",
+        device_type: "ai_agent"
+      }
+    }
+
+amazon.ai.bedrock_agent_alias_info:
+  query: >-
+    .agent_aliases[] | select(. != null) |
+    {
+      canonical_facts: {
+        id: .agent_alias_id,
+        name: .agent_alias_name,
+        tags: (.tags // {}),
+        status: .agent_alias_status
+      },
+      facts: {
+        infra_type: "public_cloud",
+        infra_bucket: "machine_learning",
+        device_type: "ai_agent"
+      }
+    }
+
+amazon.ai.bedrock_agent_action_group_info:
+  query: >-
+    .action_groups[] | select(. != null) |
+    {
+      canonical_facts: {
+        id: .action_group_id,
+        name: .action_group_name,
+        tags: (.tags // {}),
+        status: .action_group_state
+      },
+      facts: {
+        infra_type: "public_cloud",
+        infra_bucket: "machine_learning",
+        device_type: "ai_agent"
+      }
+    }
+
+amazon.ai.bedrock_foundation_models_info:
+  query: >-
+    .foundation_models[] | select(. != null) |
+    {
+      canonical_facts: {
+        id: .model_id,
+        name: (.model_name // .model_id),
+        tags: (.tags // {})
+      },
+      facts: {
+        infra_type: "public_cloud",
+        infra_bucket: "machine_learning",
+        device_type: "ai_model"
+      }
+    }
+
+# OBSERVABILITY
+
+amazon.ai.devopsguru_resource_collection_info:
+  query: >-
+    .resource_collection | select(. != null) |
+    {
+      canonical_facts: {
+        id: "devopsguru_resource_collection",
+        name: "devopsguru_resource_collection"
+      },
+      facts: {
+        infra_type: "public_cloud",
+        infra_bucket: "monitoring",
+        device_type: "monitoring"
+      }
+    }
