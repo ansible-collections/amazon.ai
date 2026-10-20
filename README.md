@@ -53,7 +53,7 @@ As such, support for Python versions below 3.10 will be removed in a release aft
 
 ## AWS SDK version compatibility
 
-Version 1.0.0 of this collection supports ``boto3 >= 1.35.0`` and ``botocore >= 1.35.0``.
+Version 2.0.0 of this collection supports ``boto3 >= 1.38.0`` and ``botocore >= 1.38.0``.
 
 ## Included content
 <!--start collection content-->
