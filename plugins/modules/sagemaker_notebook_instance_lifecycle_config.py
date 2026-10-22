@@ -114,11 +114,11 @@ notebook_instance_lifecycle_config:
         notebook_instance_lifecycle_config_name:
             description: The name of the lifecycle configuration.
             type: str
-            sample: example-lifecycle-config
+            sample: "example-lifecycle-config"
         notebook_instance_lifecycle_config_arn:
             description: The Amazon Resource Name (ARN) of the lifecycle configuration.
             type: str
-            sample: arn:aws:sagemaker:us-east-1:123456789012:notebook-instance-lifecycle-config/example-lifecycle-config
+            sample: "arn:aws:sagemaker:us-east-1:123456789012:notebook-instance-lifecycle-config/example-lifecycle-config"
         on_create:
             description: The decoded shell script run when a notebook instance is created, or null when unset.
             type: str
@@ -130,11 +130,11 @@ notebook_instance_lifecycle_config:
         creation_time:
             description: The date and time the lifecycle configuration was created.
             type: str
-            sample: '2026-01-01T00:00:00+00:00'
+            sample: "2026-01-01T00:00:00+00:00"
         last_modified_time:
             description: The date and time the lifecycle configuration was last modified.
             type: str
-            sample: '2026-01-01T00:00:00+00:00'
+            sample: "2026-01-01T00:00:00+00:00"
         tags:
             description: The tags assigned to the lifecycle configuration.
             type: dict
@@ -144,7 +144,7 @@ msg:
     description: Informative message about the action.
     type: str
     returned: always
-    sample: Lifecycle configuration example-lifecycle-config created successfully.
+    sample: "Lifecycle configuration example-lifecycle-config created successfully."
 """
 
 try:
@@ -231,7 +231,7 @@ def _ensure_absent(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[
         return False, {"msg": f"Lifecycle configuration {name} does not exist."}
 
     changed, msg = delete_notebook_instance_lifecycle_config(client, module)
-    return changed, {"msg": msg}
+    return changed, {"msg": msg, "notebook_instance_lifecycle_config": {}}
 
 
 def main() -> None:

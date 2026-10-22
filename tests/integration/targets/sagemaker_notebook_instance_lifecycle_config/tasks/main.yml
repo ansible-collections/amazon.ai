@@ -135,6 +135,7 @@
             create_first.notebook_instance_lifecycle_config.notebook_instance_lifecycle_config_arn
           - updated_info.notebook_instance_lifecycle_configs[0].on_start == lifecycle_config_on_start_updated
           - updated_info.notebook_instance_lifecycle_configs[0].on_create == lifecycle_config_on_create
+          - updated_info.notebook_instance_lifecycle_configs[0].tags.project == 'demo'
 
     - name: Re-run start script update without changes
       amazon.ai.sagemaker_notebook_instance_lifecycle_config:
@@ -265,6 +266,41 @@
         that:
           - tagged_list.notebook_instance_lifecycle_configs | length == 1
           - tagged_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - tagged_list.notebook_instance_lifecycle_configs[0].tags.target == 'primary'
+
+    - name: Limit the listing with max_items
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Descending
+        max_items: 1
+      register: limited_list
+
+    - name: Limit a tag-filtered listing whose first candidate does not match
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Descending
+        max_items: 1
+        tags:
+          target: primary
+      register: limited_tagged_list
+
+    - name: Reject a non-positive max_items
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        max_items: 0
+      register: invalid_max_items
+      ignore_errors: true
+
+    - name: Assert max_items caps the returned matches
+      ansible.builtin.assert:
+        that:
+          - limited_list.notebook_instance_lifecycle_configs | length == 1
+          - limited_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_second_name
+          - limited_tagged_list.notebook_instance_lifecycle_configs | length == 1
+          - limited_tagged_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - invalid_max_items is failed
+          - "'max_items must be a positive integer' in invalid_max_items.msg"
 
     - name: Look up a lifecycle configuration that does not exist
       amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:

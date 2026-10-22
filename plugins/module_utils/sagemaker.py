@@ -1,6 +1,7 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+import base64
 import time
 from typing import Any
 from typing import Dict
@@ -15,8 +16,6 @@ except ImportError:
 
 from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
-from ansible_collections.amazon.ai.plugins.module_utils.utils import decode_lifecycle_script
-from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_lifecycle_script
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -33,6 +32,20 @@ try:
     import botocore
 except ImportError:
     pass
+
+
+def encode_lifecycle_script(content: Optional[str]) -> List[Dict[str, str]]:
+    """Encode a lifecycle script in the shape expected by SageMaker."""
+    if content is None:
+        return []
+    return [{"Content": base64.b64encode(content.encode("utf-8")).decode("utf-8")}]
+
+
+def decode_lifecycle_script(hooks: Optional[List[Dict[str, str]]]) -> Optional[str]:
+    """Decode the single lifecycle script returned by SageMaker, if present."""
+    if not hooks:
+        return None
+    return base64.b64decode(hooks[0]["Content"]).decode("utf-8")
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -546,17 +559,21 @@ def describe_notebook_instance_lifecycle_config(client, name: str) -> Optional[D
     """Retrieve a SageMaker notebook instance lifecycle configuration by name."""
     try:
         return client.describe_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except is_boto3_error_message("Notebook Instance Lifecycle Config does not exist."):
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
         return None
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def list_notebook_instance_lifecycle_configs(client, **params: Any) -> List[Dict[str, Any]]:
+def list_notebook_instance_lifecycle_configs(
+    client, max_items: Optional[int] = None, **params: Any
+) -> List[Dict[str, Any]]:
     """Retrieve SageMaker notebook instance lifecycle configuration summaries."""
     paginator = client.get_paginator("list_notebook_instance_lifecycle_configs")
-    max_results = params.pop("MaxResults", params.pop("MaxItems", None))
-    if max_results is not None:
-        params["PaginationConfig"] = {"MaxItems": max_results}
+    if max_items is not None:
+        params["PaginationConfig"] = {"MaxItems": max_items}
     return paginator.paginate(**params).build_full_result()["NotebookInstanceLifecycleConfigs"]
 
 
@@ -620,7 +637,10 @@ def delete_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str
 
     try:
         client.delete_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except is_boto3_error_message("Notebook Instance Lifecycle Config does not exist."):
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
         return False, f"Lifecycle configuration {name} was already absent."
     return True, f"Lifecycle configuration {name} deleted successfully."
 

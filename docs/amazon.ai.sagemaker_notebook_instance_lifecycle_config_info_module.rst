@@ -107,6 +107,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include lifecycle configurations created after this time.</div>
+                        <div>Must be an ISO 8601 timestamp, for example <code>2026-01-01T00:00:00Z</code>.</div>
                 </td>
             </tr>
             <tr>
@@ -122,6 +123,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include lifecycle configurations created before this time.</div>
+                        <div>Must be an ISO 8601 timestamp, for example <code>2026-01-01T00:00:00Z</code>.</div>
                 </td>
             </tr>
             <tr>
@@ -174,6 +176,7 @@ Parameters
                 </td>
                 <td>
                         <div>Only include lifecycle configurations last modified after this time.</div>
+                        <div>Must be an ISO 8601 timestamp, for example <code>2026-01-01T00:00:00Z</code>.</div>
                 </td>
             </tr>
             <tr>
@@ -189,6 +192,24 @@ Parameters
                 </td>
                 <td>
                         <div>Only include lifecycle configurations last modified before this time.</div>
+                        <div>Must be an ISO 8601 timestamp, for example <code>2026-01-01T00:00:00Z</code>.</div>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>max_items</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">integer</span>
+                    </div>
+                </td>
+                <td>
+                </td>
+                <td>
+                        <div>The maximum number of lifecycle configurations to return. Must be at least V(1).</div>
+                        <div>When O(tags) is set, the limit applies to the configurations that match the tags. The module stops fetching tags once the limit is reached.</div>
+                        <div>Mutually exclusive with O(notebook_instance_lifecycle_config_name).</div>
                 </td>
             </tr>
             <tr>
@@ -353,7 +374,7 @@ Parameters
                 <td>
                         <div>A tag map used to filter lifecycle configurations by exact key/value matches.</div>
                         <div>When listing, tags are fetched for each candidate, which adds one API call per candidate.</div>
-                        <div>When retrieving by name, the matched resource includes its tags.</div>
+                        <div>When retrieving by name, the matched resource always includes its tags, whether or not this option is set.</div>
                 </td>
             </tr>
             <tr>
@@ -416,6 +437,12 @@ Examples
         sort_by: CreationTime
         sort_order: Descending
 
+    - name: Retrieve the five most recently modified lifecycle configurations
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        sort_by: LastModifiedTime
+        sort_order: Descending
+        max_items: 5
+
     - name: Filter lifecycle configurations by tags
       amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
         tags:
@@ -447,7 +474,8 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                 </td>
                 <td>always, on success</td>
                 <td>
-                            <div>Matching lifecycle configurations returned in list mode.</div>
+                            <div>Matching lifecycle configurations.</div>
+                            <div>When retrieving by name, the list holds at most one item and also includes <em>on_create</em>, <em>on_start</em> and <em>tags</em>.</div>
                     <br/>
                 </td>
             </tr>
@@ -521,6 +549,62 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">example-lifecycle-config</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>on_create</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td>when retrieving by name</td>
+                <td>
+                            <div>The decoded shell script run when a notebook instance is created, or null when unset.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">#!/bin/bash
+    echo &#x27;Preparing notebook&#x27;</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>on_start</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td>when retrieving by name</td>
+                <td>
+                            <div>The decoded shell script run when a notebook instance starts, or null when unset.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">#!/bin/bash
+    echo &#x27;Starting notebook&#x27;</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>tags</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td>when retrieving by name, or when <em>tags</em> is set</td>
+                <td>
+                            <div>The tags assigned to the lifecycle configuration.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;project&#x27;: &#x27;demo&#x27;}</div>
                 </td>
             </tr>
 
