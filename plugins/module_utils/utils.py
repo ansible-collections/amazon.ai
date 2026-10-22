@@ -2,14 +2,12 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 
-import base64
 import json
 from datetime import date
 from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
-from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
 from urllib.parse import urlunparse
@@ -39,20 +37,6 @@ def encode_body(body: Union[dict, list, str]) -> bytes:
         return body.encode("utf-8")
     else:
         raise TypeError("body must be a dict, list, or string")
-
-
-def encode_lifecycle_script(content: Optional[str]) -> List[Dict[str, str]]:
-    """Encode a lifecycle script in the shape expected by SageMaker."""
-    if content is None:
-        return []
-    return [{"Content": base64.b64encode(content.encode("utf-8")).decode("utf-8")}]
-
-
-def decode_lifecycle_script(hooks: Optional[List[Dict[str, str]]]) -> Optional[str]:
-    """Decode the single lifecycle script returned by SageMaker, if present."""
-    if not hooks:
-        return None
-    return base64.b64decode(hooks[0]["Content"]).decode("utf-8")
 
 
 def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
