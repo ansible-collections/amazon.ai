@@ -145,9 +145,14 @@
         agent_name: "{{ agent_name }}"
       ignore_errors: true
 
+    - name: Delete IAM instance profile for Bedrock Agent
+      amazon.aws.iam_instance_profile:
+        name: "{{ agent_role_name }}"
+        state: absent
+      ignore_errors: true
+
     - name: Delete IAM role for Bedrock Agent
       amazon.aws.iam_role:
         name: "{{ agent_role_name }}"
         state: absent
-        delete_instance_profile: true
       ignore_errors: true
