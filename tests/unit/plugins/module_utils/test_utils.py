@@ -8,10 +8,14 @@ from datetime import datetime
 from typing import Union
 
 import pytest
+from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_to_snake_dict_keeping
+from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
+from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_to_camel_dict_keeping
+from ansible_collections.amazon.ai.plugins.module_utils.utils import stringify_values
 
 
 # -----------------------
@@ -240,3 +244,76 @@ def test_convert_time_ranges_edge_cases():
             assert to_time == expected_to
         else:
             assert to_time is None
+
+
+# -----------------------------
+# Tests for config_block_differs
+# -----------------------------
+@pytest.mark.parametrize(
+    "existing,desired,expected",
+    [
+        ({"A": {"B": 1, "C": ["x", "y"]}}, {"A": {"B": 1, "C": ["x", "y"]}}, False),
+        ({"A": 1, "B": 2}, {"A": 1}, True),
+        ({"A": 1}, {"A": 1, "B": 2}, True),
+        ({"A": 1}, {"A": 2}, True),
+        ({"A": {"B": 1}}, {"A": {"B": 2}}, True),
+        ({"A": ["x", "y"]}, {"A": ["y", "x"]}, True),
+        ({"A": ["x"]}, {"A": ["x", "y"]}, True),
+        (None, {"A": 1}, True),
+        (None, {}, True),
+        ({}, {}, False),
+        ({"A": 1}, {}, True),
+    ],
+)
+def test_config_block_differs(existing, desired, expected):
+    assert config_block_differs(existing, desired) is expected
+
+
+# ----------------------------------------------------
+# Tests for snake_dict_to_camel_dict_keeping / reverse
+# ----------------------------------------------------
+SNAKE_BLOCK = {
+    "jupyter_lab_app_image_config": {
+        "container_config": {
+            "container_arguments": ["a"],
+            "container_environment_variables": {"my_var": "v", "MyOther": "w"},
+        },
+        "file_system_config": {"default_uid": 1000},
+    },
+    "kernel_specs": [{"name": "python3", "display_name": "Py"}],
+}
+CAMEL_BLOCK = {
+    "JupyterLabAppImageConfig": {
+        "ContainerConfig": {
+            "ContainerArguments": ["a"],
+            "ContainerEnvironmentVariables": {"my_var": "v", "MyOther": "w"},
+        },
+        "FileSystemConfig": {"DefaultUid": 1000},
+    },
+    "KernelSpecs": [{"Name": "python3", "DisplayName": "Py"}],
+}
+
+
+def test_snake_dict_to_camel_dict_keeping_preserves_kept_subtree():
+    result = snake_dict_to_camel_dict_keeping(SNAKE_BLOCK, ["container_environment_variables"])
+    assert result == CAMEL_BLOCK
+
+
+def test_camel_dict_to_snake_dict_keeping_preserves_kept_subtree():
+    result = camel_dict_to_snake_dict_keeping(CAMEL_BLOCK, ["container_environment_variables"])
+    assert result == SNAKE_BLOCK
+
+
+def test_keeping_without_keep_keys_converts_everything():
+    assert snake_dict_to_camel_dict_keeping({"a_b": {"c_d": 1}}, []) == {"AB": {"CD": 1}}
+    assert camel_dict_to_snake_dict_keeping({"AbC": {"CdE": 1}}, []) == {"ab_c": {"cd_e": 1}}
+
+
+def test_stringify_values():
+    assert stringify_values({"a": True, "b": False, "c": 8080, "d": 1.5, "E_f": "x"}) == {
+        "a": "true",
+        "b": "false",
+        "c": "8080",
+        "d": "1.5",
+        "E_f": "x",
+    }

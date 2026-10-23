@@ -11,14 +11,20 @@ from unittest.mock import patch
 
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_app_image_config
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_app_image_config
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
 from botocore.exceptions import ClientError
@@ -713,3 +719,276 @@ class TestModelNeedsReplacement:
         )
 
         assert model_needs_replacement(existing, module)
+
+
+ARN = "arn:aws:sagemaker:eu-north-1:123456789012:app-image-config/cfg"
+JUPYTER_BLOCK = {"ContainerConfig": {"ContainerArguments": ["--debug"]}}
+
+
+def _app_image_config_module(check_mode=False, **params):
+    module = MagicMock()
+    module.check_mode = check_mode
+    module.params = {
+        "app_image_config_name": "cfg",
+        "kernel_gateway_image_config": None,
+        "jupyter_lab_app_image_config": None,
+        "code_editor_app_image_config": None,
+        "tags": None,
+        "purge_tags": True,
+        **params,
+    }
+    return module
+
+
+def _existing(**blocks):
+    return {"AppImageConfigName": "cfg", "AppImageConfigArn": ARN, **blocks}
+
+
+class TestCreateAppImageConfig:
+    def test_check_mode_makes_no_call(self):
+        client = MagicMock()
+        changed, msg = create_app_image_config(client, _app_image_config_module(check_mode=True))
+
+        assert changed is True
+        assert msg.startswith("Check mode: would have created")
+        client.create_app_image_config.assert_not_called()
+
+    def test_sends_block_and_tags(self):
+        client = MagicMock()
+        module = _app_image_config_module(
+            jupyter_lab_app_image_config={"container_config": {"container_arguments": ["--debug"]}},
+            tags={"project": "demo"},
+        )
+
+        changed, msg = create_app_image_config(client, module)
+
+        assert changed is True
+        client.create_app_image_config.assert_called_once_with(
+            AppImageConfigName="cfg",
+            JupyterLabAppImageConfig=JUPYTER_BLOCK,
+            Tags=[{"Key": "project", "Value": "demo"}],
+        )
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.list_tags")
+class TestUpdateAppImageConfig:
+    @staticmethod
+    def _module(check_mode=False, **params):
+        params.setdefault("jupyter_lab_app_image_config", {"container_config": {"container_arguments": ["--debug"]}})
+        return _app_image_config_module(check_mode=check_mode, **params)
+
+    @staticmethod
+    def _assert_no_writes(client):
+        client.update_app_image_config.assert_not_called()
+        client.add_tags.assert_not_called()
+        client.delete_tags.assert_not_called()
+
+    def test_no_change(self, mock_list_tags):
+        client = MagicMock()
+        changed, msg = update_app_image_config(
+            client, self._module(), _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK)
+        )
+
+        assert changed is False
+        assert msg.endswith("already up to date.")
+        self._assert_no_writes(client)
+        mock_list_tags.assert_not_called()
+
+    def test_differing_block_is_sent_alone(self, mock_list_tags):
+        client = MagicMock()
+        existing = _existing(
+            JupyterLabAppImageConfig={"ContainerConfig": {"ContainerArguments": ["--old"]}},
+            CodeEditorAppImageConfig={"ContainerConfig": {"ContainerArguments": ["--keep"]}},
+        )
+
+        changed, msg = update_app_image_config(client, self._module(), existing)
+
+        assert changed is True
+        client.update_app_image_config.assert_called_once_with(
+            AppImageConfigName="cfg", JupyterLabAppImageConfig=JUPYTER_BLOCK
+        )
+
+    def test_unsupplied_block_is_not_sent(self, mock_list_tags):
+        client = MagicMock()
+        module = self._module(jupyter_lab_app_image_config=None)
+
+        changed, msg = update_app_image_config(client, module, _existing(CodeEditorAppImageConfig=JUPYTER_BLOCK))
+
+        assert changed is False
+        self._assert_no_writes(client)
+
+    def test_tags_add_and_remove(self, mock_list_tags):
+        mock_list_tags.return_value = {"old": "1", "same": "x"}
+        client = MagicMock()
+        module = self._module(tags={"same": "x", "new": "2"})
+
+        changed, msg = update_app_image_config(client, module, _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK))
+
+        assert changed is True
+        client.update_app_image_config.assert_not_called()
+        client.add_tags.assert_called_once_with(ResourceArn=ARN, Tags=[{"Key": "new", "Value": "2"}])
+        client.delete_tags.assert_called_once_with(ResourceArn=ARN, TagKeys=["old"])
+
+    def test_purge_tags_false_keeps_unlisted_tags(self, mock_list_tags):
+        mock_list_tags.return_value = {"old": "1"}
+        client = MagicMock()
+        module = self._module(tags={"new": "2"}, purge_tags=False)
+
+        update_app_image_config(client, module, _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK))
+
+        client.add_tags.assert_called_once()
+        client.delete_tags.assert_not_called()
+
+    def test_tags_none_does_not_list_tags(self, mock_list_tags):
+        update_app_image_config(MagicMock(), self._module(tags=None), _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK))
+
+        mock_list_tags.assert_not_called()
+
+    def test_supplied_current_tags_are_not_read_again(self, mock_list_tags):
+        client = MagicMock()
+        module = self._module(tags={"a": "1"})
+
+        changed, msg = update_app_image_config(
+            client, module, _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK), current_tags={"a": "1"}
+        )
+
+        assert changed is False
+        mock_list_tags.assert_not_called()
+
+    def test_check_mode_makes_no_writes(self, mock_list_tags):
+        mock_list_tags.return_value = {}
+        client = MagicMock()
+        module = self._module(check_mode=True, tags={"new": "2"})
+
+        changed, msg = update_app_image_config(client, module, _existing())
+
+        assert changed is True
+        assert msg.startswith("Check mode: would have updated")
+        self._assert_no_writes(client)
+
+    def test_environment_variables_are_coerced_to_strings(self, mock_list_tags):
+        client = MagicMock()
+        module = self._module(
+            jupyter_lab_app_image_config={
+                "container_config": {"container_environment_variables": {"PORT": 8080, "debug_mode": True}}
+            }
+        )
+        existing = _existing(
+            JupyterLabAppImageConfig={
+                "ContainerConfig": {"ContainerEnvironmentVariables": {"PORT": "8080", "debug_mode": "true"}}
+            }
+        )
+
+        changed, msg = update_app_image_config(client, module, existing)
+
+        assert changed is False
+        client.update_app_image_config.assert_not_called()
+
+        changed, msg = update_app_image_config(client, module, _existing())
+        assert changed is True
+        client.update_app_image_config.assert_called_once_with(
+            AppImageConfigName="cfg",
+            JupyterLabAppImageConfig={
+                "ContainerConfig": {"ContainerEnvironmentVariables": {"PORT": "8080", "debug_mode": "true"}}
+            },
+        )
+
+
+def _client_error(code):
+    return ClientError({"Error": {"Code": code, "Message": "boom"}}, "Operation")
+
+
+class TestDescribeAndListAppImageConfig:
+    def test_describe_returns_config(self):
+        client = MagicMock()
+        client.describe_app_image_config.return_value = {"AppImageConfigName": "cfg"}
+
+        assert describe_app_image_config(client, "cfg") == {"AppImageConfigName": "cfg"}
+        client.describe_app_image_config.assert_called_once_with(AppImageConfigName="cfg")
+
+    def test_describe_returns_none_when_missing(self):
+        client = MagicMock()
+        client.describe_app_image_config.side_effect = _client_error("ResourceNotFound")
+
+        assert describe_app_image_config(client, "cfg") is None
+
+    def test_describe_reraises_other_errors(self):
+        client = MagicMock()
+        client.describe_app_image_config.side_effect = _client_error("AccessDeniedException")
+
+        with pytest.raises(ClientError):
+            describe_app_image_config(client, "cfg")
+
+    def test_list_passes_filters_to_paginator(self):
+        client = MagicMock()
+        paginator = client.get_paginator.return_value
+        paginator.paginate.return_value.build_full_result.return_value = {
+            "AppImageConfigs": [{"AppImageConfigName": "a"}]
+        }
+
+        assert list_app_image_configs(client, NameContains="a") == [{"AppImageConfigName": "a"}]
+        client.get_paginator.assert_called_once_with("list_app_image_configs")
+        paginator.paginate.assert_called_once_with(NameContains="a")
+
+
+class TestAppImageConfigToSnakeDict:
+    def test_drops_response_metadata_and_keeps_free_form_keys(self):
+        described = {
+            "ResponseMetadata": {"HTTPStatusCode": 200},
+            "AppImageConfigName": "cfg",
+            "JupyterLabAppImageConfig": {"ContainerConfig": {"ContainerEnvironmentVariables": {"MyVar": "v"}}},
+            "Tags": {"MyKey": "v"},
+        }
+
+        assert app_image_config_to_snake_dict(described) == {
+            "app_image_config_name": "cfg",
+            "jupyter_lab_app_image_config": {"container_config": {"container_environment_variables": {"MyVar": "v"}}},
+            "tags": {"MyKey": "v"},
+        }
+
+
+class TestDeleteAppImageConfig:
+    def test_check_mode_makes_no_call(self):
+        client = MagicMock()
+
+        changed, msg = delete_app_image_config(client, _app_image_config_module(check_mode=True))
+
+        assert changed is True
+        assert msg.startswith("Check mode: would have deleted")
+        client.delete_app_image_config.assert_not_called()
+
+    def test_deletes(self):
+        client = MagicMock()
+
+        changed, msg = delete_app_image_config(client, _app_image_config_module())
+
+        assert changed is True
+        client.delete_app_image_config.assert_called_once_with(AppImageConfigName="cfg")
+
+    def test_already_deleted_by_someone_else_is_not_a_change(self):
+        client = MagicMock()
+        client.delete_app_image_config.side_effect = _client_error("ResourceNotFound")
+
+        changed, msg = delete_app_image_config(client, _app_image_config_module())
+
+        assert changed is False
+        assert msg.endswith("does not exist.")
+
+    def test_other_errors_propagate(self):
+        client = MagicMock()
+        client.delete_app_image_config.side_effect = _client_error("AccessDeniedException")
+
+        with pytest.raises(ClientError):
+            delete_app_image_config(client, _app_image_config_module())
+
+
+def test_update_fails_when_config_is_deleted_concurrently():
+    client = MagicMock()
+    client.update_app_image_config.side_effect = _client_error("ResourceNotFound")
+    module = _app_image_config_module(jupyter_lab_app_image_config={"container_config": {"container_arguments": ["x"]}})
+    module.fail_json.side_effect = SystemExit
+
+    with pytest.raises(SystemExit):
+        update_app_image_config(client, module, _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK))
+
+    assert "was deleted while it was being updated" in module.fail_json.call_args.kwargs["msg"]
