@@ -131,8 +131,9 @@ model_package_groups:
             type: str
             sample: Completed
         tags:
-            description: A dictionary containing the model package group tags.
+            description: A dictionary containing the model package group tags, or an empty dictionary when no tags are associated.
             type: dict
+            returned: always
             sample:
                 project: demo
 """
@@ -172,9 +173,7 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         group: Optional[Dict[str, Any]] = describe_model_package_group(client, model_package_group_name)
         if group is None:
             return list()
-        tags: Dict[str, str] = dict()
-        if desired_tags is not None:
-            tags = list_tags(client, group["ModelPackageGroupArn"])
+        tags = list_tags(client, group["ModelPackageGroupArn"])
         return [_normalize_model_package_group(group, tags)]
 
     params: Dict[str, Any] = dict()
@@ -204,9 +203,7 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         group_arn = group.get("ModelPackageGroupArn") or summary.get("ModelPackageGroupArn")
         if not group_arn:
             continue
-        tags: Dict[str, str] = dict()
-        if desired_tags is not None:
-            tags = list_tags(client, group_arn)
+        tags = list_tags(client, group_arn)
 
         if desired_tags is not None and not desired_tags.items() <= tags.items():
             continue

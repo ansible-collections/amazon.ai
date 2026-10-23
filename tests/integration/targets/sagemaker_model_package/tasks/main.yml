@@ -156,9 +156,23 @@
           - package_create.changed
           - "'created successfully' in package_create.msg"
           - package_create.model_package.model_package_arn is defined
+          - package_create.model_package.model_package_group_name == model_package_group_name
           - package_create.model_package.model_package_description == model_package_description
           - package_create.model_package.model_approval_status == 'PendingManualApproval'
-          - "'tags' not in package_create"
+          - package_create.model_package.inference_specification.containers[0].image == model_package_container_image
+          - >-
+            (
+              package_create.model_package.inference_specification.containers[0].model_data_url
+              | default(
+                package_create.model_package.inference_specification.containers[0].model_data_source.s3_data_source.s3_uri,
+                true
+              )
+            ) == model_package_data_url
+          - package_create.model_package.inference_specification.supported_transform_instance_types == ['ml.m5.large']
+          - package_create.model_package.inference_specification.supported_realtime_inference_instance_types == ['ml.m5.large']
+          - package_create.model_package.inference_specification.supported_content_types == ['application/json']
+          - package_create.model_package.inference_specification.supported_response_mime_types == ['application/json']
+          - package_create.tags.project == 'demo'
 
     - name: Get info about the created model package
       amazon.ai.sagemaker_model_package_info:
@@ -171,7 +185,7 @@
           - package_info.model_packages | length == 1
           - package_info.model_packages[0].model_package_arn == model_package_name
           - package_info.model_packages[0].model_approval_status == 'PendingManualApproval'
-          - "'tags' not in package_info.model_packages[0]"
+          - package_info.model_packages[0].tags.project == 'demo'
 
     - name: List model packages filtered by the group
       amazon.ai.sagemaker_model_package_info:

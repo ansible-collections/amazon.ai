@@ -14,6 +14,13 @@ author:
 description:
     - Create, update, and delete Amazon SageMaker model packages.
     - Reconcile tags on an existing model package.
+    - >-
+      The following options are only applied when creating a package and are ignored on updates:
+      O(model_package_group_name), O(model_package_description), O(model_package_registration_type),
+      O(inference_specification), O(validation_specification), O(source_algorithm_specification),
+      O(certify_for_marketplace), O(additional_inference_specifications), O(model_card), O(model_metrics),
+      O(domain), O(task), O(sample_payload_url), O(skip_model_validation), O(drift_check_baselines),
+      O(security_config), O(source_uri), and O(metadata_properties).
 options:
     state:
         description:
@@ -53,19 +60,42 @@ options:
         type: str
     model_life_cycle:
         description:
-            - The lifecycle stage of the model package.
+            - Lifecycle information for the model package.
+            - Contains required C(stage) and C(stage_status) string fields, and optional C(stage_description).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelLifeCycle.html).
         type: dict
     inference_specification:
         description:
             - The inference specification used for the package.
+            - Contains required C(containers), a list of container definition dictionaries, and optional lists of
+              C(supported_content_types), C(supported_realtime_inference_instance_types),
+              C(supported_response_mime_types), and C(supported_transform_instance_types).
+            - The two instance-type lists are required for unversioned packages and optional for versioned packages.
+            - Container dictionaries follow the
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html)
+              structure.
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_InferenceSpecification.html).
+            - Required when creating a package unless O(source_algorithm_specification) is specified.
         type: dict
     validation_specification:
         description:
             - Validation configuration for the package.
+            - Contains required C(validation_profiles), a list of validation profile dictionaries, and required
+              C(validation_role).
+            - Each profile contains required C(profile_name) and C(transform_job_definition). The transform job
+              definition requires C(transform_input), C(transform_output), and C(transform_resources).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationSpecification.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationProfile.html),
+              and U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_TransformJobDefinition.html).
         type: dict
     source_algorithm_specification:
         description:
             - Source algorithm specification for model package creation.
+            - Contains required C(source_algorithms), a list with one algorithm dictionary. Each dictionary requires
+              C(algorithm_name); C(model_data_etag), C(model_data_source), and C(model_data_url) are optional.
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithmSpecification.html)
+              and U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithm.html).
+            - Required when creating a package unless O(inference_specification) is specified.
         type: dict
     certify_for_marketplace:
         description:
@@ -74,15 +104,35 @@ options:
     additional_inference_specifications:
         description:
             - Additional inference specifications to add when creating the package.
+            - Each dictionary requires C(name) and C(containers), a list of container definition dictionaries.
+              C(description), C(supported_content_types), C(supported_response_mime_types),
+              C(supported_realtime_inference_instance_types), and C(supported_transform_instance_types) are optional.
+            - Container dictionaries follow the
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html)
+              structure.
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_AdditionalInferenceSpecificationDefinition.html).
         type: list
         elements: dict
     model_card:
         description:
             - Model card information for the package.
+            - Contains optional C(model_card_content), a JSON string that follows the SageMaker model card schema,
+              and C(model_card_status) with values V(Draft), V(PendingReview), V(Approved), or V(Archived).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageModelCard.html) and
+              U(https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-details.html#model-card-schema).
         type: dict
     model_metrics:
         description:
             - Model metrics for the package.
+            - Supports optional C(bias), C(explainability), C(model_data_quality), and C(model_quality) dictionaries.
+              Their report, constraints, and statistics fields use metric source dictionaries with required
+              C(content_type) and C(s3_uri), and optional C(content_digest).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelMetrics.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Bias.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Explainability.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelDataQuality.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelQuality.html), and
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html).
         type: dict
     domain:
         description:
@@ -103,10 +153,26 @@ options:
     drift_check_baselines:
         description:
             - Drift check baseline configuration for the package.
+            - Supports optional C(bias), C(explainability), C(model_data_quality), and C(model_quality) dictionaries.
+              Bias supports C(config_file), C(post_training_constraints), and C(pre_training_constraints);
+              explainability supports C(config_file) and C(constraints); each quality dictionary supports
+              C(constraints) and C(statistics).
+            - C(config_file) uses a file source dictionary with required C(s3_uri) and optional C(content_digest)
+              and C(content_type). Constraints and statistics use metric source dictionaries with required
+              C(content_type) and C(s3_uri), and optional C(content_digest).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBaselines.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBias.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckExplainability.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelDataQuality.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelQuality.html),
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_FileSource.html), and
+              U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html).
         type: dict
     security_config:
         description:
             - Security configuration for the package.
+            - Contains required C(kms_key_id), the KMS key identifier used to encrypt the package.
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageSecurityConfig.html).
         type: dict
     source_uri:
         description:
@@ -115,10 +181,13 @@ options:
     metadata_properties:
         description:
             - Metadata properties for the package.
+            - Supports optional string fields C(commit_id), C(generated_by), C(project_id), and C(repository).
+            - See U(https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetadataProperties.html).
         type: dict
     customer_metadata_properties:
         description:
-            - Customer metadata to attach to the package.
+            - Customer metadata to attach to the package as an arbitrary string-to-string dictionary.
+            - Customer-defined keys are preserved as supplied.
         type: dict
     customer_metadata_properties_to_remove:
         description:
@@ -128,11 +197,12 @@ options:
     additional_inference_specifications_to_add:
         description:
             - Additional inference specifications used to update the package.
+            - Uses the same dictionary structure as O(additional_inference_specifications).
         type: list
         elements: dict
     tags:
         description:
-            - Tags to apply to a standalone model package.
+            - Tags to apply to a standalone model package as a string-to-string dictionary.
             - Cannot be used with O(model_package_group_name) because SageMaker versioned packages
               inherit tags from their model package group.
         type: dict
@@ -179,21 +249,27 @@ EXAMPLES = r"""
 - name: Create a SageMaker model package in a model package group
   amazon.ai.sagemaker_model_package:
     state: present
-    model_package_group_name: example-model-package-group
-    model_package_description: Demo model package
-    model_approval_status: PendingManualApproval
+    model_package_group_name: "example-model-package-group"
+    model_package_description: "Demo model package"
+    model_approval_status: "PendingManualApproval"
+    inference_specification:
+      containers:
+        - image: "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-model:latest"
+          model_data_url: "s3://my-bucket/model.tar.gz"
+      supported_transform_instance_types:
+        - "ml.m5.large"
 
 - name: Update approval status on an existing model package
   amazon.ai.sagemaker_model_package:
     state: present
-    model_package_name: example-model-package
-    model_approval_status: Approved
-    approval_description: Approved after validation.
+    model_package_name: "example-model-package"
+    model_approval_status: "Approved"
+    approval_description: "Approved after validation."
 
 - name: Delete a model package
   amazon.ai.sagemaker_model_package:
     state: absent
-    model_package_name: example-model-package
+    model_package_name: "example-model-package"
 """
 
 RETURN = r"""
@@ -202,51 +278,43 @@ model_package:
     type: dict
     returned: on success when O(state=present)
     sample:
-        model_package_name: example-model-package
-        model_package_arn: arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package
-        model_package_description: Demo model package
-        model_approval_status: PendingManualApproval
-        creation_time: '2025-01-01T00:00:00+00:00'
-        tags:
-            project: demo
+        model_package_name: "example-model-package"
+        model_package_arn: "arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package"
+        model_package_description: "Demo model package"
+        model_approval_status: "PendingManualApproval"
+        creation_time: "2025-01-01T00:00:00+00:00"
     contains:
         model_package_name:
             description: The name of the model package.
             type: str
-            sample: example-model-package
+            sample: "example-model-package"
         model_package_arn:
             description: The ARN of the model package.
             type: str
-            sample: arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package
+            sample: "arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package"
         model_package_description:
             description: The description of the model package.
             type: str
-            sample: Demo model package
+            sample: "Demo model package"
         model_approval_status:
             description: The approval status of the package.
             type: str
-            sample: PendingManualApproval
+            sample: "PendingManualApproval"
         creation_time:
             description: The creation time of the package.
             type: str
-            sample: '2025-01-01T00:00:00+00:00'
-        tags:
-            description: The tags assigned to the model package, returned when O(tags) is specified.
-            type: dict
-            returned: when O(tags) is specified
-            sample:
-                project: demo
+            sample: "2025-01-01T00:00:00+00:00"
 msg:
     description: Informative message about the action.
     type: str
     returned: always
-    sample: Model package example-model-package created successfully.
+    sample: "Model package example-model-package created successfully."
 tags:
-    description: The current tags assigned to the standalone model package or inherited from its model package group.
+    description: "The current tags assigned to the standalone model package or inherited from its model package group."
     type: dict
-    returned: on success when O(state=present) and O(tags) is specified
+    returned: on success when O(state=present)
     sample:
-        project: demo
+        project: "demo"
 """
 
 try:
@@ -262,7 +330,6 @@ from typing import Tuple
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _model_package_values_match
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _normalize_model_package_compare_value
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _preserve_custom_metadata_keys
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
@@ -274,21 +341,37 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
+_CREATE_ONLY_FIELD_API_NAMES = {
+    "model_package_group_name": "ModelPackageGroupName",
+    "model_package_description": "ModelPackageDescription",
+    "inference_specification": "InferenceSpecification",
+    "validation_specification": "ValidationSpecification",
+    "source_algorithm_specification": "SourceAlgorithmSpecification",
+    "certify_for_marketplace": "CertifyForMarketplace",
+    "additional_inference_specifications": "AdditionalInferenceSpecifications",
+    "model_card": "ModelCard",
+    "model_metrics": "ModelMetrics",
+    "domain": "Domain",
+    "task": "Task",
+    "sample_payload_url": "SamplePayloadUrl",
+    "skip_model_validation": "SkipModelValidation",
+    "drift_check_baselines": "DriftCheckBaselines",
+    "security_config": "SecurityConfig",
+    "source_uri": "SourceUri",
+    "metadata_properties": "MetadataProperties",
+    "model_package_registration_type": "ModelPackageRegistrationType",
+}
 
-def _normalize_model_package(package: Dict[str, Any], tags: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+
+def _normalize_model_package(package: Dict[str, Any]) -> Dict[str, Any]:
     normalized: Dict[str, Any] = camel_dict_to_snake_dict(package, ignore_list=["tags"])
     if "CustomerMetadataProperties" in package:
-        normalized["customer_metadata_properties"] = _preserve_custom_metadata_keys(
-            package["CustomerMetadataProperties"]
-        )
-    if tags is not None:
-        normalized["tags"] = tags
+        normalized["customer_metadata_properties"] = package["CustomerMetadataProperties"]
     return normalized
 
 
@@ -300,9 +383,6 @@ def _wait_for_model_package_status(client, module, model_package_name: Optional[
 
 
 def _validate_model_package_create_params(module) -> None:
-    if not (module.params.get("model_package_name") or module.params.get("model_package_group_name")):
-        module.fail_json(msg="One of model_package_name or model_package_group_name must be provided.")
-
     if not (module.params.get("inference_specification") or module.params.get("source_algorithm_specification")):
         module.fail_json(
             msg="One of inference_specification or source_algorithm_specification is required when creating a model package."
@@ -317,77 +397,42 @@ def _validate_model_package_create_params(module) -> None:
             module.fail_json(msg=f"{field} can only be used when updating an existing model package.")
 
 
-def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
-    if module.params.get("model_package_name") and module.params.get("model_package_group_name"):
-        module.fail_json(
-            msg="Specify only one of model_package_name or model_package_group_name when creating or updating a model package."
-        )
-
-    if existing is not None and existing.get("ModelPackageStatus") == "Deleting":
+def _ensure_created(client, module) -> Tuple[bool, Dict[str, Any]]:
+    result: Dict[str, Any] = {"msg": "", "model_package": {}, "tags": {}}
+    _validate_model_package_create_params(module)
+    if module.params.get("tags") is not None and module.params.get("model_package_group_name"):
         module.fail_json(
             msg=(
-                f"Model package {existing.get('ModelPackageName', module.params.get('model_package_name'))} is currently "
-                "being deleted. Wait for deletion to complete before recreating or updating it."
+                "Tags cannot be specified when creating a model package in a model package group. "
+                "Manage inherited tags on the model package group instead."
             )
         )
 
-    desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
-    result: Dict[str, Any] = {"msg": "", "model_package": {}}
-    if existing is None:
-        _validate_model_package_create_params(module)
-        if desired_tags is not None and module.params.get("model_package_group_name"):
-            module.fail_json(
-                msg=(
-                    "Tags cannot be specified when creating a model package in a model package group. "
-                    "Manage inherited tags on the model package group instead."
-                )
-            )
-        changed, result["msg"], created_package_arn = create_model_package(client, module)
-        if not module.check_mode:
-            package_identifier = created_package_arn or module.params.get("model_package_name")
-            if module.params.get("wait") and package_identifier is not None:
-                _wait_for_model_package_status(client, module, package_identifier)
-            if package_identifier is not None:
-                existing = describe_model_package(client, package_identifier)
-            if existing is not None:
-                if module.params.get("tags") is not None:
-                    tag_arn = get_model_package_tag_arn(existing, client)
-                    tags = list_tags(client, tag_arn or existing["ModelPackageArn"])
-                    result["model_package"] = _normalize_model_package(existing, tags)
-                    result["tags"] = tags
-                else:
-                    result["model_package"] = _normalize_model_package(existing)
-        return changed, result
+    changed, result["msg"], created_package_arn = create_model_package(client, module)
+    if not module.check_mode:
+        package_identifier = created_package_arn or module.params.get("model_package_name")
+        if module.params.get("wait") and package_identifier is not None:
+            _wait_for_model_package_status(client, module, package_identifier)
+        if package_identifier is not None:
+            existing = describe_model_package(client, package_identifier)
+        else:
+            existing = None
+        if existing is not None:
+            tag_arn = get_model_package_tag_arn(existing, client)
+            result["tags"] = list_tags(client, tag_arn or existing["ModelPackageArn"])
+            result["model_package"] = _normalize_model_package(existing)
+    return changed, result
 
-    create_only_fields = (
-        "model_package_group_name",
-        "model_package_description",
-        "inference_specification",
-        "validation_specification",
-        "source_algorithm_specification",
-        "certify_for_marketplace",
-        "additional_inference_specifications",
-        "model_card",
-        "model_metrics",
-        "domain",
-        "task",
-        "sample_payload_url",
-        "skip_model_validation",
-        "drift_check_baselines",
-        "security_config",
-        "source_uri",
-        "metadata_properties",
-        "model_package_registration_type",
-    )
-    for param_name in create_only_fields:
+
+def _ensure_updated(client, module, existing: Dict[str, Any]) -> Tuple[bool, Dict[str, Any]]:
+    desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
+    result: Dict[str, Any] = {"msg": "", "model_package": {}, "tags": {}}
+    for param_name, api_name in _CREATE_ONLY_FIELD_API_NAMES.items():
         desired_value = _normalize_model_package_compare_value(module.params.get(param_name))
-        api_name = next(iter(snake_dict_to_camel_dict({param_name: None}, capitalize_first=True)))
         if desired_value is not None and not _model_package_values_match(existing.get(api_name), desired_value):
-            module.fail_json(
-                msg=(
-                    f"SageMaker model package field {param_name} is create-only and cannot be changed in place. "
-                    "Delete and recreate the package to change it."
-                )
+            module.warn(
+                f"SageMaker model package field {param_name} is create-only and cannot be changed in place; "
+                "ignoring the requested value."
             )
 
     messages: List[str] = []
@@ -412,27 +457,39 @@ def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple
         if tag_msg != "No updates needed.":
             messages.append(tag_msg)
 
-    package_name = module.params.get("model_package_name") or existing.get("ModelPackageName")
+    package_identifier = (
+        module.params.get("model_package_name") or existing.get("ModelPackageName") or existing.get("ModelPackageArn")
+    )
     if model_package_needs_update(existing, module):
         package_changed, package_msg = update_model_package(client, module, existing["ModelPackageArn"])
         changed = changed or package_changed
         if package_msg != "No updates needed.":
             messages.append(package_msg)
         if module.params.get("wait") and not module.check_mode:
-            _wait_for_model_package_status(client, module, package_name)
+            _wait_for_model_package_status(client, module, package_identifier)
 
     if changed or desired_tags is not None:
-        existing = describe_model_package(client, package_name)
+        existing = describe_model_package(client, package_identifier)
 
-    tags = None
-    if module.params.get("tags") is not None:
-        effective_tag_arn = get_model_package_tag_arn(existing) or existing["ModelPackageArn"]
-        tags = list_tags(client, effective_tag_arn)
-    result["model_package"] = _normalize_model_package(existing, tags)
-    if tags is not None:
-        result["tags"] = tags
+    effective_tag_arn = get_model_package_tag_arn(existing) or existing["ModelPackageArn"]
+    result["tags"] = list_tags(client, effective_tag_arn)
+    result["model_package"] = _normalize_model_package(existing)
     result["msg"] = " ".join(messages) if messages else "No updates needed."
     return changed, result
+
+
+def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
+    if existing is not None and existing.get("ModelPackageStatus") == "Deleting":
+        module.fail_json(
+            msg=(
+                f"Model package {existing.get('ModelPackageName', module.params.get('model_package_name'))} is currently "
+                "being deleted. Wait for deletion to complete before recreating or updating it."
+            )
+        )
+
+    if existing is None:
+        return _ensure_created(client, module)
+    return _ensure_updated(client, module, existing)
 
 
 def _ensure_absent(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
@@ -488,6 +545,7 @@ def main() -> None:
         argument_spec=argument_spec,
         supports_check_mode=True,
         required_if=[("state", "absent", ["model_package_name"])],
+        required_one_of=[("model_package_name", "model_package_group_name")],
         mutually_exclusive=[("model_package_name", "model_package_group_name")],
     )
 

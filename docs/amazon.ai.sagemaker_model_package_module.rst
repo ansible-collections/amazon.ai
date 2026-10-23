@@ -19,6 +19,7 @@ Synopsis
 --------
 - Create, update, and delete Amazon SageMaker model packages.
 - Reconcile tags on an existing model package.
+- The following options are only applied when creating a package and are ignored on updates: O(model_package_group_name), O(model_package_description), O(model_package_registration_type), O(inference_specification), O(validation_specification), O(source_algorithm_specification), O(certify_for_marketplace), O(additional_inference_specifications), O(model_card), O(model_metrics), O(domain), O(task), O(sample_payload_url), O(skip_model_validation), O(drift_check_baselines), O(security_config), O(source_uri), and O(metadata_properties).
 
 
 
@@ -76,6 +77,9 @@ Parameters
                 </td>
                 <td>
                         <div>Additional inference specifications to add when creating the package.</div>
+                        <div>Each dictionary requires <code>name</code> and <code>containers</code>, a list of container definition dictionaries. <code>description</code>, <code>supported_content_types</code>, <code>supported_response_mime_types</code>, <code>supported_realtime_inference_instance_types</code>, and <code>supported_transform_instance_types</code> are optional.</div>
+                        <div>Container dictionaries follow the <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html</a> structure.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_AdditionalInferenceSpecificationDefinition.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_AdditionalInferenceSpecificationDefinition.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -92,6 +96,7 @@ Parameters
                 </td>
                 <td>
                         <div>Additional inference specifications used to update the package.</div>
+                        <div>Uses the same dictionary structure as O(additional_inference_specifications).</div>
                 </td>
             </tr>
             <tr>
@@ -172,7 +177,8 @@ Parameters
                 <td>
                 </td>
                 <td>
-                        <div>Customer metadata to attach to the package.</div>
+                        <div>Customer metadata to attach to the package as an arbitrary string-to-string dictionary.</div>
+                        <div>Customer-defined keys are preserved as supplied.</div>
                 </td>
             </tr>
             <tr>
@@ -239,6 +245,9 @@ Parameters
                 </td>
                 <td>
                         <div>Drift check baseline configuration for the package.</div>
+                        <div>Supports optional <code>bias</code>, <code>explainability</code>, <code>model_data_quality</code>, and <code>model_quality</code> dictionaries. Bias supports <code>config_file</code>, <code>post_training_constraints</code>, and <code>pre_training_constraints</code>; explainability supports <code>config_file</code> and <code>constraints</code>; each quality dictionary supports <code>constraints</code> and <code>statistics</code>.</div>
+                        <div><code>config_file</code> uses a file source dictionary with required <code>s3_uri</code> and optional <code>content_digest</code> and <code>content_type</code>. Constraints and statistics use metric source dictionaries with required <code>content_type</code> and <code>s3_uri</code>, and optional <code>content_digest</code>.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBaselines.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBaselines.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBias.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckBias.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckExplainability.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckExplainability.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelDataQuality.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelDataQuality.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelQuality.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_DriftCheckModelQuality.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_FileSource.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_FileSource.html</a>, and <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -271,6 +280,11 @@ Parameters
                 </td>
                 <td>
                         <div>The inference specification used for the package.</div>
+                        <div>Contains required <code>containers</code>, a list of container definition dictionaries, and optional lists of <code>supported_content_types</code>, <code>supported_realtime_inference_instance_types</code>, <code>supported_response_mime_types</code>, and <code>supported_transform_instance_types</code>.</div>
+                        <div>The two instance-type lists are required for unversioned packages and optional for versioned packages.</div>
+                        <div>Container dictionaries follow the <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageContainerDefinition.html</a> structure.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_InferenceSpecification.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_InferenceSpecification.html</a>.</div>
+                        <div>Required when creating a package unless O(source_algorithm_specification) is specified.</div>
                 </td>
             </tr>
             <tr>
@@ -286,6 +300,8 @@ Parameters
                 </td>
                 <td>
                         <div>Metadata properties for the package.</div>
+                        <div>Supports optional string fields <code>commit_id</code>, <code>generated_by</code>, <code>project_id</code>, and <code>repository</code>.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetadataProperties.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetadataProperties.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -321,6 +337,8 @@ Parameters
                 </td>
                 <td>
                         <div>Model card information for the package.</div>
+                        <div>Contains optional <code>model_card_content</code>, a JSON string that follows the SageMaker model card schema, and <code>model_card_status</code> with values V(Draft), V(PendingReview), V(Approved), or V(Archived).</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageModelCard.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageModelCard.html</a> and <a href='https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-details.html#model-card-schema'>https://docs.aws.amazon.com/sagemaker/latest/dg/model-registry-details.html#model-card-schema</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -335,7 +353,9 @@ Parameters
                 <td>
                 </td>
                 <td>
-                        <div>The lifecycle stage of the model package.</div>
+                        <div>Lifecycle information for the model package.</div>
+                        <div>Contains required <code>stage</code> and <code>stage_status</code> string fields, and optional <code>stage_description</code>.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelLifeCycle.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelLifeCycle.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -351,6 +371,8 @@ Parameters
                 </td>
                 <td>
                         <div>Model metrics for the package.</div>
+                        <div>Supports optional <code>bias</code>, <code>explainability</code>, <code>model_data_quality</code>, and <code>model_quality</code> dictionaries. Their report, constraints, and statistics fields use metric source dictionaries with required <code>content_type</code> and <code>s3_uri</code>, and optional <code>content_digest</code>.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelMetrics.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelMetrics.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Bias.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Bias.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Explainability.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_Explainability.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelDataQuality.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelDataQuality.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelQuality.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelQuality.html</a>, and <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_MetricsSource.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -526,6 +548,8 @@ Parameters
                 </td>
                 <td>
                         <div>Security configuration for the package.</div>
+                        <div>Contains required <code>kms_key_id</code>, the KMS key identifier used to encrypt the package.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageSecurityConfig.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageSecurityConfig.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -579,6 +603,9 @@ Parameters
                 </td>
                 <td>
                         <div>Source algorithm specification for model package creation.</div>
+                        <div>Contains required <code>source_algorithms</code>, a list with one algorithm dictionary. Each dictionary requires <code>algorithm_name</code>; <code>model_data_etag</code>, <code>model_data_source</code>, and <code>model_data_url</code> are optional.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithmSpecification.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithmSpecification.html</a> and <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithm.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_SourceAlgorithm.html</a>.</div>
+                        <div>Required when creating a package unless O(inference_specification) is specified.</div>
                 </td>
             </tr>
             <tr>
@@ -627,7 +654,7 @@ Parameters
                 <td>
                 </td>
                 <td>
-                        <div>Tags to apply to a standalone model package.</div>
+                        <div>Tags to apply to a standalone model package as a string-to-string dictionary.</div>
                         <div>Cannot be used with O(model_package_group_name) because SageMaker versioned packages inherit tags from their model package group.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: resource_tags</div>
                 </td>
@@ -680,6 +707,9 @@ Parameters
                 </td>
                 <td>
                         <div>Validation configuration for the package.</div>
+                        <div>Contains required <code>validation_profiles</code>, a list of validation profile dictionaries, and required <code>validation_role</code>.</div>
+                        <div>Each profile contains required <code>profile_name</code> and <code>transform_job_definition</code>. The transform job definition requires <code>transform_input</code>, <code>transform_output</code>, and <code>transform_resources</code>.</div>
+                        <div>See <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationSpecification.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationSpecification.html</a>, <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationProfile.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_ModelPackageValidationProfile.html</a>, and <a href='https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_TransformJobDefinition.html'>https://docs.aws.amazon.com/sagemaker/latest/APIReference/API_TransformJobDefinition.html</a>.</div>
                 </td>
             </tr>
             <tr>
@@ -754,21 +784,27 @@ Examples
     - name: Create a SageMaker model package in a model package group
       amazon.ai.sagemaker_model_package:
         state: present
-        model_package_group_name: example-model-package-group
-        model_package_description: Demo model package
-        model_approval_status: PendingManualApproval
+        model_package_group_name: "example-model-package-group"
+        model_package_description: "Demo model package"
+        model_approval_status: "PendingManualApproval"
+        inference_specification:
+          containers:
+            - image: "123456789012.dkr.ecr.us-east-1.amazonaws.com/my-model:latest"
+              model_data_url: "s3://my-bucket/model.tar.gz"
+          supported_transform_instance_types:
+            - "ml.m5.large"
 
     - name: Update approval status on an existing model package
       amazon.ai.sagemaker_model_package:
         state: present
-        model_package_name: example-model-package
-        model_approval_status: Approved
-        approval_description: Approved after validation.
+        model_package_name: "example-model-package"
+        model_approval_status: "Approved"
+        approval_description: "Approved after validation."
 
     - name: Delete a model package
       amazon.ai.sagemaker_model_package:
         state: absent
-        model_package_name: example-model-package
+        model_package_name: "example-model-package"
 
 
 
@@ -798,7 +834,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                             <div>A dictionary containing the managed model package.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;model_package_name&#x27;: &#x27;example-model-package&#x27;, &#x27;model_package_arn&#x27;: &#x27;arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package&#x27;, &#x27;model_package_description&#x27;: &#x27;Demo model package&#x27;, &#x27;model_approval_status&#x27;: &#x27;PendingManualApproval&#x27;, &#x27;creation_time&#x27;: &#x27;2025-01-01T00:00:00+00:00&#x27;, &#x27;tags&#x27;: {&#x27;project&#x27;: &#x27;demo&#x27;}}</div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;model_package_name&#x27;: &#x27;example-model-package&#x27;, &#x27;model_package_arn&#x27;: &#x27;arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package&#x27;, &#x27;model_package_description&#x27;: &#x27;Demo model package&#x27;, &#x27;model_approval_status&#x27;: &#x27;PendingManualApproval&#x27;, &#x27;creation_time&#x27;: &#x27;2025-01-01T00:00:00+00:00&#x27;}</div>
                 </td>
             </tr>
                                 <tr>
@@ -891,24 +927,6 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">example-model-package</div>
                 </td>
             </tr>
-            <tr>
-                    <td class="elbow-placeholder">&nbsp;</td>
-                <td colspan="1">
-                    <div class="ansibleOptionAnchor" id="return-"></div>
-                    <b>tags</b>
-                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
-                    <div style="font-size: small">
-                      <span style="color: purple">dictionary</span>
-                    </div>
-                </td>
-                <td>when O(tags) is specified</td>
-                <td>
-                            <div>The tags assigned to the model package, returned when O(tags) is specified.</div>
-                    <br/>
-                        <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;project&#x27;: &#x27;demo&#x27;}</div>
-                </td>
-            </tr>
 
             <tr>
                 <td colspan="2">
@@ -936,7 +954,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td>on success when O(state=present) and O(tags) is specified</td>
+                <td>on success when O(state=present)</td>
                 <td>
                             <div>The current tags assigned to the standalone model package or inherited from its model package group.</div>
                     <br/>

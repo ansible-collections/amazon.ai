@@ -6,6 +6,8 @@
 
 """Unit tests for sagemaker module_utils."""
 
+from datetime import datetime
+from decimal import Decimal
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
@@ -96,9 +98,19 @@ def test_list_model_packages_limits_total_results():
     paginator = client.get_paginator.return_value
     paginator.paginate.return_value.build_full_result.return_value = {"ModelPackageSummaryList": []}
 
-    list_model_packages(client, MaxResults=2)
+    list_model_packages(client, max_items=2)
 
     paginator.paginate.assert_called_once_with(PaginationConfig={"MaxItems": 2})
+
+
+def test_list_model_packages_uses_empty_pagination_config_without_limit():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {"ModelPackageSummaryList": []}
+
+    list_model_packages(client)
+
+    paginator.paginate.assert_called_once_with(PaginationConfig={})
 
 
 def test_build_model_package_params_preserves_aws_mime_key_name():
@@ -172,7 +184,7 @@ def test_model_package_results_preserve_customer_metadata_keys(normalize):
         },
     }
 
-    result = normalize(package, {})
+    result = normalize(package)
 
     assert result["model_package_name"] == "demo-package"
     assert result["customer_metadata_properties"] == package["CustomerMetadataProperties"]
@@ -189,6 +201,32 @@ def test_normalize_model_package_compare_value_preserves_aws_mime_key_name():
 
     assert result["SupportedResponseMIMETypes"] == ["application/json"]
     assert "SupportedResponseMimeTypes" not in result
+
+
+@pytest.mark.parametrize("metadata_key", ["CustomerMetadataProperties", "customer_metadata_properties"])
+def test_model_package_values_match_preserves_other_fields_with_customer_metadata(metadata_key):
+    metadata = {"snake_case_key": "value", "MixedCase-Key": "other-value"}
+    actual = {
+        metadata_key: metadata,
+        "ModelApprovalStatus": "Approved",
+        "InferenceSpecification": {"Containers": [{"Image": "example"}]},
+    }
+    desired = dict(actual)
+
+    assert _model_package_values_match(actual, desired)
+    desired["ModelApprovalStatus"] = "Rejected"
+    assert not _model_package_values_match(actual, desired)
+
+
+def test_model_package_values_match_handles_non_json_list_values():
+    timestamp = datetime(2025, 1, 1)
+    actual = [timestamp, b"payload", Decimal("1.25"), float("nan"), 1]
+    desired = [Decimal("1.25"), float("nan"), timestamp, b"payload", True]
+
+    assert not _model_package_values_match(actual, desired)
+
+    desired[-1] = 1
+    assert _model_package_values_match(actual, desired)
 
 
 def test_model_package_needs_update_does_not_repeat_completed_delta_updates():
@@ -304,11 +342,25 @@ def test_model_package_tag_arn_derives_group_arn_for_versioned_package():
     )
 
 
+@pytest.mark.parametrize(
+    "package_arn",
+    [
+        "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group",
+        "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/not-a-version",
+        "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/1/extra",
+        "arn:aws:sagemaker:us-east-1:12345678901:model-package/demo-group/1",
+        "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group-/1",
+    ],
+)
+def test_model_package_tag_arn_does_not_rewrite_malformed_package_arn(package_arn):
+    assert get_model_package_tag_arn({"ModelPackageArn": package_arn}) == package_arn
+
+
 def test_build_model_package_params_includes_standalone_package_tags():
     module = MagicMock()
     module.params = {
         "model_package_name": "demo-package",
-        "tags": {"project": "demo"},
+        "tags": {"project": "demo", "enabled": True},
         "inference_specification": {
             "containers": [{"image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/demo:latest"}],
             "supported_response_mime_types": ["application/json"],
@@ -317,7 +369,10 @@ def test_build_model_package_params_includes_standalone_package_tags():
 
     result = _build_model_package_params(module)
 
-    assert result["Tags"] == [{"Key": "project", "Value": "demo"}]
+    assert result["Tags"] == [
+        {"Key": "project", "Value": "demo"},
+        {"Key": "enabled", "Value": "True"},
+    ]
     assert result["InferenceSpecification"]["SupportedResponseMIMETypes"] == ["application/json"]
 
 
@@ -512,9 +567,11 @@ def test_update_model_package_tags_purge_false_preserves_unmentioned_keys(mock_l
     client.delete_tags.assert_not_called()
 
 
-def test_ensure_present_creates_package_and_returns_described_package():
+@patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.list_tags")
+def test_ensure_present_creates_package_and_returns_described_package(mock_list_tags):
     client = MagicMock()
     module = _model_package_module()
+    mock_list_tags.return_value = {"project": "demo"}
     package = {
         "ModelPackageName": "demo-package",
         "ModelPackageArn": "arn:package",
@@ -530,13 +587,14 @@ def test_ensure_present_creates_package_and_returns_described_package():
         changed, result = _ensure_present(client, module, None)
 
     assert changed
+    assert result["tags"] == {"project": "demo"}
     assert result["model_package"] == {
         "model_package_name": "demo-package",
         "model_package_arn": "arn:package",
         "model_approval_status": "PendingManualApproval",
     }
-    assert "tags" not in result
     describe.assert_called_once_with(client, "arn:package")
+    mock_list_tags.assert_called_once_with(client, "arn:package")
 
 
 def test_ensure_present_create_check_mode_does_not_describe_package():
@@ -551,6 +609,7 @@ def test_ensure_present_create_check_mode_does_not_describe_package():
     assert changed
     assert result["msg"] == "Check mode: would have created model package demo-package."
     assert result["model_package"] == {}
+    assert result["tags"] == {}
     describe.assert_not_called()
 
 
@@ -569,21 +628,31 @@ def test_ensure_present_rejects_tags_for_group_package_creation():
     assert "Tags cannot be specified" in module.fail_json.call_args.kwargs["msg"]
 
 
-def test_ensure_present_rejects_in_place_changes_to_create_only_fields():
+@patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.list_tags")
+def test_ensure_present_warns_and_ignores_in_place_changes_to_create_only_fields(mock_list_tags):
+    client = MagicMock()
     module = _model_package_module(
         inference_specification={"containers": [{"image": "new-image"}]},
     )
-    module.fail_json.side_effect = RuntimeError("fail_json")
+    mock_list_tags.return_value = {}
     existing = {
         "ModelPackageName": "demo-package",
         "ModelPackageArn": "arn:package",
         "InferenceSpecification": {"Containers": [{"Image": "old-image"}]},
     }
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.model_package_needs_update",
+        return_value=False,
+    ):
+        changed, result = _ensure_present(client, module, existing)
 
-    with pytest.raises(RuntimeError, match="fail_json"):
-        _ensure_present(MagicMock(), module, existing)
-
-    assert "inference_specification is create-only" in module.fail_json.call_args.kwargs["msg"]
+    assert not changed
+    assert result["msg"] == "No updates needed."
+    module.warn.assert_called_once_with(
+        "SageMaker model package field inference_specification is create-only and cannot be changed in place; "
+        "ignoring the requested value."
+    )
+    module.fail_json.assert_not_called()
 
 
 def test_ensure_present_rejects_package_already_being_deleted():
@@ -595,6 +664,23 @@ def test_ensure_present_rejects_package_already_being_deleted():
         _ensure_present(MagicMock(), module, existing)
 
     assert "currently being deleted" in module.fail_json.call_args.kwargs["msg"]
+
+
+@patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.list_tags")
+def test_ensure_present_returns_tags_without_a_tag_filter(mock_list_tags):
+    client = MagicMock()
+    module = _model_package_module()
+    existing = {"ModelPackageName": "demo-package", "ModelPackageArn": "arn:package"}
+    mock_list_tags.return_value = {"project": "demo"}
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.model_package_needs_update",
+        return_value=False,
+    ):
+        changed, result = _ensure_present(client, module, existing)
+
+    assert not changed
+    assert result["tags"] == {"project": "demo"}
+    mock_list_tags.assert_called_once_with(client, "arn:package")
 
 
 @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.list_tags")
@@ -617,6 +703,7 @@ def test_ensure_present_reconciles_standalone_tags_and_returns_refreshed_package
     assert changed
     assert result["msg"] == "Model package tags updated successfully."
     assert result["tags"] == {"project": "demo"}
+    assert "tags" not in result["model_package"]
     mock_update_tags.assert_called_once_with(client, module, "arn:package", {"project": "demo"}, purge_tags=True)
     describe.assert_called_once_with(client, "demo-package")
     mock_list_tags.assert_called_once_with(client, "arn:package")
@@ -645,6 +732,35 @@ def test_ensure_present_updates_package_and_waits_for_status(mock_update, monkey
     assert result["msg"] == "Model package demo-package updated successfully."
     mock_update.assert_called_once_with(client, module, "arn:package")
     wait.assert_called_once_with(client, module, "demo-package")
+
+
+@patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.update_model_package")
+def test_ensure_present_uses_arn_when_versioned_package_name_is_missing(mock_update):
+    client = MagicMock()
+    package_arn = "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/1"
+    module = _model_package_module(
+        model_package_name=None,
+        inference_specification=None,
+        model_approval_status="Approved",
+        wait=False,
+    )
+    existing = {
+        "ModelPackageArn": package_arn,
+        "ModelPackageGroupArn": "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo-group",
+        "ModelApprovalStatus": "PendingManualApproval",
+    }
+    mock_update.return_value = (True, "Model package updated successfully.")
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.model_package_needs_update",
+        return_value=True,
+    ), patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.describe_model_package",
+        return_value=existing,
+    ) as describe:
+        changed, _result = _ensure_present(client, module, existing)
+
+    assert changed
+    describe.assert_called_once_with(client, package_arn)
 
 
 def test_ensure_absent_returns_noop_when_package_is_missing():
@@ -694,11 +810,71 @@ def test_wait_for_model_package_status_returns_when_completed():
     client.describe_model_package.assert_called_once_with(ModelPackageName="demo-package")
 
 
+def test_wait_for_model_package_status_waits_for_pending_and_in_progress(monkeypatch):
+    client = MagicMock()
+    client.describe_model_package.side_effect = [
+        {"ModelPackageStatus": "Pending"},
+        {"ModelPackageStatus": "InProgress"},
+        {"ModelPackageStatus": "Completed"},
+    ]
+    sleep = MagicMock()
+    monkeypatch.setattr("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.time.sleep", sleep)
+
+    wait_for_model_package_status(client, "demo-package", wait_timeout=10, sleep_time=2)
+
+    assert client.describe_model_package.call_count == 3
+    assert sleep.call_count == 2
+    sleep.assert_called_with(2)
+
+
+def test_wait_for_model_package_status_waits_until_deleting_package_disappears(monkeypatch):
+    client = MagicMock()
+    client.describe_model_package.side_effect = [
+        {"ModelPackageStatus": "Deleting"},
+        ClientError(
+            {"Error": {"Code": "ResourceNotFound", "Message": "Model package not found."}},
+            "DescribeModelPackage",
+        ),
+    ]
+    sleep = MagicMock()
+    monkeypatch.setattr("ansible_collections.amazon.ai.plugins.module_utils.sagemaker.time.sleep", sleep)
+
+    wait_for_model_package_status(client, "demo-package", wait_timeout=10)
+
+    assert client.describe_model_package.call_count == 2
+    sleep.assert_called_once_with(5)
+
+
 def test_wait_for_model_package_status_fails_on_failed_status():
     client = MagicMock()
     client.describe_model_package.return_value = {"ModelPackageStatus": "Failed"}
 
     with pytest.raises(RuntimeError, match="entered a failed state"):
+        wait_for_model_package_status(client, "demo-package", wait_timeout=1)
+
+
+def test_wait_for_model_package_status_fails_on_unknown_status():
+    client = MagicMock()
+    client.describe_model_package.return_value = {"ModelPackageStatus": "Unexpected"}
+
+    with pytest.raises(RuntimeError, match="returned unknown status 'Unexpected'"):
+        wait_for_model_package_status(client, "demo-package", wait_timeout=1)
+
+
+def test_wait_for_model_package_status_includes_failure_reasons():
+    client = MagicMock()
+    client.describe_model_package.return_value = {
+        "ModelPackageStatus": "Failed",
+        "ModelPackageStatusDetails": {
+            "ValidationStatuses": [{"Name": "ModelDataQuality", "FailureReason": "validation failed"}],
+            "ImageScanStatuses": [{"Name": "ImageScan", "FailureReason": "image scan failed"}],
+        },
+    }
+
+    with pytest.raises(
+        RuntimeError,
+        match="ModelDataQuality: validation failed; ImageScan: image scan failed",
+    ):
         wait_for_model_package_status(client, "demo-package", wait_timeout=1)
 
 
@@ -746,6 +922,8 @@ def test_model_package_main_requires_name_for_absent_state():
             model_package_main()
 
     assert ansible_module.call_args.kwargs["required_if"] == [("state", "absent", ["model_package_name"])]
+    assert ansible_module.call_args.kwargs["mutually_exclusive"] == [("model_package_name", "model_package_group_name")]
+    assert ansible_module.call_args.kwargs["required_one_of"] == [("model_package_name", "model_package_group_name")]
 
 
 def test_model_package_main_returns_noop_result():
@@ -785,24 +963,6 @@ def test_model_package_main_reports_connection_errors():
             model_package_main()
 
     module.fail_json_aws.assert_called_once_with(error, msg="Failed to connect to AWS.")
-
-
-def test_validate_model_package_create_params_requires_identifier():
-    module = MagicMock()
-    module.params = {
-        "model_package_name": None,
-        "model_package_group_name": None,
-        "inference_specification": {"containers": [{"image": "image"}]},
-        "source_algorithm_specification": None,
-        "additional_inference_specifications_to_add": None,
-        "customer_metadata_properties_to_remove": None,
-    }
-
-    _validate_model_package_create_params(module)
-
-    module.fail_json.assert_called_once_with(
-        msg="One of model_package_name or model_package_group_name must be provided."
-    )
 
 
 def test_validate_model_package_create_params_requires_model_source():
@@ -1370,6 +1530,91 @@ class TestFindModelPackageGroups:
     """Test model package group info tag filtering."""
 
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
+    @patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.describe_model_package_group"
+    )
+    def test_named_lookup_returns_tags_without_tag_filter(self, mock_describe_model_package_group, mock_list_tags):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {"model_package_group_name": "group-a", "tags": None}
+        mock_describe_model_package_group.return_value = {
+            "ModelPackageGroupName": "group-a",
+            "ModelPackageGroupArn": "arn:a",
+        }
+        mock_list_tags.return_value = {"project": "demo"}
+
+        result = find_model_package_groups(client, module)
+
+        mock_list_tags.assert_called_once_with(client, "arn:a")
+        assert result == [
+            {
+                "model_package_group_name": "group-a",
+                "model_package_group_arn": "arn:a",
+                "tags": {"project": "demo"},
+            }
+        ]
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
+    @patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.describe_model_package_group"
+    )
+    def test_named_lookup_returns_empty_tags_when_group_has_no_tags(
+        self, mock_describe_model_package_group, mock_list_tags
+    ):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {"model_package_group_name": "group-a", "tags": None}
+        mock_describe_model_package_group.return_value = {
+            "ModelPackageGroupName": "group-a",
+            "ModelPackageGroupArn": "arn:a",
+        }
+        mock_list_tags.return_value = {}
+
+        result = find_model_package_groups(client, module)
+
+        assert result == [
+            {
+                "model_package_group_name": "group-a",
+                "model_package_group_arn": "arn:a",
+                "tags": {},
+            }
+        ]
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
+    @patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.describe_model_package_group"
+    )
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_model_package_groups")
+    def test_list_returns_tags_without_tag_filter(
+        self, mock_list_model_package_groups, mock_describe_model_package_group, mock_list_tags
+    ):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {
+            "model_package_group_name": None,
+            "tags": None,
+        }
+        mock_list_model_package_groups.return_value = [
+            {"ModelPackageGroupName": "group-a", "ModelPackageGroupArn": "arn:a"}
+        ]
+        mock_describe_model_package_group.return_value = {
+            "ModelPackageGroupName": "group-a",
+            "ModelPackageGroupArn": "arn:a",
+        }
+        mock_list_tags.return_value = {"project": "demo"}
+
+        result = find_model_package_groups(client, module)
+
+        mock_list_tags.assert_called_once_with(client, "arn:a")
+        assert result == [
+            {
+                "model_package_group_name": "group-a",
+                "model_package_group_arn": "arn:a",
+                "tags": {"project": "demo"},
+            }
+        ]
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_model_package_groups")
     def test_tag_filter_excludes_mismatched_values(self, mock_list_model_package_groups, mock_list_tags):
         """A desired tag value must match the group's actual tag value."""
@@ -1491,10 +1736,8 @@ class TestFindModelPackages:
 
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.list_tags")
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.describe_model_package")
-    def test_named_lookup_forwards_included_data_without_fetching_tags(
-        self, mock_describe_model_package, mock_list_tags
-    ):
-        """Exact-name lookups should pass IncludedData and omit unrequested tag reads."""
+    def test_named_lookup_forwards_included_data_and_returns_tags(self, mock_describe_model_package, mock_list_tags):
+        """Exact-name lookups should pass IncludedData and return the package's tags."""
         client = MagicMock()
         module = MagicMock()
         module.params = {
@@ -1511,13 +1754,36 @@ class TestFindModelPackages:
         result = find_model_packages(client, module)
 
         mock_describe_model_package.assert_called_once_with(client, "demo-package", IncludedData="MetadataOnly")
-        mock_list_tags.assert_not_called()
+        mock_list_tags.assert_called_once_with(client, "arn:package")
         assert result == [
             {
                 "model_package_name": "demo-package",
                 "model_package_arn": "arn:package",
+                "tags": {"project": "demo"},
             }
         ]
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.list_tags")
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.describe_model_package")
+    def test_named_lookup_returns_empty_tags_when_package_has_no_tags(
+        self, mock_describe_model_package, mock_list_tags
+    ):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {
+            "model_package_name": "demo-package",
+            "included_data": None,
+            "tags": None,
+        }
+        mock_describe_model_package.return_value = {
+            "ModelPackageName": "demo-package",
+            "ModelPackageArn": "arn:package",
+        }
+        mock_list_tags.return_value = {}
+
+        result = find_model_packages(client, module)
+
+        assert result == [{"model_package_name": "demo-package", "model_package_arn": "arn:package", "tags": {}}]
 
     def test_model_package_name_and_tags_are_mutually_exclusive(self):
         with patch(
@@ -1549,7 +1815,7 @@ class TestFindModelPackages:
             "creation_time_before": "2027-01-01T00:00:00Z",
             "sort_by": "Name",
             "sort_order": "Ascending",
-            "max_results": 3,
+            "max_items": 3,
             "tags": {"project": "demo"},
         }
         mock_list_model_packages.return_value = [{"ModelPackageName": "package-a", "ModelPackageArn": "arn:package-a"}]
@@ -1571,7 +1837,7 @@ class TestFindModelPackages:
             CreationTimeBefore="2027-01-01T00:00:00Z",
             SortBy="Name",
             SortOrder="Ascending",
-            MaxResults=3,
+            max_items=3,
         )
         mock_describe_model_package.assert_called_once_with(client, "package-a", IncludedData="AllData")
         mock_list_tags.assert_called_once_with(client, "arn:package-a")
@@ -1603,7 +1869,7 @@ class TestFindModelPackages:
             "creation_time_before": None,
             "sort_by": None,
             "sort_order": None,
-            "max_results": None,
+            "max_items": None,
             "tags": None,
         }
         mock_list_model_packages.return_value = [
@@ -1613,6 +1879,7 @@ class TestFindModelPackages:
             "ModelPackageArn": "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/1",
             "ModelPackageGroupName": "demo-group",
         }
+        mock_list_tags.return_value = {"project": "demo"}
 
         result = find_model_packages(client, module)
 
@@ -1620,13 +1887,51 @@ class TestFindModelPackages:
             client,
             "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/1",
         )
-        mock_list_tags.assert_not_called()
+        mock_list_tags.assert_called_once_with(
+            client,
+            "arn:aws:sagemaker:us-east-1:123456789012:model-package-group/demo-group",
+        )
         assert result == [
             {
                 "model_package_arn": "arn:aws:sagemaker:us-east-1:123456789012:model-package/demo-group/1",
                 "model_package_group_name": "demo-group",
+                "tags": {"project": "demo"},
             }
         ]
+
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.list_tags")
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.describe_model_package")
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.list_model_packages")
+    def test_list_gets_tag_arn_from_package_details_when_summary_omits_arn(
+        self, mock_list_model_packages, mock_describe_model_package, mock_list_tags
+    ):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {
+            "model_package_name": None,
+            "model_package_group_name": "demo-group",
+            "model_approval_status": None,
+            "model_package_type": "Versioned",
+            "included_data": None,
+            "name_contains": None,
+            "creation_time_after": None,
+            "creation_time_before": None,
+            "sort_by": None,
+            "sort_order": None,
+            "max_items": None,
+            "tags": None,
+        }
+        mock_list_model_packages.return_value = [{"ModelPackageName": "package-a"}]
+        mock_describe_model_package.return_value = {
+            "ModelPackageName": "package-a",
+            "ModelPackageArn": "arn:package-a",
+        }
+        mock_list_tags.return_value = {}
+
+        result = find_model_packages(client, module)
+
+        mock_list_tags.assert_called_once_with(client, "arn:package-a")
+        assert result == [{"model_package_name": "package-a", "model_package_arn": "arn:package-a", "tags": {}}]
 
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.list_tags")
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info.describe_model_package")

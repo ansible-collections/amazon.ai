@@ -56,8 +56,6 @@
     - name: Get info about the created model package group
       amazon.ai.sagemaker_model_package_group_info:
         model_package_group_name: "{{ model_package_group_name }}"
-        tags:
-          project: demo
       register: group_info
 
     - name: Assert info module returns the group

@@ -69,7 +69,7 @@ options:
             - The sort order for results.
         type: str
         choices: ['Ascending', 'Descending']
-    max_results:
+    max_items:
         description:
             - The maximum number of model packages to return.
         type: int
@@ -112,40 +112,45 @@ model_packages:
     elements: dict
     returned: always
     sample:
-        - model_package_name: example-model-package
-          model_package_arn: arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package
-          model_package_description: Demo model package
-          model_approval_status: PendingManualApproval
+        - model_package_name: "example-model-package"
+          model_package_arn: "arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package"
+          model_package_description: "Demo model package"
+          model_approval_status: "PendingManualApproval"
           creation_time: '2025-01-01T00:00:00+00:00'
           tags:
-            project: demo
+            project: "demo"
     contains:
         model_package_name:
             description: The name of the model package.
             type: str
-            sample: example-model-package
+            sample: "example-model-package"
         model_package_arn:
             description: The ARN of the model package.
             type: str
-            sample: arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package
+            sample: "arn:aws:sagemaker:us-east-1:123456789012:model-package/example-model-package"
         model_package_description:
             description: The description of the model package.
             type: str
-            sample: Demo model package
+            sample: "Demo model package"
         model_approval_status:
             description: The approval status of the package.
             type: str
-            sample: PendingManualApproval
+            sample: "PendingManualApproval"
         creation_time:
             description: The creation time of the package.
             type: str
             sample: '2025-01-01T00:00:00+00:00'
         tags:
-            description: A dictionary containing the model package tags, returned when O(tags) is specified.
+            description: A dictionary containing the model package tags, or an empty dictionary when no tags are associated.
             type: dict
-            returned: when O(tags) is specified
+            returned: always
             sample:
-                project: demo
+                project: "demo"
+msg:
+    description: A message describing the failure.
+    type: str
+    returned: on failure
+    sample: "Unable to determine the tag ARN for model package package-a."
 """
 
 try:
@@ -158,7 +163,6 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _preserve_custom_metadata_keys
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_packages
@@ -176,9 +180,7 @@ from ansible_collections.amazon.aws.plugins.module_utils.transformation import s
 def _normalize_model_package(package: Dict[str, Any], tags: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     normalized: Dict[str, Any] = camel_dict_to_snake_dict(package, ignore_list=["tags"])
     if "CustomerMetadataProperties" in package:
-        normalized["customer_metadata_properties"] = _preserve_custom_metadata_keys(
-            package["CustomerMetadataProperties"]
-        )
+        normalized["customer_metadata_properties"] = package["CustomerMetadataProperties"]
     if tags is not None:
         normalized["tags"] = tags
     return normalized
@@ -196,10 +198,10 @@ def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]
         package: Optional[Dict[str, Any]] = describe_model_package(client, model_package_name, **describe_params)
         if package is None:
             return list()
-        tags: Optional[Dict[str, str]] = None
-        if desired_tags is not None:
-            tag_arn = get_model_package_tag_arn(package) or package["ModelPackageArn"]
-            tags = list_tags(client, tag_arn)
+        tag_arn = get_model_package_tag_arn(package, client) or package.get("ModelPackageArn")
+        if tag_arn is None:
+            module.fail_json(msg=f"Unable to determine the tag ARN for model package {model_package_name}.")
+        tags = list_tags(client, tag_arn)
         return [_normalize_model_package(package, tags)]
 
     params: Dict[str, Any] = snake_dict_to_camel_dict(
@@ -215,14 +217,17 @@ def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]
                     "creation_time_before",
                     "sort_by",
                     "sort_order",
-                    "max_results",
                 )
             }
         ),
         capitalize_first=True,
     )
 
-    summaries: List[Dict[str, Any]] = list_model_packages(client, **params)
+    summaries: List[Dict[str, Any]] = list_model_packages(
+        client,
+        max_items=module.params.get("max_items"),
+        **params,
+    )
     packages: List[Dict[str, Any]] = list()
     # Versioned packages share their group's tags, so cache by tag-owner ARN.
     tags_by_arn: Dict[str, Dict[str, str]] = dict()
@@ -230,17 +235,25 @@ def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]
         model_package_identifier = summary.get("ModelPackageName") or summary.get("ModelPackageArn")
         if not model_package_identifier:
             continue
-        tags = None
-        if desired_tags is not None:
-            tag_arn = get_model_package_tag_arn(summary)
-            if tag_arn not in tags_by_arn:
-                tags_by_arn[tag_arn] = list_tags(client, tag_arn)
-            tags = tags_by_arn[tag_arn]
-            if not desired_tags.items() <= tags.items():
+        package: Optional[Dict[str, Any]] = None
+        tag_arn = get_model_package_tag_arn(summary)
+        if desired_tags is None or tag_arn is None:
+            package = describe_model_package(client, model_package_identifier, **describe_params)
+            if package is None:
                 continue
-        package = describe_model_package(client, model_package_identifier, **describe_params)
-        if package is None:
+            if tag_arn is None:
+                tag_arn = get_model_package_tag_arn(package, client) or package.get("ModelPackageArn")
+        if tag_arn is None:
+            module.fail_json(msg=f"Unable to determine the tag ARN for model package {model_package_identifier}.")
+        if tag_arn not in tags_by_arn:
+            tags_by_arn[tag_arn] = list_tags(client, tag_arn)
+        tags = tags_by_arn[tag_arn]
+        if desired_tags is not None and not desired_tags.items() <= tags.items():
             continue
+        if package is None:
+            package = describe_model_package(client, model_package_identifier, **describe_params)
+            if package is None:
+                continue
         packages.append(_normalize_model_package(package, tags))
 
     return packages
@@ -259,7 +272,7 @@ def main() -> None:
         creation_time_before=dict(type="str"),
         sort_by=dict(type="str", choices=["Name", "CreationTime"]),
         sort_order=dict(type="str", choices=["Ascending", "Descending"]),
-        max_results=dict(type="int"),
+        max_items=dict(type="int"),
     )
 
     module = AnsibleAWSModule(
