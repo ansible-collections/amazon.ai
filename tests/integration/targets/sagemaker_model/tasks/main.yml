@@ -78,6 +78,7 @@
       register: ecr_token
       no_log: true
 
+    # Avoid public ECR's unauthenticated pull data limit in CI.
     - name: Push Docker V2 image to ECR
       ansible.builtin.command: >-
         skopeo copy
