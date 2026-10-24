@@ -233,8 +233,6 @@ def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple
             client,
             module,
             existing["ModelPackageGroupArn"],
-            module.params.get("tags"),
-            purge_tags=module.params["purge_tags"],
         )
     return changed, _model_package_group_result(existing, msg, client)
 

@@ -30,9 +30,14 @@
     force: true
   ignore_errors: true
 
+- name: Cleanup IAM instance profile
+  amazon.aws.iam_instance_profile:
+    name: "{{ model_role_name }}"
+    state: absent
+  ignore_errors: true
+
 - name: Cleanup IAM role
   amazon.aws.iam_role:
     name: "{{ model_role_name }}"
     state: absent
-    delete_instance_profile: true
   ignore_errors: true
