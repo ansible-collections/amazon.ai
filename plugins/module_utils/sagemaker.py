@@ -559,10 +559,7 @@ def describe_notebook_instance_lifecycle_config(client, name: str) -> Optional[D
     """Retrieve a SageMaker notebook instance lifecycle configuration by name."""
     try:
         return client.describe_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except (
-        is_boto3_error_code("ResourceNotFound"),
-        is_boto3_error_message("does not exist"),
-    ):
+    except is_boto3_error_code("ResourceNotFound"):
         return None
 
 
@@ -637,10 +634,7 @@ def delete_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str
 
     try:
         client.delete_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except (
-        is_boto3_error_code("ResourceNotFound"),
-        is_boto3_error_message("does not exist"),
-    ):
+    except is_boto3_error_code("ResourceNotFound"):
         return False, f"Lifecycle configuration {name} was already absent."
     return True, f"Lifecycle configuration {name} deleted successfully."
 

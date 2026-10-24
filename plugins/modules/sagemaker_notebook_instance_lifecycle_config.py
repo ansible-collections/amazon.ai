@@ -189,7 +189,7 @@ def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple
     if existing is None:
         changed, msg = create_notebook_instance_lifecycle_config(client, module)
         if module.check_mode:
-            return changed, {"msg": msg}
+            return changed, {"notebook_instance_lifecycle_config": {}, "msg": msg}
         created = describe_notebook_instance_lifecycle_config(client, name)
         return changed, {
             "notebook_instance_lifecycle_config": _lifecycle_config_result(client, created),
@@ -228,7 +228,10 @@ def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple
 def _ensure_absent(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
     name = module.params["notebook_instance_lifecycle_config_name"]
     if existing is None:
-        return False, {"msg": f"Lifecycle configuration {name} does not exist."}
+        return False, {
+            "notebook_instance_lifecycle_config": {},
+            "msg": f"Lifecycle configuration {name} does not exist.",
+        }
 
     changed, msg = delete_notebook_instance_lifecycle_config(client, module)
     return changed, {"msg": msg, "notebook_instance_lifecycle_config": {}}
