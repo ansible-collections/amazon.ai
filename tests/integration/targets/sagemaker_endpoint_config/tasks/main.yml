@@ -61,13 +61,46 @@
       register: ecr_token
       no_log: true
 
-    - name: Push Docker V2 image to ECR
-      ansible.builtin.command: >-
-        skopeo copy --format v2s2
-        --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://public.ecr.aws/docker/library/alpine:3.20
-        docker://{{ model_image }}
-      no_log: true
+    - name: Create temporary registry authentication directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: ecr-auth
+      register: ecr_auth_directory
+
+    - name: Authenticate and push the test image
+      block:
+        - name: Log in to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - login
+              - --authfile
+              - "{{ ecr_auth_directory.path }}/auth.json"
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ model_image.split('/')[0] }}"
+            stdin: "{{ ecr_token.stdout }}"
+          no_log: true
+
+        - name: Push Docker V2 image to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - copy
+              - --format
+              - v2s2
+              - --authfile
+              - "{{ ecr_auth_directory.path }}/auth.json"
+              # Avoid public ECR's unauthenticated pull data limit in CI.
+              - docker://mirror.gcr.io/library/alpine:3.20
+              - "docker://{{ model_image }}"
+      always:
+        - name: Remove temporary registry credentials
+          ansible.builtin.file:
+            path: "{{ ecr_auth_directory.path }}"
+            state: absent
+          ignore_errors: true
 
     - name: Create S3 bucket for model artifacts
       amazon.aws.s3_bucket:
