@@ -20,14 +20,6 @@
     wait_timeout: 3600
   ignore_errors: true
 
-- name: Remove the temporary execution-role policy
-  amazon.aws.iam_policy:
-    iam_type: role
-    iam_name: "{{ training_role_name }}"
-    policy_name: "{{ training_role_policy_name }}"
-    state: absent
-  ignore_errors: true
-
 - name: Remove the temporary execution role
   amazon.aws.iam_role:
     name: "{{ training_role_name }}"

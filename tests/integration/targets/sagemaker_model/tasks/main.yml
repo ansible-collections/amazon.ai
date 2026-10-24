@@ -78,12 +78,13 @@
       register: ecr_token
       no_log: true
 
+    # Avoid public ECR's unauthenticated pull data limit in CI.
     - name: Push Docker V2 image to ECR
       ansible.builtin.command: >-
         skopeo copy
         --format v2s2
         --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://mirror.gcr.io/library/alpine:3.20
         docker://{{ model_image }}
       no_log: true
 
