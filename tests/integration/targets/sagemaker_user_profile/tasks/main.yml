@@ -1,0 +1,22 @@
+---
+- name: SageMaker user profile integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create the IAM role, network lookups and SageMaker domain
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the SageMaker user profile modules
+      ansible.builtin.include_tasks: user_profile.yml
+  always:
+    - name: Tear down the user profiles, domain, security groups and IAM role
+      ansible.builtin.include_tasks: teardown.yml

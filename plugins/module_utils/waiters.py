@@ -66,12 +66,75 @@ image_version_data = {
 }
 
 
+# botocore ships no user-profile waiters. DescribeUserProfile raises ResourceNotFound once the
+# profile is gone.
+user_profile_data = {
+    "version": 2,
+    "waiters": {
+        "UserProfileInService": {
+            "description": "Wait until a SageMaker AI user profile is InService",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeUserProfile",
+            "acceptors": [
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "InService",
+                    "state": "success",
+                },
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "Failed",
+                    "state": "failure",
+                },
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "Update_Failed",
+                    "state": "failure",
+                },
+                {
+                    "matcher": "error",
+                    "expected": "ResourceNotFound",
+                    "state": "failure",
+                },
+            ],
+        },
+        "UserProfileDeleted": {
+            "description": "Wait until a SageMaker AI user profile is deleted",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeUserProfile",
+            "acceptors": [
+                {
+                    "matcher": "error",
+                    "expected": "ResourceNotFound",
+                    "state": "success",
+                },
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "Delete_Failed",
+                    "state": "failure",
+                },
+            ],
+        },
+    },
+}
+
+
 def model_package_group_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=model_package_group_data).get_waiter(name)
 
 
 def image_version_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=image_version_data).get_waiter(name)
+
+
+def user_profile_model(name: str) -> Any:
+    return core_waiter.WaiterModel(waiter_config=user_profile_data).get_waiter(name)
 
 
 waiters_by_name = {
@@ -90,6 +153,22 @@ waiters_by_name = {
         "image_version_deleted",
         image_version_model("ImageVersionDeleted"),
         core_waiter.NormalizedOperationMethod(sagemaker.describe_image_version),
+    ),
+    (
+        "SageMaker",
+        "user_profile_in_service",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "user_profile_in_service",
+        user_profile_model("UserProfileInService"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_user_profile),
+    ),
+    (
+        "SageMaker",
+        "user_profile_deleted",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "user_profile_deleted",
+        user_profile_model("UserProfileDeleted"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_user_profile),
     ),
 }
 
