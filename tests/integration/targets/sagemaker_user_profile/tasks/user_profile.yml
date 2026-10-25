@@ -1,0 +1,550 @@
+---
+# 1 --- Info on a nonexistent profile ---
+- name: Look up a nonexistent user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ missing_profile_name }}"
+  register: missing_info
+
+- name: Assert a missing user profile is non-fatal and returns an empty list
+  ansible.builtin.assert:
+    that:
+      - missing_info is not failed
+      - missing_info is not changed
+      - missing_info.user_profiles == []
+
+# 2 --- Create in a nonexistent domain ---
+- name: Create a user profile in a nonexistent domain
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ missing_domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: missing_domain_create
+  ignore_errors: true
+
+- name: Confirm nothing was created in the nonexistent domain
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ missing_domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: missing_domain_info
+
+- name: Assert creating in a nonexistent domain fails
+  ansible.builtin.assert:
+    that:
+      - missing_domain_create is failed
+      - missing_domain_info.user_profiles == []
+
+# 3 --- Create minimal ---
+- name: Create the minimal user profile (check mode)
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  check_mode: true
+  register: minimal_create_check
+
+- name: Confirm check mode did not create the minimal user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_create_check_info
+
+- name: Assert minimal create check mode
+  ansible.builtin.assert:
+    that:
+      - minimal_create_check is changed
+      - "minimal_create_check.msg.startswith('Check mode: would have created')"
+      - minimal_create_check_info.user_profiles == []
+
+- name: Create the minimal user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_create
+
+- name: Assert the minimal user profile was created and is InService
+  ansible.builtin.assert:
+    that:
+      - minimal_create is changed
+      - minimal_create.msg == 'Created user profile ' ~ minimal_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - minimal_create.user_profile.user_profile_arn is defined
+      - minimal_create.user_profile.user_profile_name == minimal_profile_name
+      - minimal_create.user_profile.domain_id == domain_id
+      - minimal_create.user_profile.status == 'InService'
+      - minimal_create.user_profile.tags == {}
+
+- name: Create the minimal user profile again
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_create_rerun
+
+- name: Assert minimal create is idempotent
+  ansible.builtin.assert:
+    that:
+      - minimal_create_rerun is not changed
+      - minimal_create_rerun.msg == 'User profile ' ~ minimal_profile_name ~ ' in domain ' ~ domain_id ~ ' is already in the desired state.'
+      - minimal_create_rerun.user_profile.user_profile_arn == minimal_create.user_profile.user_profile_arn
+
+# 4 --- Create full ---
+- name: Create the full user profile (check mode)
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    execution_role: "{{ role_arn }}"
+    security_groups: "{{ security_group_ids }}"
+    sharing_settings: "{{ full_sharing_settings }}"
+    jupyter_lab_app_settings: "{{ full_jupyter_lab_app_settings }}"
+    canvas_app_settings: "{{ full_canvas_app_settings }}"
+    space_storage_settings: "{{ full_space_storage_settings }}"
+    default_landing_uri: "studio::"
+    studio_web_portal: ENABLED
+    studio_web_portal_settings:
+      hidden_app_types: "{{ full_hidden_app_types }}"
+    auto_mount_home_efs: DefaultAsDomain
+    tags: "{{ full_tags }}"
+  check_mode: true
+  register: full_create_check
+
+- name: Confirm check mode did not create the full user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+  register: full_create_check_info
+
+- name: Assert full create check mode
+  ansible.builtin.assert:
+    that:
+      - full_create_check is changed
+      - "full_create_check.msg.startswith('Check mode: would have created')"
+      - full_create_check_info.user_profiles == []
+
+- name: Create the full user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    execution_role: "{{ role_arn }}"
+    security_groups: "{{ security_group_ids }}"
+    sharing_settings: "{{ full_sharing_settings }}"
+    jupyter_lab_app_settings: "{{ full_jupyter_lab_app_settings }}"
+    canvas_app_settings: "{{ full_canvas_app_settings }}"
+    space_storage_settings: "{{ full_space_storage_settings }}"
+    default_landing_uri: "studio::"
+    studio_web_portal: ENABLED
+    studio_web_portal_settings:
+      hidden_app_types: "{{ full_hidden_app_types }}"
+    auto_mount_home_efs: DefaultAsDomain
+    tags: "{{ full_tags }}"
+  register: full_create
+
+- name: Assert the full user profile round-trips its settings
+  vars:
+    settings: "{{ full_create.user_profile.user_settings }}"
+  ansible.builtin.assert:
+    that:
+      - full_create is changed
+      - full_create.msg == 'Created user profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - full_create.user_profile.status == 'InService'
+      - full_create.user_profile.tags == full_tags
+      - settings.execution_role == role_arn
+      - settings.security_groups | sort == security_group_ids | sort
+      - settings.default_landing_uri == 'studio::'
+      - settings.studio_web_portal == 'ENABLED'
+      - settings.auto_mount_home_efs == 'DefaultAsDomain'
+      - settings.sharing_settings == full_sharing_settings
+      - settings.jupyter_lab_app_settings.default_resource_spec.instance_type == full_jupyter_lab_app_settings.default_resource_spec.instance_type
+      - >-
+        settings.jupyter_lab_app_settings.app_lifecycle_management.idle_settings.lifecycle_management
+        == full_jupyter_lab_app_settings.app_lifecycle_management.idle_settings.lifecycle_management
+      - >-
+        settings.jupyter_lab_app_settings.app_lifecycle_management.idle_settings.idle_timeout_in_minutes
+        == full_jupyter_lab_app_settings.app_lifecycle_management.idle_settings.idle_timeout_in_minutes
+      - settings.jupyter_lab_app_settings.code_repositories == full_jupyter_lab_app_settings.code_repositories
+      - settings.space_storage_settings == full_space_storage_settings
+      - settings.canvas_app_settings.time_series_forecasting_settings.status == full_canvas_app_settings.time_series_forecasting_settings.status
+      - settings.canvas_app_settings.workspace_settings.s3_artifact_path == full_canvas_app_settings.workspace_settings.s3_artifact_path
+      - settings.studio_web_portal_settings.hidden_app_types | sort == full_hidden_app_types | sort
+
+- name: Create the full user profile again
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    execution_role: "{{ role_arn }}"
+    security_groups: "{{ security_group_ids }}"
+    sharing_settings: "{{ full_sharing_settings }}"
+    jupyter_lab_app_settings: "{{ full_jupyter_lab_app_settings }}"
+    canvas_app_settings: "{{ full_canvas_app_settings }}"
+    space_storage_settings: "{{ full_space_storage_settings }}"
+    default_landing_uri: "studio::"
+    studio_web_portal: ENABLED
+    studio_web_portal_settings:
+      hidden_app_types: "{{ full_hidden_app_types }}"
+    auto_mount_home_efs: DefaultAsDomain
+    tags: "{{ full_tags }}"
+  register: full_create_rerun
+
+- name: Assert full create is idempotent
+  ansible.builtin.assert:
+    that:
+      - full_create_rerun is not changed
+      - full_create_rerun.msg == 'User profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ ' is already in the desired state.'
+
+# 5 --- Info by name ---
+- name: Describe the full user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+  register: full_info
+
+- name: Assert info returns the full user profile with the created settings
+  ansible.builtin.assert:
+    that:
+      - full_info is not changed
+      - full_info.user_profiles | length == 1
+      - full_info.user_profiles[0].user_profile_arn == full_create.user_profile.user_profile_arn
+      - full_info.user_profiles[0].status == 'InService'
+      - full_info.user_profiles[0].user_settings == full_create.user_profile.user_settings
+      - "'tags' not in full_info.user_profiles[0]"
+
+# 6 --- Update full ---
+- name: Update the full user profile (check mode)
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    studio_web_portal: DISABLED
+    jupyter_lab_app_settings:
+      default_resource_spec:
+        instance_type: ml.t3.large
+  check_mode: true
+  register: full_update_check
+
+- name: Confirm check mode did not update the full user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+  register: full_update_check_info
+
+- name: Assert full update check mode
+  ansible.builtin.assert:
+    that:
+      - full_update_check is changed
+      - "full_update_check.msg.startswith('Check mode: would have updated')"
+      - full_update_check_info.user_profiles[0].user_settings == full_create.user_profile.user_settings
+
+- name: Update the full user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    studio_web_portal: DISABLED
+    jupyter_lab_app_settings:
+      default_resource_spec:
+        instance_type: ml.t3.large
+  register: full_update
+
+- name: Assert the update applied and preserved every untouched setting
+  vars:
+    created: "{{ full_create.user_profile.user_settings }}"
+    settings: "{{ full_update.user_profile.user_settings }}"
+  ansible.builtin.assert:
+    that:
+      - full_update is changed
+      - full_update.msg == 'Updated user profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - full_update.user_profile.status == 'InService'
+      - settings.studio_web_portal == 'DISABLED'
+      - settings.jupyter_lab_app_settings.default_resource_spec.instance_type == 'ml.t3.large'
+      - settings.jupyter_lab_app_settings.app_lifecycle_management == created.jupyter_lab_app_settings.app_lifecycle_management
+      - settings.jupyter_lab_app_settings.code_repositories == created.jupyter_lab_app_settings.code_repositories
+      - settings.sharing_settings == created.sharing_settings
+      - settings.space_storage_settings == created.space_storage_settings
+      - settings.canvas_app_settings == created.canvas_app_settings
+      - settings.studio_web_portal_settings == created.studio_web_portal_settings
+      - settings.execution_role == created.execution_role
+      - full_update.user_profile.tags == full_tags
+
+- name: Re-query the full user profile after the update
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+  register: full_update_info
+
+- name: Assert the update happened in place
+  ansible.builtin.assert:
+    that:
+      - full_update_info.user_profiles | length == 1
+      - full_update_info.user_profiles[0].user_profile_arn == full_create.user_profile.user_profile_arn
+      - full_update_info.user_profiles[0].user_settings == full_update.user_profile.user_settings
+
+- name: Update the full user profile again
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    studio_web_portal: DISABLED
+    jupyter_lab_app_settings:
+      default_resource_spec:
+        instance_type: ml.t3.large
+  register: full_update_rerun
+
+- name: Assert full update is idempotent
+  ansible.builtin.assert:
+    that:
+      - full_update_rerun is not changed
+      - full_update_rerun.msg == 'User profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ ' is already in the desired state.'
+
+# 7 --- Reordered lists ---
+- name: Apply the full user profile's lists in reverse order
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    security_groups: "{{ security_group_ids | reverse | list }}"
+    studio_web_portal_settings:
+      hidden_app_types: "{{ full_hidden_app_types | reverse | list }}"
+  register: full_reordered
+
+- name: Assert list order is ignored
+  ansible.builtin.assert:
+    that:
+      - full_reordered is not changed
+
+# 8 --- Tags on minimal ---
+- name: Add the initial tags to the minimal user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_initial }}"
+    purge_tags: false
+  register: minimal_tags_initial_add
+
+- name: Assert the initial tags were added
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_initial_add is changed
+      - minimal_tags_initial_add.msg == 'Updated the tags of User profile ' ~ minimal_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - minimal_tags_initial_add.user_profile.tags == minimal_tags_initial
+
+- name: Merge a tag into the minimal user profile (check mode)
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_added }}"
+    purge_tags: false
+  check_mode: true
+  register: minimal_tags_merge_check
+
+- name: Assert tag merge check mode left the tags unchanged
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_merge_check is changed
+      - "minimal_tags_merge_check.msg.startswith('Check mode: would have updated the tags')"
+      - minimal_tags_merge_check.user_profile.tags == minimal_tags_initial
+
+- name: Merge a tag into the minimal user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_added }}"
+    purge_tags: false
+  register: minimal_tags_merge
+
+- name: Assert the merge kept the existing tags
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_merge is changed
+      - minimal_tags_merge.user_profile.tags == minimal_tags_initial | combine(minimal_tags_added)
+
+- name: Merge a tag into the minimal user profile again
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_added }}"
+    purge_tags: false
+  register: minimal_tags_merge_rerun
+
+- name: Assert tag merge is idempotent
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_merge_rerun is not changed
+      - minimal_tags_merge_rerun.user_profile.tags == minimal_tags_initial | combine(minimal_tags_added)
+
+- name: Replace the minimal user profile's tags (check mode)
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_replaced }}"
+    purge_tags: true
+  check_mode: true
+  register: minimal_tags_purge_check
+
+- name: Assert tag purge check mode left the tags unchanged
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_purge_check is changed
+      - "minimal_tags_purge_check.msg.startswith('Check mode: would have updated the tags')"
+      - minimal_tags_purge_check.user_profile.tags == minimal_tags_initial | combine(minimal_tags_added)
+
+- name: Replace the minimal user profile's tags
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_replaced }}"
+    purge_tags: true
+  register: minimal_tags_purge
+
+- name: Assert the purge removed the unlisted tags
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_purge is changed
+      - minimal_tags_purge.user_profile.tags == minimal_tags_replaced
+
+- name: Replace the minimal user profile's tags again
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    tags: "{{ minimal_tags_replaced }}"
+    purge_tags: true
+  register: minimal_tags_purge_rerun
+
+- name: Assert tag purge is idempotent
+  ansible.builtin.assert:
+    that:
+      - minimal_tags_purge_rerun is not changed
+      - minimal_tags_purge_rerun.user_profile.tags == minimal_tags_replaced
+
+# 9 --- Create-only drift ---
+- name: Try to set single sign-on options on the existing minimal user profile
+  amazon.ai.sagemaker_user_profile:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+    single_sign_on_user_identifier: UserName
+    single_sign_on_user_value: ansible-test-user
+  register: minimal_sso_drift
+  ignore_errors: true
+
+- name: Confirm the minimal user profile was not changed
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_sso_drift_info
+
+- name: Assert create-only drift fails and leaves the profile untouched
+  ansible.builtin.assert:
+    that:
+      - minimal_sso_drift is failed
+      - "'cannot be changed on existing' in minimal_sso_drift.msg"
+      - "'requires recreating the user profile' in minimal_sso_drift.msg"
+      - minimal_sso_drift_info.user_profiles | length == 1
+      - minimal_sso_drift_info.user_profiles[0].user_profile_arn == minimal_create.user_profile.user_profile_arn
+      - minimal_sso_drift_info.user_profiles[0].single_sign_on_user_value is not defined
+
+# 10 --- Info list, filter and sort ---
+- name: List the user profiles in the domain
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+  register: list_all
+
+- name: List the user profiles whose name contains the full profile's name
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name_contains: "{{ full_profile_name }}"
+  register: list_contains
+
+- name: List the user profiles newest first
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    sort_by: CreationTime
+    sort_order: Descending
+  register: list_sorted
+
+- name: Assert list, filter and sort results
+  ansible.builtin.assert:
+    that:
+      - list_all.user_profiles | length == 2
+      - list_all.user_profiles | map(attribute='user_profile_name') | sort == [full_profile_name, minimal_profile_name] | sort
+      - list_contains.user_profiles | length == 1
+      - list_contains.user_profiles[0].user_profile_name == full_profile_name
+      - list_sorted.user_profiles | map(attribute='user_profile_name') | list == [full_profile_name, minimal_profile_name]
+
+# 11 --- Delete minimal ---
+- name: Delete the minimal user profile (check mode)
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  check_mode: true
+  register: minimal_delete_check
+
+- name: Confirm check mode did not delete the minimal user profile
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_delete_check_info
+
+- name: Assert minimal delete check mode
+  ansible.builtin.assert:
+    that:
+      - minimal_delete_check is changed
+      - "minimal_delete_check.msg.startswith('Check mode: would have deleted')"
+      - minimal_delete_check_info.user_profiles | length == 1
+      - minimal_delete_check_info.user_profiles[0].status == 'InService'
+
+- name: Delete the minimal user profile
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_delete
+
+- name: Confirm the minimal user profile is gone
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_delete_info
+
+- name: Assert the minimal user profile was deleted
+  ansible.builtin.assert:
+    that:
+      - minimal_delete is changed
+      - minimal_delete.msg == 'Deleted user profile ' ~ minimal_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - minimal_delete_info.user_profiles == []
+
+- name: Delete the minimal user profile again
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ minimal_profile_name }}"
+  register: minimal_delete_rerun
+
+- name: Assert minimal delete is idempotent
+  ansible.builtin.assert:
+    that:
+      - minimal_delete_rerun is not changed
+      - minimal_delete_rerun.msg == 'User profile ' ~ minimal_profile_name ~ ' in domain ' ~ domain_id ~ ' does not exist.'
+
+# 12 --- Delete full without waiting, then wait through the Deleting status ---
+- name: Delete the full user profile without waiting
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    wait: false
+  register: full_delete_nowait
+
+- name: Delete the full user profile again, waiting for the deletion
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+    wait: true
+  register: full_delete_wait
+
+- name: Confirm the full user profile is gone
+  amazon.ai.sagemaker_user_profile_info:
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ full_profile_name }}"
+  register: full_delete_info
+
+- name: Assert the full user profile was deleted through the Deleting early exit
+  ansible.builtin.assert:
+    that:
+      - full_delete_nowait is changed
+      - full_delete_nowait.msg == 'Deleted user profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ '.'
+      - full_delete_wait is not changed
+      - full_delete_wait.msg == 'User profile ' ~ full_profile_name ~ ' in domain ' ~ domain_id ~ ' is deleted.'
+      - full_delete_info.user_profiles == []

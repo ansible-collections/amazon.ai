@@ -1,0 +1,49 @@
+---
+iam_role_name: "ansible-test-sagemaker-user-profile-{{ tiny_prefix }}"
+domain_name: "ansible-test-up-domain-{{ tiny_prefix }}"
+domain_wait_timeout: 1800
+security_group_names:
+  - "ansible-test-up-sg1-{{ tiny_prefix }}"
+  - "ansible-test-up-sg2-{{ tiny_prefix }}"
+s3_path_base: "s3://ansible-test-up-{{ tiny_prefix }}"
+
+minimal_profile_name: "minimal-{{ tiny_prefix }}"
+full_profile_name: "full-{{ tiny_prefix }}"
+missing_profile_name: "missing-{{ tiny_prefix }}"
+missing_domain_id: d-ansibletestmissing0
+
+full_jupyter_lab_app_settings:
+  default_resource_spec:
+    instance_type: ml.t3.medium
+  app_lifecycle_management:
+    idle_settings:
+      lifecycle_management: ENABLED
+      idle_timeout_in_minutes: 120
+  code_repositories:
+    - repository_url: https://github.com/ansible-collections/amazon.ai.git
+full_sharing_settings:
+  notebook_output_option: Allowed
+  s3_output_path: "{{ s3_path_base }}/sharing"
+full_space_storage_settings:
+  default_ebs_storage_settings:
+    default_ebs_volume_size_in_gb: 5
+    maximum_ebs_volume_size_in_gb: 10
+full_canvas_app_settings:
+  time_series_forecasting_settings:
+    status: DISABLED
+  workspace_settings:
+    s3_artifact_path: "{{ s3_path_base }}/canvas"
+full_hidden_app_types:
+  - RStudioServerPro
+  - TensorBoard
+full_tags:
+  Environment: integration
+  Profile: full
+
+minimal_tags_initial:
+  Environment: integration
+  Owner: ansible-test
+minimal_tags_added:
+  Team: ai
+minimal_tags_replaced:
+  Environment: integration-updated

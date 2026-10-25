@@ -2,6 +2,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 import time
+from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
@@ -13,7 +14,10 @@ try:
 except ImportError:
     pass
 
+from ansible_collections.amazon.ai.plugins.module_utils.utils import deep_merge
 from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
+from ansible_collections.amazon.ai.plugins.module_utils.utils import rename_keys
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import get_waiter
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
@@ -31,6 +35,17 @@ try:
     import botocore
 except ImportError:
     pass
+
+
+class UserProfileStatus(str, Enum):
+    DELETING = "Deleting"
+    FAILED = "Failed"
+    IN_SERVICE = "InService"
+    PENDING = "Pending"
+    UPDATING = "Updating"
+    UPDATE_FAILED = "Update_Failed"
+    DELETE_FAILED = "Delete_Failed"
+    DELETED = "Deleted"
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -1262,3 +1277,368 @@ def _pipeline_properties_match(
         if actual != expected:
             return False
     return True
+
+
+# The UserSettings members, exposed as top-level module options and sent as UserSettings.
+USER_SETTINGS_OPTIONS = (
+    "execution_role",
+    "security_groups",
+    "sharing_settings",
+    "jupyter_server_app_settings",
+    "kernel_gateway_app_settings",
+    "tensor_board_app_settings",
+    "r_studio_server_pro_app_settings",
+    "r_session_app_settings",
+    "canvas_app_settings",
+    "code_editor_app_settings",
+    "jupyter_lab_app_settings",
+    "space_storage_settings",
+    "default_landing_uri",
+    "studio_web_portal",
+    "custom_posix_user_config",
+    "custom_file_system_configs",
+    "studio_web_portal_settings",
+    "auto_mount_home_efs",
+)
+
+# AWS names that do not survive the implicit snake_case <-> PascalCase conversion.
+USER_SETTINGS_REQUEST_RENAMES = {
+    "AutoMountHomeEfs": "AutoMountHomeEFS",
+    "EfsFileSystemConfig": "EFSFileSystemConfig",
+    "FsxLustreFileSystemConfig": "FSxLustreFileSystemConfig",
+}
+# camel_dict_to_snake_dict already yields auto_mount_home_efs and efs_file_system_config.
+USER_SETTINGS_RESPONSE_RENAMES = {
+    "f_sx_lustre_file_system_config": "fsx_lustre_file_system_config",
+}
+
+
+def build_user_settings(params: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build the PascalCase UserSettings request structure from the top-level, snake_case module options.
+
+    Args:
+        params: Module parameters, or any dict keyed by USER_SETTINGS_OPTIONS names; other keys and
+            None values are dropped.
+
+    Returns:
+        The UserSettings dict for create_user_profile / update_user_profile, empty when no
+        setting is supplied.
+    """
+    user_settings = scrub_none_parameters({option: params.get(option) for option in USER_SETTINGS_OPTIONS})
+    user_settings = snake_dict_to_camel_dict(user_settings, capitalize_first=True)
+    return rename_keys(user_settings, USER_SETTINGS_REQUEST_RENAMES)
+
+
+def format_user_profile(profile: Dict[str, Any], tags: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """
+    Convert a describe_user_profile response into the module's snake_case shape.
+
+    Args:
+        profile: The describe_user_profile response.
+        tags: The profile's tags, attached as 'tags' when given.
+
+    Returns:
+        The formatted profile; each 'user_settings' member has the shape of the module option of the same name.
+    """
+    result = camel_dict_to_snake_dict(profile, ignore_list=["tags", "Tags"])
+    result.pop("response_metadata", None)
+    result = rename_keys(result, USER_SETTINGS_RESPONSE_RENAMES)
+    if tags is not None:
+        result["tags"] = tags
+    return result
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_user_profile(client, domain_id: str, user_profile_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a SageMaker AI user profile.
+
+    Args:
+        client: The boto3 SageMaker client.
+        domain_id: The ID of the domain the profile belongs to.
+        user_profile_name: The name of the user profile.
+
+    Returns:
+        The describe_user_profile response if found, otherwise None.
+    """
+    try:
+        return client.describe_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_user_profiles(
+    client,
+    domain_id: Optional[str] = None,
+    user_profile_name_contains: Optional[str] = None,
+    sort_by: Optional[str] = None,
+    sort_order: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Retrieve SageMaker AI user profile summaries using pagination.
+
+    Args:
+        client: The boto3 SageMaker client.
+        domain_id: Only list profiles in this domain.
+        user_profile_name_contains: Only list profiles whose name contains this string.
+        sort_by: 'CreationTime' or 'LastModifiedTime'.
+        sort_order: 'Ascending' or 'Descending'.
+
+    Returns:
+        A list of user profile summary dictionaries.
+    """
+    params = scrub_none_parameters(
+        {
+            "DomainIdEquals": domain_id,
+            "UserProfileNameContains": user_profile_name_contains,
+            "SortBy": sort_by,
+            "SortOrder": sort_order,
+        }
+    )
+    paginator = client.get_paginator("list_user_profiles")
+    return paginator.paginate(**params).build_full_result()["UserProfiles"]
+
+
+def _user_profile_label(module) -> str:
+    return f"user profile {module.params['user_profile_name']} in domain {module.params['domain_id']}"
+
+
+def wait_for_user_profile_status(client, module, domain_id: str, user_profile_name: str, deleted: bool = False) -> None:
+    """
+    Wait for a SageMaker AI user profile to become InService, or to be deleted.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance (provides wait_timeout).
+        domain_id: The ID of the domain the profile belongs to.
+        user_profile_name: The name of the user profile.
+        deleted: When True, wait for the profile to be deleted; otherwise wait for InService.
+    """
+    wait_timeout = module.params.get("wait_timeout", 600)
+    delay = 15
+    waiter = get_waiter(client, "user_profile_deleted" if deleted else "user_profile_in_service")
+    try:
+        waiter.wait(
+            DomainId=domain_id,
+            UserProfileName=user_profile_name,
+            WaiterConfig={"Delay": delay, "MaxAttempts": max(1, wait_timeout // delay)},
+        )
+    except WaiterError as e:
+        goal = "be deleted" if deleted else "become InService"
+        label = f"user profile {user_profile_name} in domain {domain_id}"
+        profile = describe_user_profile(client, domain_id, user_profile_name)
+        if profile and profile.get("FailureReason"):
+            module.fail_json(
+                msg=(
+                    f"Failed waiting for {label} to {goal}: status {profile.get('Status')}, "
+                    f"reason: {profile['FailureReason']}"
+                )
+            )
+        if "Max attempts exceeded" in str(e):
+            module.fail_json(msg=f"Timed out after {wait_timeout} seconds waiting for {label} to {goal}.")
+        module.fail_json(msg=f"Failed waiting for {label} to {goal}: {e}")
+
+
+def create_user_profile(client, module) -> Tuple[bool, str]:
+    """
+    Create a SageMaker AI user profile from module params, waiting for InService when 'wait' is set.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple (changed, message).
+    """
+    domain_id = module.params["domain_id"]
+    user_profile_name = module.params["user_profile_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created {_user_profile_label(module)}."
+
+    identity = {
+        field: module.params.get(field)
+        for field in (
+            "domain_id",
+            "user_profile_name",
+            "single_sign_on_user_identifier",
+            "single_sign_on_user_value",
+        )
+    }
+    params = snake_dict_to_camel_dict(scrub_none_parameters(identity), capitalize_first=True)
+    user_settings = build_user_settings(module.params)
+    if user_settings:
+        params["UserSettings"] = user_settings
+    if module.params.get("tags"):
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+
+    client.create_user_profile(**params)
+    if module.params.get("wait"):
+        wait_for_user_profile_status(client, module, domain_id, user_profile_name)
+    return True, f"Created {_user_profile_label(module)}."
+
+
+def ensure_user_profile_create_only_unchanged(module, existing: Dict[str, Any]) -> None:
+    """
+    Fail when a create-only option is supplied with a value that differs from the existing profile.
+
+    Args:
+        module: The Ansible module instance.
+        existing: The existing profile, as returned by format_user_profile().
+    """
+    for option in ("single_sign_on_user_identifier", "single_sign_on_user_value"):
+        desired = module.params.get(option)
+        if desired is not None and desired != existing.get(option):
+            module.fail_json(
+                msg=(
+                    f"Option {option} cannot be changed on existing {_user_profile_label(module)} "
+                    f"(current: {existing.get(option)!r}, requested: {desired!r}); "
+                    "changing it requires recreating the user profile."
+                )
+            )
+
+
+def _user_setting_differs(desired: Any, current: Any) -> bool:
+    """
+    Compare a desired user setting with the described one; only the supplied (non-None) parts count.
+
+    Dicts differ when any supplied key differs. Lists of scalars compare as sets; lists of dicts
+    compare order-insensitively, element by element.
+    """
+    if isinstance(desired, dict):
+        current_dict = current if isinstance(current, dict) else {}
+        return any(_user_setting_differs(value, current_dict.get(key)) for key, value in desired.items())
+    if isinstance(desired, list):
+        current_items = current if isinstance(current, list) else []
+        if not any(isinstance(item, dict) for item in desired + current_items):
+            return set(desired) != set(current_items)
+        if len(desired) != len(current_items):
+            return True
+        unmatched = list(current_items)
+        for item in desired:
+            index = next(
+                (i for i, candidate in enumerate(unmatched) if not _user_setting_differs(item, candidate)), None
+            )
+            if index is None:
+                return True
+            unmatched.pop(index)
+        return False
+    return desired != current
+
+
+def user_settings_to_update(module, existing: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Work out which top-level UserSettings members differ from the existing profile.
+
+    Only the UserSettings options the user supplied are compared; a None option or suboption is unmanaged.
+
+    Args:
+        module: The Ansible module instance.
+        existing: The existing profile, as returned by format_user_profile().
+
+    Returns:
+        A snake_case map of the differing members, each dict member deep-merged over the
+        described one so that unspecified siblings are preserved. Empty when nothing differs.
+    """
+    desired_settings = scrub_none_parameters({option: module.params.get(option) for option in USER_SETTINGS_OPTIONS})
+    current_settings = existing.get("user_settings") or {}
+    settings_to_update = {}
+    for option, desired in desired_settings.items():
+        current = current_settings.get(option)
+        if not _user_setting_differs(desired, current):
+            continue
+        if isinstance(desired, dict) and isinstance(current, dict):
+            settings_to_update[option] = deep_merge(current, desired)
+        else:
+            settings_to_update[option] = desired
+    return settings_to_update
+
+
+def update_user_profile(client, module, settings_to_update: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Update the UserSettings of a SageMaker AI user profile, waiting for InService when 'wait' is set.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        settings_to_update: The differing members, as returned by user_settings_to_update().
+
+    Returns:
+        A tuple (changed, message).
+    """
+    domain_id = module.params["domain_id"]
+    user_profile_name = module.params["user_profile_name"]
+    if not settings_to_update:
+        return False, f"The settings of {_user_profile_label(module)} are already in the desired state."
+    if module.check_mode:
+        return True, f"Check mode: would have updated {_user_profile_label(module)}."
+
+    client.update_user_profile(
+        DomainId=domain_id,
+        UserProfileName=user_profile_name,
+        UserSettings=build_user_settings(settings_to_update),
+    )
+    if module.params.get("wait"):
+        wait_for_user_profile_status(client, module, domain_id, user_profile_name)
+    return True, f"Updated {_user_profile_label(module)}."
+
+
+def reconcile_user_profile_tags(client, module, user_profile_arn: str) -> bool:
+    """
+    Reconcile SageMaker AI user profile tags in place, honouring purge_tags.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        user_profile_arn: The ARN of the user profile.
+
+    Returns:
+        True if tags were (or would be, in check mode) changed.
+    """
+    if module.params.get("tags") is None:
+        return False
+    current_tags = list_tags(client, user_profile_arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(ResourceArn=user_profile_arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=user_profile_arn, TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
+
+
+def delete_user_profile(client, module) -> Tuple[bool, str]:
+    """
+    Delete a SageMaker AI user profile, waiting for the deletion when 'wait' is set.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple (changed, message).
+    """
+    domain_id = module.params["domain_id"]
+    user_profile_name = module.params["user_profile_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted {_user_profile_label(module)}."
+
+    try:
+        client.delete_user_profile(DomainId=domain_id, UserProfileName=user_profile_name)
+    except is_boto3_error_code("ResourceInUse") as e:
+        module.fail_json_aws(
+            e,
+            msg=(
+                f"Failed to delete {_user_profile_label(module)}. "
+                "Delete all apps and spaces owned by the user profile first."
+            ),
+        )
+    if module.params.get("wait"):
+        wait_for_user_profile_status(client, module, domain_id, user_profile_name, deleted=True)
+    return True, f"Deleted {_user_profile_label(module)}."
