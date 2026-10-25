@@ -1,0 +1,72 @@
+---
+- name: Create the IAM role used by the domain and the user profiles
+  amazon.aws.iam_role:
+    name: "{{ iam_role_name }}"
+    assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker.json') }}"
+    managed_policies:
+      - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+    state: present
+  register: role
+
+- name: Wait for the IAM role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+
+- name: Look up the default VPC
+  amazon.aws.ec2_vpc_net_info:
+    filters:
+      is-default: true
+  register: default_vpc
+
+- name: Assert a default VPC exists
+  ansible.builtin.assert:
+    that:
+      - default_vpc.vpcs | length == 1
+
+- name: Look up the default VPC's default subnets
+  amazon.aws.ec2_vpc_subnet_info:
+    filters:
+      vpc-id: "{{ default_vpc.vpcs[0].id }}"
+      default-for-az: true
+  register: default_subnets
+
+- name: Create two security groups in the default VPC for the full profile
+  amazon.aws.ec2_security_group:
+    name: "{{ item }}"
+    description: SageMaker user profile integration test
+    vpc_id: "{{ default_vpc.vpcs[0].id }}"
+  loop: "{{ security_group_names }}"
+  register: security_groups
+
+- name: Record the network and role facts
+  ansible.builtin.set_fact:
+    role_arn: "{{ role.iam_role.arn }}"
+    subnet_ids: "{{ default_subnets.subnets | map(attribute='id') | list }}"
+    security_group_ids: "{{ security_groups.results | map(attribute='group_id') | list }}"
+
+- name: Create the SageMaker domain
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ domain_name }}"
+    auth_mode: IAM
+    app_network_access_type: PublicInternetOnly
+    vpc_id: "{{ default_vpc.vpcs[0].id }}"
+    subnet_ids: "{{ subnet_ids }}"
+    home_efs_file_system_creation: Enabled
+    default_user_settings:
+      execution_role: "{{ role_arn }}"
+    wait_timeout: "{{ domain_wait_timeout }}"
+
+- name: Look up the SageMaker domain
+  amazon.ai.sagemaker_domain_info:
+    domain_name: "{{ domain_name }}"
+  register: domain_info
+
+- name: Assert the domain is InService
+  ansible.builtin.assert:
+    that:
+      - domain_info.domains | length == 1
+      - domain_info.domains[0].status == 'InService'
+
+- name: Record the domain ID
+  ansible.builtin.set_fact:
+    domain_id: "{{ domain_info.domains[0].domain_id }}"
