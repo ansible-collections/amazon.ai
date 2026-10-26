@@ -148,8 +148,10 @@ options:
         type: str
     skip_model_validation:
         description:
-            - Whether to skip model validation.
-        type: bool
+            - Which model validation checks to skip.
+            - Set to V(All) to skip all checks or V(None) to run all checks.
+        type: str
+        choices: [All, None]
     drift_check_baselines:
         description:
             - Drift check baseline configuration for the package.
@@ -231,6 +233,9 @@ notes:
     - sagemaker:AddTags
     - sagemaker:ListTags
     - sagemaker:DeleteTags
+    - >-
+      ecr:BatchGetImage, when an O(inference_specification) or O(additional_inference_specifications) container
+      references an image in Amazon ECR. SageMaker checks that the caller can pull the image when the package is created.
 seealso:
     - module: amazon.ai.sagemaker_model_package_info
       description: Retrieve details for a single model package or list matching packages.
@@ -527,7 +532,7 @@ def main() -> None:
         domain=dict(type="str"),
         task=dict(type="str"),
         sample_payload_url=dict(type="str"),
-        skip_model_validation=dict(type="bool"),
+        skip_model_validation=dict(type="str", choices=["All", "None"]),
         drift_check_baselines=dict(type="dict"),
         security_config=dict(type="dict"),
         source_uri=dict(type="str"),

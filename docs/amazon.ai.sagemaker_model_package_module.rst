@@ -577,17 +577,18 @@ Parameters
                     <b>skip_model_validation</b>
                     <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
                     <div style="font-size: small">
-                        <span style="color: purple">boolean</span>
+                        <span style="color: purple">string</span>
                     </div>
                 </td>
                 <td>
                         <ul style="margin: 0; padding: 0"><b>Choices:</b>
-                                    <li>no</li>
-                                    <li>yes</li>
+                                    <li>All</li>
+                                    <li>None</li>
                         </ul>
                 </td>
                 <td>
-                        <div>Whether to skip model validation.</div>
+                        <div>Which model validation checks to skip.</div>
+                        <div>Set to V(All) to skip all checks or V(None) to run all checks.</div>
                 </td>
             </tr>
             <tr>
@@ -763,6 +764,7 @@ Notes
    - sagemaker:AddTags
    - sagemaker:ListTags
    - sagemaker:DeleteTags
+   - ecr:BatchGetImage, when an O(inference_specification) or O(additional_inference_specifications) container references an image in Amazon ECR. SageMaker checks that the caller can pull the image when the package is created.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 

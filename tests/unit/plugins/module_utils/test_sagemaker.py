@@ -278,6 +278,7 @@ def test_build_model_package_params_allows_group_name_without_package_name():
     module.params = {
         "model_package_group_name": "demo-group",
         "model_package_description": "demo description",
+        "skip_model_validation": "All",
         "inference_specification": {
             "containers": [{"image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/demo:latest"}],
             "supported_response_mime_types": ["application/json"],
@@ -288,6 +289,7 @@ def test_build_model_package_params_allows_group_name_without_package_name():
 
     assert result["ModelPackageGroupName"] == "demo-group"
     assert "ModelPackageName" not in result
+    assert result["SkipModelValidation"] == "All"
     assert result["InferenceSpecification"]["SupportedResponseMIMETypes"] == ["application/json"]
 
 
