@@ -65,6 +65,44 @@ image_version_data = {
     },
 }
 
+space_data = {
+    "version": 2,
+    "waiters": {
+        "SpaceInService": {
+            "description": "Wait until a SageMaker Space is in service",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeSpace",
+            "acceptors": [
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "InService",
+                    "state": "success",
+                },
+                {"matcher": "path", "argument": "Status", "expected": "Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Update_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Delete_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleting", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleted", "state": "failure"},
+            ],
+        },
+        "SpaceDeleted": {
+            "description": "Wait until a SageMaker Space is deleted",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeSpace",
+            "acceptors": [
+                {"matcher": "error", "expected": "ResourceNotFound", "state": "success"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleted", "state": "success"},
+                {"matcher": "path", "argument": "Status", "expected": "Delete_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Update_Failed", "state": "failure"},
+            ],
+        },
+    },
+}
+
 
 def model_package_group_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=model_package_group_data).get_waiter(name)
@@ -72,6 +110,10 @@ def model_package_group_model(name: str) -> Any:
 
 def image_version_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=image_version_data).get_waiter(name)
+
+
+def space_model(name: str) -> Any:
+    return core_waiter.WaiterModel(waiter_config=space_data).get_waiter(name)
 
 
 waiters_by_name = {
@@ -90,6 +132,22 @@ waiters_by_name = {
         "image_version_deleted",
         image_version_model("ImageVersionDeleted"),
         core_waiter.NormalizedOperationMethod(sagemaker.describe_image_version),
+    ),
+    (
+        "SageMaker",
+        "space_in_service",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "space_in_service",
+        space_model("SpaceInService"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_space),
+    ),
+    (
+        "SageMaker",
+        "space_deleted",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "space_deleted",
+        space_model("SpaceDeleted"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_space),
     ),
 }
 

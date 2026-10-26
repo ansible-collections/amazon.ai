@@ -94,6 +94,8 @@ Name | Description
 [amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
 [amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
 [amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
+[amazon.ai.sagemaker_space](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_module.rst)|Manage Amazon SageMaker AI Spaces
+[amazon.ai.sagemaker_space_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_info_module.rst)|Gather information about SageMaker AI Spaces
 
 <!--end collection content-->
 
@@ -242,4 +244,3 @@ See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/C
 GNU General Public License v3.0 or later.
 
 See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
-

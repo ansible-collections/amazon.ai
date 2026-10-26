@@ -12,6 +12,7 @@ from unittest.mock import patch
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import DomainStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_domain_params
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_replacement_space_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_domain
@@ -24,11 +25,14 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_do
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_spaces
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_domain_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_domain
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_replacement
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_domain_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
@@ -658,6 +662,102 @@ def test_describe_endpoint_config_reraises_other_validation_errors():
 
     with pytest.raises(ClientError):
         describe_endpoint_config(client, "bad-config")
+
+
+def _space_module(params):
+    module = MagicMock()
+    module.params = params
+    return module
+
+
+def test_list_spaces_applies_max_items_and_forwards_filters():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {"Spaces": [{"SpaceName": "space-a"}]}
+
+    result = list_spaces(client, max_items=1, DomainIdEquals="domain-a")
+
+    paginator.paginate.assert_called_once_with(
+        DomainIdEquals="domain-a",
+        PaginationConfig={"MaxItems": 1},
+    )
+    assert result == [{"SpaceName": "space-a"}]
+
+
+def test_space_needs_replacement_detects_ownership_settings_change():
+    module = _space_module({"ownership_settings": {"owner_user_profile_name": "profile-b"}})
+    existing = {"OwnershipSettings": {"OwnerUserProfileName": "profile-a"}}
+
+    assert space_needs_replacement(existing, module)
+
+
+def test_space_needs_replacement_detects_app_type_change():
+    module = _space_module({"space_settings": {"app_type": "JupyterLab"}})
+    existing = {"SpaceSettings": {"AppType": "CodeEditor"}}
+
+    assert space_needs_replacement(existing, module)
+
+
+def test_space_needs_replacement_ignores_omitted_immutable_settings():
+    module = _space_module({})
+    existing = {
+        "OwnershipSettings": {"OwnerUserProfileName": "profile-a"},
+        "SpaceSharingSettings": {"SharingType": "Private"},
+        "SpaceSettings": {"AppType": "JupyterLab"},
+    }
+
+    assert not space_needs_replacement(existing, module)
+
+
+def test_space_needs_update_detects_mutable_space_changes():
+    module = _space_module(
+        {
+            "space_display_name": "Updated",
+            "space_settings": {"remote_access": "ENABLED"},
+        }
+    )
+    existing = {
+        "SpaceDisplayName": "Existing",
+        "SpaceSettings": {"AppType": "JupyterLab", "RemoteAccess": "DISABLED"},
+    }
+
+    assert space_needs_update(existing, module)
+
+
+def test_space_needs_update_ignores_immutable_app_type():
+    module = _space_module({"space_settings": {"app_type": "CodeEditor"}})
+    existing = {"SpaceSettings": {"AppType": "JupyterLab"}}
+
+    assert not space_needs_update(existing, module)
+
+
+def test_build_replacement_space_params_preserves_unspecified_existing_settings():
+    module = _space_module({"space_settings": {"app_type": "JupyterLab"}})
+    existing = {
+        "OwnershipSettings": {"OwnerUserProfileName": "profile-a"},
+        "SpaceSharingSettings": {"SharingType": "Private"},
+        "SpaceDisplayName": "Existing",
+        "SpaceSettings": {
+            "AppType": "CodeEditor",
+            "RemoteAccess": "ENABLED",
+        },
+    }
+
+    params = _build_replacement_space_params(module, existing)
+
+    assert params["OwnershipSettings"] == {"OwnerUserProfileName": "profile-a"}
+    assert params["SpaceSharingSettings"] == {"SharingType": "Private"}
+    assert params["SpaceDisplayName"] == "Existing"
+    assert params["SpaceSettings"] == {"AppType": "JupyterLab", "RemoteAccess": "ENABLED"}
+
+
+def test_build_replacement_space_params_omits_missing_existing_settings():
+    module = _space_module({"space_settings": {"app_type": "JupyterLab"}})
+    existing = {"SpaceSettings": {"AppType": "CodeEditor"}}
+
+    params = _build_replacement_space_params(module, existing)
+
+    assert params == {"SpaceSettings": {"AppType": "JupyterLab"}}
 
 
 def test_reconcile_endpoint_config_tags_check_mode_does_not_modify_tags():

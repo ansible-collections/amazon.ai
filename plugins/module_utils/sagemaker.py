@@ -45,6 +45,17 @@ class DomainStatus(str, Enum):
     DELETED = "Deleted"
 
 
+class SpaceStatus(str, Enum):
+    DELETING = "Deleting"
+    DELETE_FAILED = "Delete_Failed"
+    FAILED = "Failed"
+    IN_SERVICE = "InService"
+    PENDING = "Pending"
+    UPDATE_FAILED = "Update_Failed"
+    UPDATING = "Updating"
+    DELETED = "Deleted"
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def list_tags(client, resource_arn: str) -> Dict[str, str]:
     paginator = client.get_paginator("list_tags")
@@ -69,6 +80,24 @@ def list_domains(client, **params: Any) -> List[Dict[str, Any]]:
         params["PaginationConfig"] = {"MaxItems": max_results}
     paginator = client.get_paginator("list_domains")
     return paginator.paginate(**params).build_full_result()["Domains"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_space(client, domain_id: str, space_name: str) -> Optional[Dict[str, Any]]:
+    """Retrieve details for a SageMaker Space, or None if it does not exist."""
+    try:
+        return client.describe_space(DomainId=domain_id, SpaceName=space_name)
+    except is_boto3_error_code("ResourceNotFound"):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_spaces(client, max_items: Optional[int] = None, **params: Any) -> List[Dict[str, Any]]:
+    """Retrieve SageMaker Spaces using the service paginator."""
+    paginator = client.get_paginator("list_spaces")
+    if max_items is not None:
+        params["PaginationConfig"] = {"MaxItems": max_items}
+    return paginator.paginate(**params).build_full_result()["Spaces"]
 
 
 def get_domain_by_name(client, domain_name: str) -> Optional[Dict[str, Any]]:
@@ -334,6 +363,188 @@ def reconcile_domain_tags(client, module, existing: Dict[str, Any]) -> bool:
         return False
 
     resource_arn = existing["DomainArn"]
+    current_tags = list_tags(client, resource_arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        current_tags,
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if not tags_to_add and not tags_to_remove:
+        return False
+    if module.check_mode:
+        return True
+
+    if tags_to_add:
+        client.add_tags(ResourceArn=resource_arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=resource_arn, TagKeys=tags_to_remove)
+    return True
+
+
+def _build_space_params(module) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        field: module.params.get(field)
+        for field in (
+            "domain_id",
+            "space_name",
+            "ownership_settings",
+            "space_display_name",
+            "space_settings",
+            "space_sharing_settings",
+        )
+    }
+    space_params = snake_dict_to_camel_dict(scrub_none_parameters(params), capitalize_first=True)
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if tags is not None:
+        space_params["Tags"] = ansible_dict_to_boto3_tag_list(tags)
+    return space_params
+
+
+def space_needs_replacement(existing: Dict[str, Any], module) -> bool:
+    """Return whether requested immutable Space settings differ."""
+    desired = _build_space_params(module)
+    for field in ("OwnershipSettings", "SpaceSharingSettings"):
+        if field in desired and desired[field] != existing.get(field):
+            return True
+
+    desired_settings = desired.get("SpaceSettings") or {}
+    existing_settings = existing.get("SpaceSettings") or {}
+    return "AppType" in desired_settings and desired_settings["AppType"] != existing_settings.get("AppType")
+
+
+def space_needs_update(existing: Dict[str, Any], module) -> bool:
+    """Return whether requested mutable Space settings differ."""
+    desired = _build_space_params(module)
+    if "SpaceDisplayName" in desired and desired["SpaceDisplayName"] != existing.get("SpaceDisplayName"):
+        return True
+
+    desired_settings = desired.get("SpaceSettings") or {}
+    existing_settings = existing.get("SpaceSettings") or {}
+    return any(value != existing_settings.get(key) for key, value in desired_settings.items() if key != "AppType")
+
+
+def _build_replacement_space_params(module, existing: Dict[str, Any]) -> Dict[str, Any]:
+    params = _build_space_params(module)
+    for field in ("OwnershipSettings", "SpaceSharingSettings", "SpaceDisplayName"):
+        if field not in params and existing.get(field) is not None:
+            params[field] = existing[field]
+    existing_settings = dict(existing.get("SpaceSettings") or {})
+    existing_settings.update(params.get("SpaceSettings") or {})
+    if existing_settings:
+        params["SpaceSettings"] = existing_settings
+    return params
+
+
+def wait_for_space_status(client, module, domain_id: str, space_name: str, status: SpaceStatus) -> None:
+    """Wait for a Space lifecycle status using a custom botocore waiter."""
+    from ansible_collections.amazon.ai.plugins.module_utils.waiters import get_waiter
+
+    waiter_name = "space_deleted" if status == SpaceStatus.DELETED else "space_in_service"
+    waiter = get_waiter(client, waiter_name)
+    delay = 15
+    max_attempts = max(1, module.params.get("wait_timeout", 600) // delay)
+    try:
+        waiter.wait(
+            DomainId=domain_id,
+            SpaceName=space_name,
+            WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
+        )
+    except WaiterError as e:
+        response = e.last_response
+        last_status = response.get("Status") if isinstance(response, dict) else None
+        if last_status in (
+            SpaceStatus.DELETING.value,
+            SpaceStatus.FAILED.value,
+            SpaceStatus.UPDATE_FAILED.value,
+            SpaceStatus.DELETE_FAILED.value,
+            SpaceStatus.DELETED.value,
+        ):
+            module.fail_json(msg=f"Space {space_name} entered terminal status {last_status} while waiting.")
+        module.fail_json(
+            msg=f"Timeout waiting for Space {space_name} to reach "
+            f"{'absence' if status == SpaceStatus.DELETED else status.value}."
+        )
+
+
+def create_space(
+    client,
+    module,
+    params: Optional[Dict[str, Any]] = None,
+    wait_for_completion: Optional[bool] = None,
+) -> Tuple[bool, str]:
+    """Create a SageMaker Space."""
+    space_name = module.params["space_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created Space {space_name}."
+
+    client.create_space(**(params if params is not None else _build_space_params(module)))
+    if wait_for_completion is None:
+        wait_for_completion = module.params.get("wait", True)
+    if wait_for_completion:
+        wait_for_space_status(
+            client,
+            module,
+            module.params["domain_id"],
+            space_name,
+            SpaceStatus.IN_SERVICE,
+        )
+    return True, f"Space {space_name} created successfully."
+
+
+def update_space(client, module) -> Tuple[bool, str]:
+    """Update mutable SageMaker Space settings."""
+    space_name = module.params["space_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have updated Space {space_name}."
+
+    params = _build_space_params(module)
+    update_params = {key: value for key, value in params.items() if key in ("SpaceDisplayName", "SpaceSettings")}
+    update_params["DomainId"] = module.params["domain_id"]
+    update_params["SpaceName"] = space_name
+    client.update_space(**update_params)
+    if module.params.get("wait", True):
+        wait_for_space_status(
+            client,
+            module,
+            module.params["domain_id"],
+            space_name,
+            SpaceStatus.IN_SERVICE,
+        )
+    return True, f"Space {space_name} updated successfully."
+
+
+def delete_space(
+    client,
+    module,
+    domain_id: str,
+    space_name: str,
+    wait_for_completion: Optional[bool] = None,
+) -> Tuple[bool, str]:
+    """Delete a SageMaker Space and optionally wait until it is absent."""
+    if module.check_mode:
+        return True, f"Check mode: would have deleted Space {space_name}."
+
+    try:
+        client.delete_space(DomainId=domain_id, SpaceName=space_name)
+    except is_boto3_error_code("ResourceNotFound"):
+        return False, f"Space {space_name} does not exist."
+    except is_boto3_error_code("ResourceInUse") as e:
+        module.fail_json(
+            msg=f"Cannot delete Space {space_name} while it is in use. Stop dependent apps and retry. AWS error: {e}"
+        )
+    if wait_for_completion is None:
+        wait_for_completion = module.params.get("wait", True)
+    if wait_for_completion:
+        wait_for_space_status(client, module, domain_id, space_name, SpaceStatus.DELETED)
+    return True, f"Space {space_name} deleted successfully."
+
+
+def reconcile_space_tags(client, module, existing: Dict[str, Any]) -> bool:
+    """Reconcile SageMaker Space tags, honoring purge_tags and check mode."""
+    if module.params.get("tags") is None:
+        return False
+
+    resource_arn = existing["SpaceArn"]
     current_tags = list_tags(client, resource_arn)
     tags_to_add, tags_to_remove = compare_aws_tags(
         current_tags,
