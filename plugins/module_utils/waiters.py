@@ -65,6 +65,44 @@ image_version_data = {
     },
 }
 
+space_data = {
+    "version": 2,
+    "waiters": {
+        "SpaceInService": {
+            "description": "Wait until a SageMaker Space is in service",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeSpace",
+            "acceptors": [
+                {
+                    "matcher": "path",
+                    "argument": "Status",
+                    "expected": "InService",
+                    "state": "success",
+                },
+                {"matcher": "path", "argument": "Status", "expected": "Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Update_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Delete_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleting", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleted", "state": "failure"},
+            ],
+        },
+        "SpaceDeleted": {
+            "description": "Wait until a SageMaker Space is deleted",
+            "delay": 15,
+            "maxAttempts": 40,
+            "operation": "DescribeSpace",
+            "acceptors": [
+                {"matcher": "error", "expected": "ResourceNotFound", "state": "success"},
+                {"matcher": "path", "argument": "Status", "expected": "Deleted", "state": "success"},
+                {"matcher": "path", "argument": "Status", "expected": "Delete_Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Failed", "state": "failure"},
+                {"matcher": "path", "argument": "Status", "expected": "Update_Failed", "state": "failure"},
+            ],
+        },
+    },
+}
+
 
 # botocore ships no user-profile waiters. DescribeUserProfile raises ResourceNotFound once the
 # profile is gone.
@@ -137,6 +175,10 @@ def user_profile_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=user_profile_data).get_waiter(name)
 
 
+def space_model(name: str) -> Any:
+    return core_waiter.WaiterModel(waiter_config=space_data).get_waiter(name)
+
+
 waiters_by_name = {
     (
         "SageMaker",
@@ -169,6 +211,22 @@ waiters_by_name = {
         "user_profile_deleted",
         user_profile_model("UserProfileDeleted"),
         core_waiter.NormalizedOperationMethod(sagemaker.describe_user_profile),
+    ),
+    (
+        "SageMaker",
+        "space_in_service",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "space_in_service",
+        space_model("SpaceInService"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_space),
+    ),
+    (
+        "SageMaker",
+        "space_deleted",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "space_deleted",
+        space_model("SpaceDeleted"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_space),
     ),
 }
 

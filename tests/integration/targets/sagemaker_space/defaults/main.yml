@@ -1,0 +1,10 @@
+---
+space_test_id: "{{ tiny_prefix }}"
+space_domain_name: "ansible-test-space-domain-{{ space_test_id }}"
+space_name: "ansible-test-space-{{ space_test_id }}"
+space_user_profile_name: "ansible-test-space-user-{{ space_test_id }}"
+space_user_profile_stack_name: "ansible-test-space-profile-{{ space_test_id }}"
+space_role_name: "ansible-test-space-role-{{ space_test_id }}"
+space_vpc_name: "ansible-test-space-vpc-{{ space_test_id }}"
+space_security_group_name: "ansible-test-space-sg-{{ space_test_id }}"
+space_subnet_cidr: 10.101.1.0/24

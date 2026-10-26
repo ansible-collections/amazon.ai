@@ -34,7 +34,7 @@
 
     - name: Wait for VPC to propagate
       ansible.builtin.pause:
-        seconds: 15
+        seconds: 25
 
     - name: Create subnet
       amazon.aws.ec2_vpc_subnet:
@@ -45,7 +45,7 @@
 
     - name: Wait for subnet to propagate
       ansible.builtin.pause:
-        seconds: 15
+        seconds: 25
 
     - name: example using security group rule descriptions
       amazon.aws.ec2_security_group:
