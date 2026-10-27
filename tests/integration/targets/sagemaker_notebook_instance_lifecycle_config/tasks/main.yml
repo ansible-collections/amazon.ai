@@ -1,0 +1,372 @@
+---
+- name: SageMaker Notebook Instance Lifecycle Config integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Check-mode create lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_create: "{{ lifecycle_config_on_create }}"
+        on_start: "{{ lifecycle_config_on_start }}"
+        tags:
+          project: demo
+          target: primary
+      check_mode: true
+      register: create_check
+
+    - name: Assert check-mode create and absent info lookup
+      ansible.builtin.assert:
+        that:
+          - create_check.changed
+          - "'Check mode: would have created ' in create_check.msg"
+
+    - name: Confirm check-mode create did not create the lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: create_check_info
+
+    - name: Assert check-mode resource remains absent
+      ansible.builtin.assert:
+        that:
+          - create_check_info.notebook_instance_lifecycle_configs == []
+
+    - name: Create lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_create: "{{ lifecycle_config_on_create }}"
+        on_start: "{{ lifecycle_config_on_start }}"
+        tags:
+          project: demo
+          target: primary
+      register: create_first
+
+    - name: Assert lifecycle configuration creation and returned state
+      ansible.builtin.assert:
+        that:
+          - create_first.changed
+          - "'created successfully' in create_first.msg"
+          - "'arn:' in create_first.notebook_instance_lifecycle_config.notebook_instance_lifecycle_config_arn"
+          - create_first.notebook_instance_lifecycle_config.on_create == lifecycle_config_on_create
+          - create_first.notebook_instance_lifecycle_config.on_start == lifecycle_config_on_start
+
+    - name: Confirm create through the info module
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        tags:
+          project: demo
+      register: created_info
+
+    - name: Assert info returns scripts and tags
+      ansible.builtin.assert:
+        that:
+          - created_info.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - created_info.notebook_instance_lifecycle_configs[0].on_create == lifecycle_config_on_create
+          - created_info.notebook_instance_lifecycle_configs[0].on_start == lifecycle_config_on_start
+          - created_info.notebook_instance_lifecycle_configs[0].tags.project == 'demo'
+          - created_info.notebook_instance_lifecycle_configs[0].tags.target == 'primary'
+
+    - name: Re-run create without changes
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_create: "{{ lifecycle_config_on_create }}"
+        on_start: "{{ lifecycle_config_on_start }}"
+        tags:
+          project: demo
+          target: primary
+      register: create_second
+
+    - name: Assert create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not create_second.changed
+          - "'up to date' in create_second.msg"
+
+    - name: Check-mode update lifecycle start script
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_create: "{{ lifecycle_config_on_create }}"
+        on_start: "{{ lifecycle_config_on_start_updated }}"
+      check_mode: true
+      register: update_check
+
+    - name: Assert check-mode update reports a change
+      ansible.builtin.assert:
+        that:
+          - update_check.changed
+          - "'Check mode: would have updated ' in update_check.msg"
+
+    - name: Confirm check-mode update did not mutate the start script
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: update_check_info
+
+    - name: Assert check-mode update preserved the original script
+      ansible.builtin.assert:
+        that:
+          - update_check_info.notebook_instance_lifecycle_configs[0].on_start == lifecycle_config_on_start
+
+    - name: Update lifecycle start script
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_create: "{{ lifecycle_config_on_create }}"
+        on_start: "{{ lifecycle_config_on_start_updated }}"
+      register: update_first
+
+    - name: Query lifecycle configuration after update
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: updated_info
+
+    - name: Assert update is in place and preserves the create script
+      ansible.builtin.assert:
+        that:
+          - update_first.changed
+          - >-
+            updated_info.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_arn ==
+            create_first.notebook_instance_lifecycle_config.notebook_instance_lifecycle_config_arn
+          - updated_info.notebook_instance_lifecycle_configs[0].on_start == lifecycle_config_on_start_updated
+          - updated_info.notebook_instance_lifecycle_configs[0].on_create == lifecycle_config_on_create
+          - updated_info.notebook_instance_lifecycle_configs[0].tags.project == 'demo'
+
+    - name: Re-run start script update without changes
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        on_start: "{{ lifecycle_config_on_start_updated }}"
+      register: update_second
+
+    - name: Assert script update is idempotent
+      ansible.builtin.assert:
+        that:
+          - not update_second.changed
+
+    - name: Add tag drift without purging existing tags
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        tags:
+          project: demo
+          target: primary
+          unexpected: remove-me
+        purge_tags: false
+
+    - name: Check-mode purge of tag drift
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        tags:
+          project: demo
+          target: primary
+        purge_tags: true
+      check_mode: true
+      register: tags_check
+
+    - name: Assert check-mode tag purge reports a change
+      ansible.builtin.assert:
+        that:
+          - tags_check.changed
+          - "'Check mode: would have updated ' in tags_check.msg"
+
+    - name: Purge tag drift
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        tags:
+          project: demo
+          target: primary
+        purge_tags: true
+      register: tags_first
+
+    - name: Assert tags were reconciled
+      ansible.builtin.assert:
+        that:
+          - tags_first.changed
+          - tags_first.notebook_instance_lifecycle_config.tags.keys() | list | length == 2
+          - tags_first.notebook_instance_lifecycle_config.tags.project == 'demo'
+          - tags_first.notebook_instance_lifecycle_config.tags.target == 'primary'
+
+    - name: Re-run tag reconciliation without changes
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+        tags:
+          project: demo
+          target: primary
+        purge_tags: true
+      register: tags_second
+
+    - name: Assert tag reconciliation is idempotent
+      ansible.builtin.assert:
+        that:
+          - not tags_second.changed
+
+    - name: List the primary lifecycle configuration by name
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "{{ lifecycle_config_name }}"
+      register: primary_list
+
+    - name: Assert list mode returns summary fields only
+      ansible.builtin.assert:
+        that:
+          - primary_list.notebook_instance_lifecycle_configs | length == 1
+          - primary_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - >-
+            primary_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_arn ==
+            create_first.notebook_instance_lifecycle_config.notebook_instance_lifecycle_config_arn
+          - primary_list.notebook_instance_lifecycle_configs[0].creation_time is defined
+          - primary_list.notebook_instance_lifecycle_configs[0].last_modified_time is defined
+          - "'on_create' not in primary_list.notebook_instance_lifecycle_configs[0]"
+          - "'on_start' not in primary_list.notebook_instance_lifecycle_configs[0]"
+          - "'tags' not in primary_list.notebook_instance_lifecycle_configs[0]"
+
+    - name: Create a second lifecycle configuration for sorting
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_second_name }}"
+        on_start: "{{ lifecycle_config_on_start }}"
+
+    - name: List both lifecycle configurations in ascending name order
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Ascending
+      register: sorted_ascending
+
+    - name: List both lifecycle configurations in descending name order
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Descending
+      register: sorted_descending
+
+    - name: Assert both list sorting directions
+      ansible.builtin.assert:
+        that:
+          - >-
+            sorted_ascending.notebook_instance_lifecycle_configs
+            | map(attribute='notebook_instance_lifecycle_config_name') | list
+            == [lifecycle_config_name, lifecycle_config_second_name]
+          - >-
+            sorted_descending.notebook_instance_lifecycle_configs
+            | map(attribute='notebook_instance_lifecycle_config_name') | list
+            == [lifecycle_config_second_name, lifecycle_config_name]
+
+    - name: Filter lifecycle configurations by tags
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        tags:
+          target: primary
+      register: tagged_list
+
+    - name: Assert tag filter returns only the primary configuration
+      ansible.builtin.assert:
+        that:
+          - tagged_list.notebook_instance_lifecycle_configs | length == 1
+          - tagged_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - tagged_list.notebook_instance_lifecycle_configs[0].tags.target == 'primary'
+
+    - name: Limit the listing with max_items
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Descending
+        max_items: 1
+      register: limited_list
+
+    - name: Limit a tag-filtered listing whose first candidate does not match
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        name_contains: "sagemaker-lifecycle-{{ test_id }}-"
+        sort_by: Name
+        sort_order: Descending
+        max_items: 1
+        tags:
+          target: primary
+      register: limited_tagged_list
+
+    - name: Reject a non-positive max_items
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        max_items: 0
+      register: invalid_max_items
+      ignore_errors: true
+
+    - name: Assert max_items caps the returned matches
+      ansible.builtin.assert:
+        that:
+          - limited_list.notebook_instance_lifecycle_configs | length == 1
+          - limited_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_second_name
+          - limited_tagged_list.notebook_instance_lifecycle_configs | length == 1
+          - limited_tagged_list.notebook_instance_lifecycle_configs[0].notebook_instance_lifecycle_config_name == lifecycle_config_name
+          - invalid_max_items is failed
+          - "'max_items must be a positive integer' in invalid_max_items.msg"
+
+    - name: Look up a lifecycle configuration that does not exist
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "sagemaker-lifecycle-{{ test_id }}-missing"
+      register: missing_info
+
+    - name: Assert missing lookup is non-fatal
+      ansible.builtin.assert:
+        that:
+          - missing_info.notebook_instance_lifecycle_configs == []
+
+    - name: Check-mode delete lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        state: absent
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      check_mode: true
+      register: delete_check
+
+    - name: Assert check-mode delete reports a change
+      ansible.builtin.assert:
+        that:
+          - delete_check.changed
+          - "'Check mode: would have deleted ' in delete_check.msg"
+
+    - name: Delete lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        state: absent
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: delete_first
+
+    - name: Assert lifecycle configuration was deleted
+      ansible.builtin.assert:
+        that:
+          - delete_first.changed
+          - "'deleted successfully' in delete_first.msg"
+
+    - name: Confirm deleted lifecycle configuration is absent
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config_info:
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: deleted_info
+
+    - name: Assert deleted resource lookup is empty
+      ansible.builtin.assert:
+        that:
+          - deleted_info.notebook_instance_lifecycle_configs == []
+
+    - name: Re-run delete for the already absent lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        state: absent
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      register: delete_second
+
+    - name: Assert delete is idempotent
+      ansible.builtin.assert:
+        that:
+          - not delete_second.changed
+
+  always:
+    - name: Ensure cleanup of the primary lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        state: absent
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_name }}"
+      ignore_errors: true
+
+    - name: Ensure cleanup of the secondary lifecycle configuration
+      amazon.ai.sagemaker_notebook_instance_lifecycle_config:
+        state: absent
+        notebook_instance_lifecycle_config_name: "{{ lifecycle_config_second_name }}"
+      ignore_errors: true

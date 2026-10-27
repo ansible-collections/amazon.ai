@@ -1,6 +1,7 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+import base64
 import time
 from typing import Any
 from typing import Dict
@@ -31,6 +32,20 @@ try:
     import botocore
 except ImportError:
     pass
+
+
+def encode_lifecycle_script(content: Optional[str]) -> List[Dict[str, str]]:
+    """Encode a lifecycle script in the shape expected by SageMaker."""
+    if content is None:
+        return []
+    return [{"Content": base64.b64encode(content.encode("utf-8")).decode("utf-8")}]
+
+
+def decode_lifecycle_script(hooks: Optional[List[Dict[str, str]]]) -> Optional[str]:
+    """Decode the single lifecycle script returned by SageMaker, if present."""
+    if not hooks:
+        return None
+    return base64.b64decode(hooks[0]["Content"]).decode("utf-8")
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -537,6 +552,119 @@ def list_model_package_groups(client, max_items: Optional[int] = None, **params:
             "ModelPackageGroupSummaryList"
         ]
     return paginator.paginate(**params).build_full_result()["ModelPackageGroupSummaryList"]
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_notebook_instance_lifecycle_config(client, name: str) -> Optional[Dict[str, Any]]:
+    """Retrieve a SageMaker notebook instance lifecycle configuration by name."""
+    try:
+        return client.describe_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
+        return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_notebook_instance_lifecycle_configs(
+    client, max_items: Optional[int] = None, **params: Any
+) -> List[Dict[str, Any]]:
+    """Retrieve SageMaker notebook instance lifecycle configuration summaries."""
+    paginator = client.get_paginator("list_notebook_instance_lifecycle_configs")
+    if max_items is not None:
+        params["PaginationConfig"] = {"MaxItems": max_items}
+    return paginator.paginate(**params).build_full_result()["NotebookInstanceLifecycleConfigs"]
+
+
+def _notebook_instance_lifecycle_config_params(module) -> Dict[str, Any]:
+    params: Dict[str, Any] = {
+        "NotebookInstanceLifecycleConfigName": module.params["notebook_instance_lifecycle_config_name"]
+    }
+    params["OnCreate"] = (
+        None if module.params.get("on_create") is None else encode_lifecycle_script(module.params["on_create"])
+    )
+    params["OnStart"] = (
+        None if module.params.get("on_start") is None else encode_lifecycle_script(module.params["on_start"])
+    )
+    tags: Optional[Dict[str, str]] = module.params.get("tags")
+    if tags is not None:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(tags)
+    return scrub_none_parameters(params)
+
+
+def create_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str]:
+    """Create a SageMaker notebook instance lifecycle configuration."""
+    name = module.params["notebook_instance_lifecycle_config_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created lifecycle configuration {name}."
+
+    client.create_notebook_instance_lifecycle_config(**_notebook_instance_lifecycle_config_params(module))
+    return True, f"Lifecycle configuration {name} created successfully."
+
+
+def lifecycle_config_needs_update(existing: Dict[str, Any], module) -> bool:
+    """Determine whether a requested lifecycle script differs from the existing configuration."""
+    for field, response_field in (("on_create", "OnCreate"), ("on_start", "OnStart")):
+        desired = module.params.get(field)
+        if desired is not None and decode_lifecycle_script(existing.get(response_field)) != desired:
+            return True
+    return False
+
+
+def update_notebook_instance_lifecycle_config(client, module, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """Update the requested scripts on a SageMaker notebook instance lifecycle configuration.
+
+    The update API replaces the whole configuration, so any script the user omitted is re-sent from
+    ``existing`` (the describe response) to preserve it.
+    """
+    name = module.params["notebook_instance_lifecycle_config_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have updated lifecycle configuration {name}."
+
+    params: Dict[str, Any] = {"NotebookInstanceLifecycleConfigName": name}
+    for field, api_field in (("on_create", "OnCreate"), ("on_start", "OnStart")):
+        desired: Optional[str] = module.params.get(field)
+        params[api_field] = existing.get(api_field) if desired is None else encode_lifecycle_script(desired)
+    client.update_notebook_instance_lifecycle_config(**scrub_none_parameters(params))
+    return True, f"Lifecycle configuration {name} updated successfully."
+
+
+def delete_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str]:
+    """Delete a SageMaker notebook instance lifecycle configuration."""
+    name = module.params["notebook_instance_lifecycle_config_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted lifecycle configuration {name}."
+
+    try:
+        client.delete_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
+        return False, f"Lifecycle configuration {name} was already absent."
+    return True, f"Lifecycle configuration {name} deleted successfully."
+
+
+def update_notebook_instance_lifecycle_config_tags(
+    client, module, arn: str, desired_tags: Dict[str, str], purge_tags: bool = True
+) -> Tuple[bool, str]:
+    """Reconcile SageMaker notebook instance lifecycle configuration tags in place."""
+    current_tags: Dict[str, str] = list_tags(client, arn)
+    tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, purge_tags)
+
+    if not tags_to_add and not tags_to_remove:
+        return False, "No updates needed."
+
+    if module.check_mode:
+        return True, "Check mode: would have updated lifecycle configuration tags."
+
+    if tags_to_add:
+        client.add_tags(ResourceArn=arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=arn, TagKeys=tags_to_remove)
+
+    return True, "Lifecycle configuration tags updated successfully."
 
 
 def _build_model_package_group_params(module) -> Dict[str, Any]:

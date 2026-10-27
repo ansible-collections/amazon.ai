@@ -36,6 +36,8 @@ action_groups:
     - sagemaker_endpoint_config_info
     - sagemaker_endpoint
     - sagemaker_endpoint_info
+    - sagemaker_notebook_instance_lifecycle_config
+    - sagemaker_notebook_instance_lifecycle_config_info
 plugin_routing:
   modules:
     bedrock_agent:
