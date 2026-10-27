@@ -82,6 +82,8 @@ Name | Description
 [amazon.ai.sagemaker_endpoint_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_module.rst)|Manage Amazon SageMaker endpoint configurations
 [amazon.ai.sagemaker_endpoint_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_info_module.rst)|Gather information about SageMaker endpoint configurations
 [amazon.ai.sagemaker_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_info_module.rst)|Gather information about SageMaker endpoints
+[amazon.ai.sagemaker_feature_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_feature_group_module.rst)|Manage Amazon SageMaker Feature Store feature groups
+[amazon.ai.sagemaker_feature_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_feature_group_info_module.rst)|Gather information about Amazon SageMaker Feature Store feature groups
 [amazon.ai.sagemaker_image](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_module.rst)|Manage Amazon SageMaker Images
 [amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
 [amazon.ai.sagemaker_image_version](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_version_module.rst)|Manage Amazon SageMaker Image Versions
