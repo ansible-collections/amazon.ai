@@ -24,7 +24,7 @@
 - name: Assert the original volume remains after check mode
   ansible.builtin.assert:
     that:
-      - update_check_info.notebook_instance.volume_size_in_gb == notebook_volume_initial
+      - update_check_info.notebook_instances[0].volume_size_in_gb == notebook_volume_initial
 
 - name: Increase notebook volume while restoring its running state
   amazon.ai.sagemaker_notebook_instance:
@@ -52,9 +52,9 @@
 - name: Assert the updated instance retains its identity
   ansible.builtin.assert:
     that:
-      - update_info.notebook_instance.notebook_instance_status == 'InService'
-      - update_info.notebook_instance.volume_size_in_gb == notebook_volume_updated
-      - update_info.notebook_instance.notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
+      - update_info.notebook_instances[0].notebook_instance_status == 'InService'
+      - update_info.notebook_instances[0].volume_size_in_gb == notebook_volume_updated
+      - update_info.notebook_instances[0].notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
 
 - name: Re-run the notebook volume update
   amazon.ai.sagemaker_notebook_instance:
