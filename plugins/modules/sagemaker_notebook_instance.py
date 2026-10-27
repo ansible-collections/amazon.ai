@@ -141,22 +141,22 @@ extends_documentation_fragment:
 EXAMPLES = r"""
 - name: Create a SageMaker notebook instance
   amazon.ai.sagemaker_notebook_instance:
-    notebook_instance_name: my-notebook
-    instance_type: ml.t3.medium
-    role_arn: arn:aws:iam::123456789012:role/service-role/AmazonSageMaker-ExecutionRole
+    notebook_instance_name: "my-notebook"
+    instance_type: "ml.t3.medium"
+    role_arn: "arn:aws:iam::123456789012:role/service-role/AmazonSageMaker-ExecutionRole"
     tags:
       Environment: dev
 
 - name: Update an in-place notebook instance property
   amazon.ai.sagemaker_notebook_instance:
-    notebook_instance_name: my-notebook
-    instance_type: ml.t3.large
+    notebook_instance_name: "my-notebook"
+    instance_type: "ml.t3.large"
     volume_size_in_gb: 20
 
 - name: Delete a SageMaker notebook instance
   amazon.ai.sagemaker_notebook_instance:
-    state: absent
-    notebook_instance_name: my-notebook
+    state: "absent"
+    notebook_instance_name: "my-notebook"
 """
 
 RETURN = r"""
@@ -168,68 +168,68 @@ notebook_instance:
         notebook_instance_name:
             description: The name of the notebook instance.
             type: str
-            sample: my-notebook
+            sample: "my-notebook"
         notebook_instance_arn:
             description: The Amazon Resource Name (ARN) of the notebook instance.
             type: str
-            sample: arn:aws:sagemaker:us-east-1:123456789012:notebook-instance/my-notebook
+            sample: "arn:aws:sagemaker:us-east-1:123456789012:notebook-instance/my-notebook"
         notebook_instance_status:
             description: The lifecycle status. One of Pending, InService, Stopping, Stopped, Failed, Deleting, Updating, PendingMaintenance, or InMaintenance.
             type: str
-            sample: InService
+            sample: "InService"
         failure_reason:
             description: The reason a notebook instance failed to start.
             type: str
-            sample: The instance failed to start.
+            sample: "The instance failed to start."
         url:
             description: The URL used to access the notebook instance.
             type: str
-            sample: my-notebook.notebook.us-east-1.sagemaker.aws
+            sample: "my-notebook.notebook.us-east-1.sagemaker.aws"
         instance_type:
             description: The compute instance type, with the supported values documented under notebook_instance.instance_type.
             type: str
-            sample: ml.t3.medium
+            sample: "ml.t3.medium"
         ip_address_type:
             description: The IP address type. One of ipv4 or dualstack.
             type: str
-            sample: ipv4
+            sample: "ipv4"
         subnet_id:
             description: The ID of the subnet in the notebook instance VPC.
             type: str
-            sample: subnet-0123456789abcdef0
+            sample: "subnet-0123456789abcdef0"
         security_groups:
             description: The IDs of the security groups attached to the notebook instance.
             type: list
             elements: str
-            sample: [sg-0123456789abcdef0]
+            sample: ["sg-0123456789abcdef0"]
         role_arn:
             description: The Amazon Resource Name (ARN) of the IAM role associated with the notebook instance.
             type: str
-            sample: arn:aws:iam::123456789012:role/SageMakerExecutionRole
+            sample: "arn:aws:iam::123456789012:role/SageMakerExecutionRole"
         kms_key_id:
             description: The ID of the KMS key used to encrypt the notebook instance storage volume.
             type: str
-            sample: 12345678-1234-1234-1234-123456789012
+            sample: "12345678-1234-1234-1234-123456789012"
         network_interface_id:
             description: The ID of the network interface attached to the notebook instance.
             type: str
-            sample: eni-0123456789abcdef0
+            sample: "eni-0123456789abcdef0"
         last_modified_time:
             description: The time when the notebook instance was last modified.
             type: str
-            sample: '2025-01-01T12:00:00Z'
+            sample: "2025-01-01T12:00:00Z"
         creation_time:
             description: The time when the notebook instance was created.
             type: str
-            sample: '2025-01-01T12:00:00Z'
+            sample: "2025-01-01T12:00:00Z"
         notebook_instance_lifecycle_config_name:
             description: The name of the notebook instance lifecycle configuration.
             type: str
-            sample: my-lifecycle-config
+            sample: "my-lifecycle-config"
         direct_internet_access:
             description: Whether direct internet access is enabled. One of Enabled or Disabled.
             type: str
-            sample: Enabled
+            sample: "Enabled"
         volume_size_in_gb:
             description: The size of the notebook instance storage volume in gigabytes.
             type: int
@@ -240,24 +240,24 @@ notebook_instance:
                 - Values include ml.eia1.medium, ml.eia1.large, ml.eia1.xlarge, ml.eia2.medium, ml.eia2.large, and ml.eia2.xlarge.
             type: list
             elements: str
-            sample: [ml.eia1.medium]
+            sample: ["ml.eia1.medium"]
         default_code_repository:
             description: The URL of the default Git repository associated with the notebook instance.
             type: str
-            sample: https://github.com/example/repository.git
+            sample: "https://github.com/example/repository.git"
         additional_code_repositories:
             description: The URLs of additional Git repositories associated with the notebook instance.
             type: list
             elements: str
-            sample: [https://github.com/example/another-repository.git]
+            sample: ["https://github.com/example/another-repository.git"]
         root_access:
             description: Whether root access is enabled. One of Enabled or Disabled.
             type: str
-            sample: Enabled
+            sample: "Enabled"
         platform_identifier:
             description: The platform identifier of the notebook instance operating system.
             type: str
-            sample: notebook-al2-v1
+            sample: "notebook-al2-v1"
         instance_metadata_service_configuration:
             description: The instance metadata service configuration for the notebook instance.
             type: dict
@@ -265,17 +265,12 @@ notebook_instance:
                 minimum_instance_metadata_service_version:
                     description: The minimum supported instance metadata service version.
                     type: str
-                    sample: '1'
-        tags:
-            description: The notebook instance tags, returned when O(tags) is provided.
-            type: dict
-            sample:
-                Environment: dev
+                    sample: "1"
 msg:
     description: Informative message about the action.
     type: str
     returned: always
-    sample: Notebook instance my-notebook created successfully.
+    sample: "Notebook instance my-notebook created successfully."
 tags:
     description: A dictionary containing the notebook instance's current tags.
     type: dict
@@ -315,35 +310,55 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 def _notebook_instance_status_check(
     client, existing_notebook: Optional[Dict[str, Any]], module: AnsibleAWSModule
 ) -> None:
-    # Early exit if is deleting, creating, updating or stopping
+    """
+    Check the status of an existing SageMaker Notebook instance and handle various states.
+    Acts as an early exit mechanism for various notebook instance states.
+
+    Args:
+        client: The boto3 SageMaker client.
+        existing_notebook: The existing notebook instance details, if any.
+        module: The Ansible module instance.
+    """
     if existing_notebook:
-        if existing_notebook.get("NotebookInstanceStatus") in {
-            NotebookInstanceStatus.PENDING,
-            NotebookInstanceStatus.UPDATING,
-        }:
-            if not module.params.get("wait", False) or module.check_mode:
-                module.exit_json(
-                    msg=f"Notebook instance {existing_notebook.get('NotebookInstanceName')} "
-                    f"is currently in {existing_notebook.get('NotebookInstanceStatus')} state."
-                )
-            else:
-                wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.IN_SERVICE)
-        elif existing_notebook.get("NotebookInstanceStatus") == NotebookInstanceStatus.DELETING:
-            if not module.params.get("wait", False) or module.check_mode:
-                module.exit_json(
-                    msg=f"Notebook instance {existing_notebook.get('NotebookInstanceName')} "
-                    f"is currently in {existing_notebook.get('NotebookInstanceStatus')} state."
-                )
-            else:
-                wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.DELETED)
-        elif existing_notebook.get("NotebookInstanceStatus") == NotebookInstanceStatus.STOPPING:
-            if not module.params.get("wait", False) or module.check_mode:
-                module.exit_json(
-                    msg=f"Notebook instance {existing_notebook.get('NotebookInstanceName')} "
-                    f"is currently in {existing_notebook.get('NotebookInstanceStatus')} state."
-                )
-            else:
-                wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+        status = existing_notebook.get("NotebookInstanceStatus")
+        name = existing_notebook.get("NotebookInstanceName")
+        is_present = module.params.get("state") == "present"
+
+        if status == NotebookInstanceStatus.IN_SERVICE or status == NotebookInstanceStatus.STOPPED:
+            return
+
+        if module.check_mode:
+            module.exit_json(
+                changed=False,
+                msg=f"Notebook instance {name} is currently in {status} state (check mode).",
+            )
+
+        if status == NotebookInstanceStatus.FAILED:
+            if not is_present:
+                # Can be deleted but not updated
+                return
+            module.fail_json(msg=f"Cannot manage Notebook instance {name} while it is in terminal status {status}.")
+        elif status in (NotebookInstanceStatus.PENDING_MAINTENANCE, NotebookInstanceStatus.IN_MAINTENANCE):
+            module.fail_json(msg=f"Cannot manage Notebook instance {name} while it is in status {status}.")
+
+        if not module.params["wait"]:
+            module.exit_json(
+                changed=False,
+                msg=f"Notebook instance {name} is currently in {status} state (not waiting).",
+            )
+
+        if status == NotebookInstanceStatus.DELETING:
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.DELETED)
+            if not is_present:
+                module.exit_json(changed=False, msg=f"Notebook instance {name} is deleted.")
+        elif status in (NotebookInstanceStatus.PENDING, NotebookInstanceStatus.UPDATING):
+            # Notebook is stopped when updating / pending and will resolve to STOPPED state
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+        elif status == NotebookInstanceStatus.STOPPING:
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+
+        # Refresh the notebook information after waiting for the status change
+        existing_notebook = describe_notebook_instance(client, name)
 
 
 def _notebook_instance_result(client, name: str) -> Dict[str, Any]:
@@ -354,19 +369,11 @@ def _notebook_instance_result(client, name: str) -> Dict[str, Any]:
 
 
 def _absent(module: AnsibleAWSModule, client, name: str, existing_notebook_instance: Optional[Dict[str, Any]]) -> None:
-    if not existing_notebook_instance:
-        module.exit_json(changed=False, msg=f"Notebook instance {name} does not exist.")
-    else:
-        if module.check_mode:
-            module.exit_json(changed=True, msg=f"Check mode: would have deleted notebook instance {name}.")
-
-        delete_notebook_instance(client, module, existing_notebook_instance)
-        module.exit_json(
-            changed=True,
-            notebook_instance={},
-            tags={},
-            msg=f"Notebook instance {name} deleted successfully.",
-        )
+    changed = False
+    msg = f"Notebook instance {name} does not exist."
+    if existing_notebook_instance:
+        changed, msg = delete_notebook_instance(client, module, existing_notebook_instance)
+    module.exit_json(changed=changed, notebook_instance={}, tags={}, msg=msg)
 
 
 def _present(module: AnsibleAWSModule, client, name: str, existing_notebook_instance: Optional[Dict[str, Any]]) -> None:
@@ -386,9 +393,15 @@ def _present(module: AnsibleAWSModule, client, name: str, existing_notebook_inst
             update_notebook_instance(client, module, existing_notebook_instance, update_params)
             changed = True
         if module.check_mode:
+            msg = f"Check mode: no changes needed for notebook instance {name}."
             if changed:
-                module.exit_json(changed=changed, msg=f"Check mode: would have updated notebook instance {name}.")
-            module.exit_json(changed=changed, msg=f"Check mode: no changes needed for notebook instance {name}.")
+                msg = f"Check mode: would have updated notebook instance {name}."
+            module.exit_json(
+                changed=changed,
+                notebook_instance={},
+                tags={},
+                msg=msg,
+            )
 
         notebook_instance = _notebook_instance_result(client, name)
         tags = list_tags(client, notebook_instance["notebook_instance_arn"]) if notebook_instance else {}
@@ -400,7 +413,9 @@ def _present(module: AnsibleAWSModule, client, name: str, existing_notebook_inst
         module.exit_json(changed=changed, notebook_instance=notebook_instance, tags=tags, msg=message)
 
     if module.check_mode:
-        module.exit_json(changed=True, msg=f"Check mode: would have created notebook instance {name}.")
+        module.exit_json(
+            changed=True, notebook_instance={}, tags={}, msg=f"Check mode: would have created notebook instance {name}."
+        )
 
     create_notebook_instance(client, module)
     notebook_instance = _notebook_instance_result(client, name)
@@ -452,8 +467,6 @@ def main() -> None:
 
         existing_notebook_instance = describe_notebook_instance(client, name)
         _notebook_instance_status_check(client, existing_notebook_instance, module)
-        # Refresh status of the existing notebook instance
-        existing_notebook_instance = describe_notebook_instance(client, name)
 
         if module.params["state"] == "present":
             _present(module, client, name, existing_notebook_instance)

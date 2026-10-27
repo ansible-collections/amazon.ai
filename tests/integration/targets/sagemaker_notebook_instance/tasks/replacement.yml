@@ -25,5 +25,5 @@
 - name: Assert the original notebook instance remains
   ansible.builtin.assert:
     that:
-      - replacement_info.notebook_instance.notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
-      - replacement_info.notebook_instance.notebook_instance_status == 'InService'
+      - replacement_info.notebook_instances[0].notebook_instance_arn == create_real.notebook_instance.notebook_instance_arn
+      - replacement_info.notebook_instances[0].notebook_instance_status == 'InService'

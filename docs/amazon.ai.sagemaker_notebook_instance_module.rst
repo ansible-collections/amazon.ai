@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
@@ -588,22 +588,22 @@ Examples
 
     - name: Create a SageMaker notebook instance
       amazon.ai.sagemaker_notebook_instance:
-        notebook_instance_name: my-notebook
-        instance_type: ml.t3.medium
-        role_arn: arn:aws:iam::123456789012:role/service-role/AmazonSageMaker-ExecutionRole
+        notebook_instance_name: "my-notebook"
+        instance_type: "ml.t3.medium"
+        role_arn: "arn:aws:iam::123456789012:role/service-role/AmazonSageMaker-ExecutionRole"
         tags:
           Environment: dev
 
     - name: Update an in-place notebook instance property
       amazon.ai.sagemaker_notebook_instance:
-        notebook_instance_name: my-notebook
-        instance_type: ml.t3.large
+        notebook_instance_name: "my-notebook"
+        instance_type: "ml.t3.large"
         volume_size_in_gb: 20
 
     - name: Delete a SageMaker notebook instance
       amazon.ai.sagemaker_notebook_instance:
-        state: absent
-        notebook_instance_name: my-notebook
+        state: "absent"
+        notebook_instance_name: "my-notebook"
 
 
 
@@ -1049,24 +1049,6 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">subnet-0123456789abcdef0</div>
-                </td>
-            </tr>
-            <tr>
-                    <td class="elbow-placeholder">&nbsp;</td>
-                <td colspan="2">
-                    <div class="ansibleOptionAnchor" id="return-"></div>
-                    <b>tags</b>
-                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
-                    <div style="font-size: small">
-                      <span style="color: purple">dictionary</span>
-                    </div>
-                </td>
-                <td></td>
-                <td>
-                            <div>The notebook instance tags, returned when O(tags) is provided.</div>
-                    <br/>
-                        <div style="font-size: smaller"><b>Sample:</b></div>
-                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;Environment&#x27;: &#x27;dev&#x27;}</div>
                 </td>
             </tr>
             <tr>
