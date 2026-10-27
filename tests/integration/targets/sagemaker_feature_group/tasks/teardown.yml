@@ -1,0 +1,26 @@
+---
+- name: Cleanup feature groups
+  amazon.ai.sagemaker_feature_group:
+    state: absent
+    feature_group_name: "{{ item }}"
+  loop:
+    - "{{ feature_group_name }}"
+    - "{{ offline_feature_group_name }}"
+    - "{{ bad_role_feature_group_name }}"
+    - "{{ no_store_feature_group_name }}"
+  ignore_errors: true
+
+# The offline store writes marker objects into the bucket, so it must be emptied.
+- name: Cleanup S3 bucket
+  amazon.aws.s3_bucket:
+    name: "{{ feature_store_bucket_name }}"
+    state: absent
+    force: true
+  ignore_errors: true
+
+# state=absent also detaches the managed policy; amazon.aws main has no delete_instance_profile option.
+- name: Cleanup IAM role
+  amazon.aws.iam_role:
+    name: "{{ feature_store_role_name }}"
+    state: absent
+  ignore_errors: true

@@ -1,0 +1,485 @@
+---
+# 1. Info for a missing name
+- name: Look up a feature group that does not exist
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: missing_info
+
+- name: Assert a missing feature group is an empty list
+  ansible.builtin.assert:
+    that:
+      - missing_info is not failed
+      - missing_info is not changed
+      - missing_info.feature_groups == []
+
+# 2. Create without any store config
+- name: Create a feature group without any store
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ no_store_feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+  register: no_store
+  ignore_errors: true
+
+- name: Assert creating without a store fails
+  ansible.builtin.assert:
+    that:
+      - no_store is failed
+      - "'At least one of online_store_config or offline_store_config' in no_store.msg"
+
+# 3. Create (online Standard + offline, tags) — check mode / real / rerun
+- name: Create a feature group (check mode)
+  amazon.ai.sagemaker_feature_group: &create_feature_group
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+    online_store_config:
+      enable_online_store: true
+      storage_type: Standard
+    offline_store_config:
+      s3_storage_config:
+        s3_uri: "{{ feature_store_s3_uri }}"
+      disable_glue_table_creation: true
+    role_arn: "{{ feature_store_role_arn }}"
+    description: Integration test feature group
+    tags:
+      team: ml
+      test_id: "{{ test_id }}"
+  check_mode: true
+  register: create_check
+
+- name: Assert create in check mode reports a change
+  ansible.builtin.assert:
+    that:
+      - create_check is changed
+      - "create_check.msg.startswith('Check mode: would have created')"
+
+- name: Create a feature group
+  amazon.ai.sagemaker_feature_group: *create_feature_group
+  register: create_real
+
+- name: Assert the feature group was created
+  ansible.builtin.assert:
+    that:
+      - create_real is changed
+      - "'created successfully' in create_real.msg"
+      - create_real.feature_group.feature_group_arn is defined
+      - create_real.feature_group.feature_group_status == 'Created'
+      - create_real.feature_group.feature_definitions | length == 2
+      - "create_real.tags == {'team': 'ml', 'test_id': test_id}"
+
+- name: Create the feature group again
+  amazon.ai.sagemaker_feature_group: *create_feature_group
+  register: create_rerun
+
+- name: Assert recreating is idempotent
+  ansible.builtin.assert:
+    that:
+      - create_rerun is not changed
+      - "'already matches the requested configuration' in create_rerun.msg"
+      - create_rerun.feature_group.feature_group_arn == create_real.feature_group.feature_group_arn
+
+# 4. Info by name and with filters, sorting
+- name: Create a second, offline-only feature group for listing
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ offline_feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+    offline_store_config:
+      s3_storage_config:
+        s3_uri: "{{ feature_store_s3_uri }}"
+      disable_glue_table_creation: true
+    role_arn: "{{ feature_store_role_arn }}"
+  register: create_offline
+
+- name: Get the feature group by name
+  amazon.ai.sagemaker_feature_group_info:
+    name: "{{ feature_group_name }}"
+  register: info_by_name
+
+- name: Assert the feature group is returned by name
+  ansible.builtin.assert:
+    that:
+      - info_by_name is not changed
+      - info_by_name.feature_groups | length == 1
+      - info_by_name.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
+      - info_by_name.feature_groups[0].feature_group_status == 'Created'
+      - info_by_name.feature_groups[0].record_identifier_feature_name == 'record_id'
+      - info_by_name.feature_groups[0].online_store_config.storage_type == 'Standard'
+      - info_by_name.feature_groups[0].offline_store_config.s3_storage_config.s3_uri == feature_store_s3_uri
+      - info_by_name.feature_groups[0].feature_definitions | map(attribute='feature_name') | list == ['record_id', 'event_time']
+      - "info_by_name.feature_groups[0].tags == {'team': 'ml', 'test_id': test_id}"
+
+- name: List feature groups of this run that are Created
+  amazon.ai.sagemaker_feature_group_info:
+    name_contains: "{{ test_id }}"
+    feature_group_status_equals: Created
+  register: info_filtered
+
+- name: Assert the status filter returns both feature groups
+  ansible.builtin.assert:
+    that:
+      - info_filtered.feature_groups | map(attribute='feature_group_name') | sort | list ==
+        [feature_group_name, offline_feature_group_name] | sort | list
+
+- name: List feature groups of this run sorted by name, ascending
+  amazon.ai.sagemaker_feature_group_info:
+    name_contains: "{{ test_id }}"
+    sort_by: Name
+    sort_order: Ascending
+  register: info_ascending
+
+- name: List feature groups of this run sorted by name, descending
+  amazon.ai.sagemaker_feature_group_info:
+    name_contains: "{{ test_id }}"
+    sort_by: Name
+    sort_order: Descending
+  register: info_descending
+
+- name: Assert sorting by name orders the results
+  vars:
+    ascending_names: "{{ info_ascending.feature_groups | map(attribute='feature_group_name') | list }}"
+    descending_names: "{{ info_descending.feature_groups | map(attribute='feature_group_name') | list }}"
+  ansible.builtin.assert:
+    that:
+      - ascending_names | length == 2
+      - ascending_names == ascending_names | sort
+      - descending_names == ascending_names | reverse | list
+
+- name: Combine a name with a filter
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+    name_contains: "{{ test_id }}"
+  register: info_conflict
+  ignore_errors: true
+
+- name: Assert a name and a filter are mutually exclusive
+  ansible.builtin.assert:
+    that:
+      - info_conflict is failed
+      - "'mutually exclusive' in info_conflict.msg"
+
+# 5. Add a feature — check / real / rerun
+- name: Add a feature (check mode)
+  amazon.ai.sagemaker_feature_group: &add_feature
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+  check_mode: true
+  register: add_check
+
+- name: Assert adding a feature in check mode reports a change
+  ansible.builtin.assert:
+    that:
+      - add_check is changed
+      - "add_check.msg.startswith('Check mode: would have updated')"
+
+- name: Add a feature
+  amazon.ai.sagemaker_feature_group: *add_feature
+  register: add_real
+
+- name: Add the feature again
+  amazon.ai.sagemaker_feature_group: *add_feature
+  register: add_rerun
+
+- name: Get the feature group after adding a feature
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_add
+
+- name: Assert the feature was added in place
+  ansible.builtin.assert:
+    that:
+      - add_real is changed
+      - "'updated successfully' in add_real.msg"
+      - add_rerun is not changed
+      - "'already matches the requested configuration' in add_rerun.msg"
+      - info_after_add.feature_groups | length == 1
+      - info_after_add.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
+      - info_after_add.feature_groups[0].feature_definitions | map(attribute='feature_name') | list ==
+        ['record_id', 'event_time', 'score']
+      - info_after_add.feature_groups[0].last_update_status.status == 'Successful'
+
+# 6. Change the online store TTL — check / real / rerun
+- name: Set the online store TTL (check mode)
+  amazon.ai.sagemaker_feature_group: &set_ttl
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    online_store_config:
+      ttl_duration:
+        unit: Hours
+        value: 2
+  check_mode: true
+  register: ttl_check
+
+- name: Set the online store TTL
+  amazon.ai.sagemaker_feature_group: *set_ttl
+  register: ttl_real
+
+- name: Set the online store TTL again
+  amazon.ai.sagemaker_feature_group: *set_ttl
+  register: ttl_rerun
+
+- name: Get the feature group after setting the TTL
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_ttl
+
+- name: Assert the TTL was set in place
+  ansible.builtin.assert:
+    that:
+      - ttl_check is changed
+      - "ttl_check.msg.startswith('Check mode: would have updated')"
+      - ttl_real is changed
+      - ttl_rerun is not changed
+      - info_after_ttl.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
+      - "info_after_ttl.feature_groups[0].online_store_config.ttl_duration == {'unit': 'Hours', 'value': 2}"
+
+# 7. Switch to provisioned throughput — check / real / rerun
+- name: Switch to provisioned throughput (check mode)
+  amazon.ai.sagemaker_feature_group: &provisioned
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    throughput_config:
+      throughput_mode: Provisioned
+      provisioned_read_capacity_units: 1
+      provisioned_write_capacity_units: 1
+  check_mode: true
+  register: throughput_check
+
+- name: Switch to provisioned throughput
+  amazon.ai.sagemaker_feature_group: *provisioned
+  register: throughput_real
+
+- name: Switch to provisioned throughput again
+  amazon.ai.sagemaker_feature_group: *provisioned
+  register: throughput_rerun
+
+- name: Get the feature group after switching throughput
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_throughput
+
+- name: Assert the throughput was switched in place
+  ansible.builtin.assert:
+    that:
+      - throughput_check is changed
+      - "throughput_check.msg.startswith('Check mode: would have updated')"
+      - throughput_real is changed
+      - throughput_rerun is not changed
+      - info_after_throughput.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
+      - "info_after_throughput.feature_groups[0].throughput_config ==
+        {'throughput_mode': 'Provisioned', 'provisioned_read_capacity_units': 1, 'provisioned_write_capacity_units': 1}"
+
+# 8. Tags — merge without purge, then replace — check / real / rerun
+- name: Add a tag without purging (check mode)
+  amazon.ai.sagemaker_feature_group: &merge_tags
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    tags:
+      stage: test
+    purge_tags: false
+  check_mode: true
+  register: tags_check
+
+- name: Add a tag without purging
+  amazon.ai.sagemaker_feature_group: *merge_tags
+  register: tags_real
+
+- name: Add the tag again without purging
+  amazon.ai.sagemaker_feature_group: *merge_tags
+  register: tags_rerun
+
+- name: Assert tags were merged
+  ansible.builtin.assert:
+    that:
+      - tags_check is changed
+      - "tags_check.msg.startswith('Check mode: would have updated')"
+      - tags_real is changed
+      - "tags_real.tags == {'team': 'ml', 'test_id': test_id, 'stage': 'test'}"
+      - tags_rerun is not changed
+
+- name: Replace the tags
+  amazon.ai.sagemaker_feature_group: &replace_tags
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    tags:
+      stage: test
+  register: replace_real
+
+- name: Replace the tags again
+  amazon.ai.sagemaker_feature_group: *replace_tags
+  register: replace_rerun
+
+- name: Get the feature group after replacing tags
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_tags
+
+- name: Assert tags were replaced
+  ansible.builtin.assert:
+    that:
+      - replace_real is changed
+      - "replace_real.tags == {'stage': 'test'}"
+      - replace_rerun is not changed
+      - "info_after_tags.feature_groups[0].tags == {'stage': 'test'}"
+
+# 9. Failure paths
+- name: Create an offline store without a role
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ no_store_feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+    offline_store_config:
+      s3_storage_config:
+        s3_uri: "{{ feature_store_s3_uri }}"
+  register: no_role
+  ignore_errors: true
+
+- name: Switch to provisioned throughput without capacity units
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    throughput_config:
+      throughput_mode: Provisioned
+  register: no_units
+  ignore_errors: true
+
+- name: Remove a feature
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+  register: remove_feature
+  ignore_errors: true
+
+- name: Change the type of a feature
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions:
+      - feature_name: record_id
+        feature_type: String
+      - feature_name: event_time
+        feature_type: Fractional
+      - feature_name: score
+        feature_type: Fractional
+  register: change_type
+  ignore_errors: true
+
+- name: Change the description
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    description: A different description
+  register: change_description
+  ignore_errors: true
+
+- name: Change the role
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    role_arn: "{{ missing_role_arn }}"
+  register: change_role
+  ignore_errors: true
+
+- name: Change the event time feature
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: record_id
+    feature_definitions: "{{ extended_features }}"
+  register: change_event_time
+  ignore_errors: true
+
+- name: Assert unsupported changes fail with a message naming the option
+  ansible.builtin.assert:
+    that:
+      - no_role is failed
+      - "'role_arn' in no_role.msg"
+      - no_units is failed
+      - "'provisioned_read_capacity_units' in no_units.msg"
+      - remove_feature is failed
+      - "'cannot be removed' in remove_feature.msg"
+      - change_type is failed
+      - "'feature_type' in change_type.msg"
+      - change_description is failed
+      - "'description cannot be changed' in change_description.msg"
+      - change_role is failed
+      - "'role_arn cannot be changed' in change_role.msg"
+      - change_event_time is failed
+      - "'event_time_feature_name cannot be changed' in change_event_time.msg"
+
+# Whether a missing role is rejected synchronously or the group lands in CreateFailed is not documented;
+# either way the task must fail.
+- name: Create a feature group with a role that does not exist
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ bad_role_feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+    offline_store_config:
+      s3_storage_config:
+        s3_uri: "{{ feature_store_s3_uri }}"
+      disable_glue_table_creation: true
+    role_arn: "{{ missing_role_arn }}"
+  register: bad_role
+  ignore_errors: true
+
+- name: Assert creating with a missing role fails
+  ansible.builtin.assert:
+    that:
+      - bad_role is failed
+
+# 10. Delete — check / real / rerun
+- name: Delete the feature group (check mode)
+  amazon.ai.sagemaker_feature_group: &delete_feature_group
+    state: absent
+    feature_group_name: "{{ feature_group_name }}"
+  check_mode: true
+  register: delete_check
+
+- name: Delete the feature group
+  amazon.ai.sagemaker_feature_group: *delete_feature_group
+  register: delete_real
+
+- name: Delete the feature group again
+  amazon.ai.sagemaker_feature_group: *delete_feature_group
+  register: delete_rerun
+
+- name: Get the feature group after deleting it
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_delete
+
+- name: Assert the feature group was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_check is changed
+      - "delete_check.msg.startswith('Check mode: would have deleted')"
+      - delete_real is changed
+      - "'deleted successfully' in delete_real.msg"
+      - delete_rerun is not changed
+      - "'does not exist' in delete_rerun.msg"
+      - info_after_delete.feature_groups == []
