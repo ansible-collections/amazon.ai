@@ -4299,3 +4299,46 @@ def test_list_user_profiles_omits_unset_filters():
 
     assert list_user_profiles(client) == []
     paginator.paginate.assert_called_once_with()
+
+
+def test_delete_feature_group_check_mode_exits_without_calling_the_api():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = True
+    module.params = {"feature_group_name": "fg"}
+    module.exit_json.side_effect = SystemExit
+    client = MagicMock()
+    with pytest.raises(SystemExit):
+        sagemaker.delete_feature_group(client, module)
+    client.delete_feature_group.assert_not_called()
+
+
+def test_delete_feature_group_deletes_and_waits_for_it_to_be_gone():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module)
+    assert deleted is True
+    client.delete_feature_group.assert_called_once_with(FeatureGroupName="fg")
+    wait.assert_called_once_with(client, module, "fg", "feature_group_deleted")
+
+
+def test_delete_feature_group_that_vanished_between_describe_and_delete_returns_false():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    client.delete_feature_group.side_effect = ClientError(
+        {"Error": {"Code": "ResourceNotFound", "Message": "gone"}}, "DeleteFeatureGroup"
+    )
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module)
+    assert deleted is False
+    wait.assert_not_called()
