@@ -17,7 +17,7 @@ Version added: 2.0.0
 
 Synopsis
 --------
-- This module retrieves details for a single Amazon SageMaker model package group or lists all model package groups.
+- Retrieve details for a single Amazon SageMaker model package group or list all model package groups.
 
 
 
@@ -543,9 +543,9 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td></td>
+                <td>always</td>
                 <td>
-                            <div>A dictionary containing the model package group tags.</div>
+                            <div>A dictionary containing the model package group tags, or an empty dictionary when no tags are associated.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;project&#x27;: &#x27;demo&#x27;}</div>
