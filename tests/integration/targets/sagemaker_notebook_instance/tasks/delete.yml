@@ -21,7 +21,7 @@
 - name: Assert the notebook remains before deletion
   ansible.builtin.assert:
     that:
-      - delete_check_info.notebook_instance.notebook_instance_name == notebook_instance_name
+      - delete_check_info.notebook_instances[0].notebook_instance_name == notebook_instance_name
 
 - name: Delete the notebook instance
   amazon.ai.sagemaker_notebook_instance:
@@ -44,7 +44,7 @@
 - name: Assert no notebook instance remains after deletion
   ansible.builtin.assert:
     that:
-      - delete_info.notebook_instance == []
+      - delete_info.notebook_instances == []
 
 - name: Re-run notebook instance deletion
   amazon.ai.sagemaker_notebook_instance:

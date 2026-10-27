@@ -15,9 +15,9 @@
   ansible.builtin.assert:
     that:
       - not notebook_instance_info.changed
-      - notebook_instance_info.notebook_instance.notebook_instance_name == notebook_instance_name
-      - notebook_instance_info.notebook_instance.notebook_instance_status == 'InService'
-      - notebook_instance_info.notebook_instance.tags.Environment == 'integration'
+      - notebook_instance_info.notebook_instances[0].notebook_instance_name == notebook_instance_name
+      - notebook_instance_info.notebook_instances[0].notebook_instance_status == 'InService'
+      - notebook_instance_info.notebook_instances[0].tags.Environment == 'integration'
 
 - name: List notebook instances matching the unique name
   amazon.ai.sagemaker_notebook_instance_info:
