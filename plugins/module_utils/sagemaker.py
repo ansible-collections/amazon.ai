@@ -798,7 +798,8 @@ def _build_model_package_update_params(module, model_package_arn: str) -> Dict[s
         if value is not None:
             update_fields[field] = value
     customer_metadata_properties = update_fields.pop("customer_metadata_properties", None)
-    params.update(snake_dict_to_camel_dict(scrub_none_parameters(update_fields), capitalize_first=True))
+    normalized = snake_dict_to_camel_dict(scrub_none_parameters(update_fields), capitalize_first=True)
+    params.update(_fix_model_package_api_key_names(normalized))
     if customer_metadata_properties is not None:
         params["CustomerMetadataProperties"] = customer_metadata_properties
     return scrub_none_parameters(params)

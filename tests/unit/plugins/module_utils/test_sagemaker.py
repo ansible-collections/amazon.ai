@@ -149,6 +149,25 @@ def test_build_model_package_params_preserves_customer_metadata_keys():
     }
 
 
+def test_build_model_package_update_params_preserves_aws_mime_key_name():
+    module = MagicMock()
+    module.params = {
+        "additional_inference_specifications_to_add": [
+            {
+                "name": "additional-spec",
+                "containers": [{"image": "123456789012.dkr.ecr.us-east-1.amazonaws.com/demo:latest"}],
+                "supported_response_mime_types": ["application/json"],
+            }
+        ],
+    }
+
+    result = _build_model_package_update_params(module, "arn:package")
+
+    specification = result["AdditionalInferenceSpecificationsToAdd"][0]
+    assert specification["SupportedResponseMIMETypes"] == ["application/json"]
+    assert "SupportedResponseMimeTypes" not in specification
+
+
 def test_build_model_package_update_params_preserves_customer_metadata_keys():
     module = MagicMock()
     module.params = {
@@ -157,6 +176,7 @@ def test_build_model_package_update_params_preserves_customer_metadata_keys():
         "customer_metadata_properties": {
             "snake_case_key": "value",
             "MixedCase-Key": "other-value",
+            "SupportedResponseMimeTypes": "literal-metadata-key",
         },
         "customer_metadata_properties_to_remove": None,
         "model_life_cycle": None,
@@ -168,6 +188,7 @@ def test_build_model_package_update_params_preserves_customer_metadata_keys():
     assert result["CustomerMetadataProperties"] == {
         "snake_case_key": "value",
         "MixedCase-Key": "other-value",
+        "SupportedResponseMimeTypes": "literal-metadata-key",
     }
 
 
