@@ -559,7 +559,10 @@ def describe_notebook_instance_lifecycle_config(client, name: str) -> Optional[D
     """Retrieve a SageMaker notebook instance lifecycle configuration by name."""
     try:
         return client.describe_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except is_boto3_error_code("ResourceNotFound"):
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
         return None
 
 
@@ -609,19 +612,20 @@ def lifecycle_config_needs_update(existing: Dict[str, Any], module) -> bool:
     return False
 
 
-def update_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str]:
-    """Update the requested scripts on a SageMaker notebook instance lifecycle configuration."""
+def update_notebook_instance_lifecycle_config(client, module, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """Update the requested scripts on a SageMaker notebook instance lifecycle configuration.
+
+    The update API replaces the whole configuration, so any script the user omitted is re-sent from
+    ``existing`` (the describe response) to preserve it.
+    """
     name = module.params["notebook_instance_lifecycle_config_name"]
     if module.check_mode:
         return True, f"Check mode: would have updated lifecycle configuration {name}."
 
     params: Dict[str, Any] = {"NotebookInstanceLifecycleConfigName": name}
-    params["OnCreate"] = (
-        None if module.params.get("on_create") is None else encode_lifecycle_script(module.params["on_create"])
-    )
-    params["OnStart"] = (
-        None if module.params.get("on_start") is None else encode_lifecycle_script(module.params["on_start"])
-    )
+    for field, api_field in (("on_create", "OnCreate"), ("on_start", "OnStart")):
+        desired: Optional[str] = module.params.get(field)
+        params[api_field] = existing.get(api_field) if desired is None else encode_lifecycle_script(desired)
     client.update_notebook_instance_lifecycle_config(**scrub_none_parameters(params))
     return True, f"Lifecycle configuration {name} updated successfully."
 
@@ -634,7 +638,10 @@ def delete_notebook_instance_lifecycle_config(client, module) -> Tuple[bool, str
 
     try:
         client.delete_notebook_instance_lifecycle_config(NotebookInstanceLifecycleConfigName=name)
-    except is_boto3_error_code("ResourceNotFound"):
+    except (
+        is_boto3_error_code("ResourceNotFound"),
+        is_boto3_error_message("does not exist"),
+    ):
         return False, f"Lifecycle configuration {name} was already absent."
     return True, f"Lifecycle configuration {name} deleted successfully."
 
