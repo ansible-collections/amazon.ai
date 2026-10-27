@@ -199,7 +199,7 @@ def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple
     changed = False
     messages = []
     if lifecycle_config_needs_update(existing, module):
-        script_changed, script_msg = update_notebook_instance_lifecycle_config(client, module)
+        script_changed, script_msg = update_notebook_instance_lifecycle_config(client, module, existing)
         changed = changed or script_changed
         messages.append(script_msg)
 
