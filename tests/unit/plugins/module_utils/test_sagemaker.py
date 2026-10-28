@@ -6,22 +6,35 @@
 
 """Unit tests for sagemaker module_utils."""
 
+from copy import deepcopy
 from unittest.mock import MagicMock
 from unittest.mock import patch
 
+import botocore.session
 import pytest
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_OPTIONS
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_REQUEST_RENAMES
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_RESPONSE_RENAMES
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import build_user_settings
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_user_profile
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import format_user_profile
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_models
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_user_profiles
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import user_settings_to_update
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_user_profile import _user_settings_options
 from botocore.exceptions import ClientError
+
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 
 @pytest.mark.parametrize(
@@ -713,3 +726,337 @@ class TestModelNeedsReplacement:
         )
 
         assert model_needs_replacement(existing, module)
+
+
+# --------------------------------------------------------------------------------------
+# User profiles — parameter mapping, describe and list
+# --------------------------------------------------------------------------------------
+_DEFAULT_RESOURCE_SPEC = {
+    "sage_maker_image_arn": "arn:aws:sagemaker:us-east-1:123456789012:image/img",
+    "sage_maker_image_version_alias": "1.0",
+    "instance_type": "ml.t3.medium",
+    "lifecycle_config_arn": "arn:aws:sagemaker:us-east-1:123456789012:studio-lifecycle-config/lc",
+    "training_plan_arn": "arn:aws:sagemaker:us-east-1:123456789012:training-plan/tp",
+}
+_APP_LIFECYCLE_MANAGEMENT = {
+    "idle_settings": {
+        "lifecycle_management": "ENABLED",
+        "idle_timeout_in_minutes": 120,
+        "min_idle_timeout_in_minutes": 60,
+        "max_idle_timeout_in_minutes": 240,
+    }
+}
+_CUSTOM_IMAGES = [{"image_name": "img", "image_version_number": 1, "app_image_config_name": "cfg"}]
+
+# Every UserSettings member (a top-level module option), with every nested structure and all three acronym keys.
+USER_SETTINGS_FIXTURE = {
+    "execution_role": "arn:aws:iam::123456789012:role/exec",
+    "security_groups": ["sg-1", "sg-2"],
+    "sharing_settings": {
+        "notebook_output_option": "Allowed",
+        "s3_output_path": "s3://bucket/out",
+        "s3_kms_key_id": "kms-key",
+    },
+    "jupyter_server_app_settings": {
+        "default_resource_spec": _DEFAULT_RESOURCE_SPEC,
+        "lifecycle_config_arns": ["arn:lc1"],
+        "code_repositories": [{"repository_url": "https://example.com/repo.git"}],
+    },
+    "kernel_gateway_app_settings": {
+        "default_resource_spec": _DEFAULT_RESOURCE_SPEC,
+        "custom_images": _CUSTOM_IMAGES,
+        "lifecycle_config_arns": ["arn:lc1"],
+    },
+    "tensor_board_app_settings": {"default_resource_spec": {"instance_type": "system"}},
+    "r_studio_server_pro_app_settings": {"access_status": "ENABLED", "user_group": "R_STUDIO_USER"},
+    "r_session_app_settings": {
+        "default_resource_spec": {"sage_maker_image_version_arn": "arn:imgver"},
+        "custom_images": _CUSTOM_IMAGES,
+    },
+    "canvas_app_settings": {
+        "time_series_forecasting_settings": {
+            "status": "ENABLED",
+            "amazon_forecast_role_arn": "arn:aws:iam::123456789012:role/forecast",
+        },
+        "model_register_settings": {
+            "status": "DISABLED",
+            "cross_account_model_register_role_arn": "arn:aws:iam::123456789012:role/register",
+        },
+        "workspace_settings": {"s3_artifact_path": "s3://bucket/canvas", "s3_kms_key_id": "kms-key"},
+        "identity_provider_o_auth_settings": [
+            {"data_source_name": "Snowflake", "status": "ENABLED", "secret_arn": "arn:secret"},
+        ],
+        "direct_deploy_settings": {"status": "ENABLED"},
+        "kendra_settings": {"status": "DISABLED"},
+        "generative_ai_settings": {"amazon_bedrock_role_arn": "arn:aws:iam::123456789012:role/bedrock"},
+        "emr_serverless_settings": {
+            "execution_role_arn": "arn:aws:iam::123456789012:role/emr",
+            "status": "ENABLED",
+        },
+    },
+    "code_editor_app_settings": {
+        "default_resource_spec": _DEFAULT_RESOURCE_SPEC,
+        "custom_images": _CUSTOM_IMAGES,
+        "lifecycle_config_arns": ["arn:lc1"],
+        "app_lifecycle_management": _APP_LIFECYCLE_MANAGEMENT,
+        "built_in_lifecycle_config_arn": "arn:builtin",
+    },
+    "jupyter_lab_app_settings": {
+        "default_resource_spec": _DEFAULT_RESOURCE_SPEC,
+        "custom_images": _CUSTOM_IMAGES,
+        "lifecycle_config_arns": ["arn:lc1"],
+        "code_repositories": [{"repository_url": "https://example.com/repo.git"}],
+        "app_lifecycle_management": _APP_LIFECYCLE_MANAGEMENT,
+        "emr_settings": {
+            "assumable_role_arns": ["arn:aws:iam::123456789012:role/assume"],
+            "execution_role_arns": ["arn:aws:iam::123456789012:role/run"],
+        },
+        "built_in_lifecycle_config_arn": "arn:builtin",
+    },
+    "space_storage_settings": {
+        "default_ebs_storage_settings": {"default_ebs_volume_size_in_gb": 5, "maximum_ebs_volume_size_in_gb": 100}
+    },
+    "default_landing_uri": "studio::",
+    "studio_web_portal": "ENABLED",
+    "custom_posix_user_config": {"uid": 10000, "gid": 1001},
+    "custom_file_system_configs": [
+        {"efs_file_system_config": {"file_system_id": "fs-0123456789abcdef0", "file_system_path": "/home"}},
+        {"fsx_lustre_file_system_config": {"file_system_id": "fs-0fedcba9876543210", "file_system_path": "/lustre"}},
+        {"s3_file_system_config": {"s3_uri": "s3://bucket/data", "mount_path": "/mnt/s3"}},
+    ],
+    "studio_web_portal_settings": {
+        "hidden_ml_tools": ["Comet"],
+        "hidden_app_types": ["JupyterServer"],
+        "hidden_instance_types": ["ml.p4d.24xlarge"],
+        "hidden_sage_maker_image_version_aliases": [
+            {"sage_maker_image_name": "sagemaker_distribution", "version_aliases": ["1.0"]},
+        ],
+        "execution_role_session_name_mode": "USER_IDENTITY",
+    },
+    "auto_mount_home_efs": "DefaultAsDomain",
+}
+
+
+def test_user_settings_options_are_every_user_settings_member():
+    """Every UserSettings member is a top-level option, and the fixture sets all of them."""
+    model = botocore.session.get_session().get_service_model("sagemaker")
+    members = model.shape_for("UserSettings").members
+
+    assert len(USER_SETTINGS_OPTIONS) == len(members)
+    assert set(USER_SETTINGS_OPTIONS) == set(USER_SETTINGS_FIXTURE)
+    assert set(build_user_settings(USER_SETTINGS_FIXTURE)) == set(members)
+
+
+def test_module_argument_spec_exposes_user_settings_options_at_top_level():
+    assert set(_user_settings_options()) == set(USER_SETTINGS_OPTIONS)
+
+
+@pytest.mark.parametrize(
+    "aws_key, produced",
+    [
+        ("AutoMountHomeEFS", "auto_mount_home_efs"),
+        ("EFSFileSystemConfig", "efs_file_system_config"),
+        ("FSxLustreFileSystemConfig", "f_sx_lustre_file_system_config"),
+    ],
+)
+def test_camel_dict_to_snake_dict_spelling_of_acronym_keys(aws_key, produced):
+    """Pins what the implicit conversion produces, which the response renames depend on."""
+    assert list(camel_dict_to_snake_dict({aws_key: "x"})) == [produced]
+
+
+def test_user_settings_renames_restore_the_acronym_keys():
+    assert set(USER_SETTINGS_REQUEST_RENAMES.values()) == {
+        "AutoMountHomeEFS",
+        "EFSFileSystemConfig",
+        "FSxLustreFileSystemConfig",
+    }
+    assert USER_SETTINGS_RESPONSE_RENAMES == {"f_sx_lustre_file_system_config": "fsx_lustre_file_system_config"}
+
+
+def test_build_user_settings_converts_and_renames():
+    user_settings = build_user_settings(USER_SETTINGS_FIXTURE)
+
+    assert user_settings["AutoMountHomeEFS"] == "DefaultAsDomain"
+    assert user_settings["CustomFileSystemConfigs"] == [
+        {"EFSFileSystemConfig": {"FileSystemId": "fs-0123456789abcdef0", "FileSystemPath": "/home"}},
+        {"FSxLustreFileSystemConfig": {"FileSystemId": "fs-0fedcba9876543210", "FileSystemPath": "/lustre"}},
+        {"S3FileSystemConfig": {"S3Uri": "s3://bucket/data", "MountPath": "/mnt/s3"}},
+    ]
+    jupyter_lab = user_settings["JupyterLabAppSettings"]
+    assert jupyter_lab["DefaultResourceSpec"]["SageMakerImageArn"] == _DEFAULT_RESOURCE_SPEC["sage_maker_image_arn"]
+    assert jupyter_lab["DefaultResourceSpec"]["InstanceType"] == "ml.t3.medium"
+    assert jupyter_lab["AppLifecycleManagement"]["IdleSettings"] == {
+        "LifecycleManagement": "ENABLED",
+        "IdleTimeoutInMinutes": 120,
+        "MinIdleTimeoutInMinutes": 60,
+        "MaxIdleTimeoutInMinutes": 240,
+    }
+    assert jupyter_lab["EmrSettings"] == {
+        "AssumableRoleArns": ["arn:aws:iam::123456789012:role/assume"],
+        "ExecutionRoleArns": ["arn:aws:iam::123456789012:role/run"],
+    }
+    assert user_settings["SpaceStorageSettings"] == {
+        "DefaultEbsStorageSettings": {"DefaultEbsVolumeSizeInGb": 5, "MaximumEbsVolumeSizeInGb": 100}
+    }
+    assert user_settings["CanvasAppSettings"] == {
+        "TimeSeriesForecastingSettings": {
+            "Status": "ENABLED",
+            "AmazonForecastRoleArn": "arn:aws:iam::123456789012:role/forecast",
+        },
+        "ModelRegisterSettings": {
+            "Status": "DISABLED",
+            "CrossAccountModelRegisterRoleArn": "arn:aws:iam::123456789012:role/register",
+        },
+        "WorkspaceSettings": {"S3ArtifactPath": "s3://bucket/canvas", "S3KmsKeyId": "kms-key"},
+        "IdentityProviderOAuthSettings": [
+            {"DataSourceName": "Snowflake", "Status": "ENABLED", "SecretArn": "arn:secret"}
+        ],
+        "DirectDeploySettings": {"Status": "ENABLED"},
+        "KendraSettings": {"Status": "DISABLED"},
+        "GenerativeAiSettings": {"AmazonBedrockRoleArn": "arn:aws:iam::123456789012:role/bedrock"},
+        "EmrServerlessSettings": {"ExecutionRoleArn": "arn:aws:iam::123456789012:role/emr", "Status": "ENABLED"},
+    }
+    assert user_settings["RStudioServerProAppSettings"] == {"AccessStatus": "ENABLED", "UserGroup": "R_STUDIO_USER"}
+    assert user_settings["StudioWebPortalSettings"]["HiddenSageMakerImageVersionAliases"] == [
+        {"SageMakerImageName": "sagemaker_distribution", "VersionAliases": ["1.0"]}
+    ]
+
+
+def test_build_user_settings_drops_none_and_unrelated_options():
+    params = {
+        "domain_id": "d-abc123",
+        "user_profile_name": "user",
+        "tags": {"k": "v"},
+        "wait": True,
+        "execution_role": "arn:aws:iam::123456789012:role/exec",
+        "security_groups": None,
+        "jupyter_lab_app_settings": {
+            "default_resource_spec": {"instance_type": "ml.t3.medium", "sage_maker_image_arn": None},
+            "app_lifecycle_management": None,
+        },
+    }
+
+    assert build_user_settings(params) == {
+        "ExecutionRole": "arn:aws:iam::123456789012:role/exec",
+        "JupyterLabAppSettings": {"DefaultResourceSpec": {"InstanceType": "ml.t3.medium"}},
+    }
+
+
+def test_build_user_settings_returns_empty_dict_without_settings():
+    assert build_user_settings({"domain_id": "d-abc123", "user_profile_name": "user", "tags": None}) == {}
+
+
+def test_user_settings_to_update_returns_only_differing_members_merged_over_current():
+    current = deepcopy(USER_SETTINGS_FIXTURE)
+    module = MagicMock()
+    module.params = {
+        "domain_id": "d-abc123",
+        "user_profile_name": "user",
+        "execution_role": current["execution_role"],
+        "security_groups": list(reversed(current["security_groups"])),
+        "jupyter_lab_app_settings": {
+            "default_resource_spec": {"instance_type": "ml.m5.large", "sage_maker_image_arn": None},
+            "app_lifecycle_management": None,
+        },
+        "studio_web_portal": None,
+    }
+
+    result = user_settings_to_update(module, {"user_settings": current})
+
+    expected_jupyter_lab = deepcopy(current["jupyter_lab_app_settings"])
+    expected_jupyter_lab["default_resource_spec"]["instance_type"] = "ml.m5.large"
+    assert result == {"jupyter_lab_app_settings": expected_jupyter_lab}
+
+
+def test_user_settings_to_update_is_empty_when_nothing_differs():
+    module = MagicMock()
+    module.params = {"domain_id": "d-abc123", "user_profile_name": "user", **deepcopy(USER_SETTINGS_FIXTURE)}
+
+    assert user_settings_to_update(module, {"user_settings": deepcopy(USER_SETTINGS_FIXTURE)}) == {}
+
+
+def test_user_settings_to_update_without_user_settings():
+    module = MagicMock()
+    module.params = {"domain_id": "d-abc123", "user_profile_name": "user", **dict.fromkeys(USER_SETTINGS_OPTIONS)}
+
+    assert user_settings_to_update(module, {"user_settings": deepcopy(USER_SETTINGS_FIXTURE)}) == {}
+
+
+def test_user_settings_round_trip_through_format_user_profile():
+    profile = {
+        "DomainId": "d-abc123",
+        "UserProfileArn": "arn:aws:sagemaker:us-east-1:123456789012:user-profile/d-abc123/user",
+        "UserProfileName": "user",
+        "HomeEfsFileSystemUid": "200001",
+        "Status": "InService",
+        "UserSettings": build_user_settings(USER_SETTINGS_FIXTURE),
+        "ResponseMetadata": {"RequestId": "abc"},
+    }
+
+    result = format_user_profile(profile)
+
+    assert result["user_settings"] == USER_SETTINGS_FIXTURE
+    assert result["domain_id"] == "d-abc123"
+    assert result["user_profile_arn"] == profile["UserProfileArn"]
+    assert result["home_efs_file_system_uid"] == "200001"
+    assert result["status"] == "InService"
+    assert "response_metadata" not in result
+    assert "tags" not in result
+
+
+def test_format_user_profile_attaches_tags_unchanged():
+    tags = {"CamelKey": "v", "snake_key": "w"}
+
+    result = format_user_profile({"DomainId": "d-abc123", "UserProfileName": "user"}, tags=tags)
+
+    assert result["tags"] == tags
+    assert "user_settings" not in result
+
+
+def test_describe_user_profile_returns_none_when_missing():
+    client = MagicMock()
+    client.describe_user_profile.side_effect = ClientError(
+        {"Error": {"Code": "ResourceNotFound", "Message": "User profile does not exist."}},
+        "DescribeUserProfile",
+    )
+
+    assert describe_user_profile(client, "d-abc123", "missing") is None
+    client.describe_user_profile.assert_called_once_with(DomainId="d-abc123", UserProfileName="missing")
+
+
+def test_describe_user_profile_reraises_other_errors():
+    client = MagicMock()
+    client.describe_user_profile.side_effect = ClientError(
+        {"Error": {"Code": "AccessDeniedException", "Message": "denied"}},
+        "DescribeUserProfile",
+    )
+
+    with pytest.raises(ClientError):
+        describe_user_profile(client, "d-abc123", "user")
+
+
+def test_list_user_profiles_maps_filters_and_paginates():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {
+        "UserProfiles": [{"DomainId": "d-abc123", "UserProfileName": "user"}]
+    }
+
+    result = list_user_profiles(
+        client, domain_id="d-abc123", user_profile_name_contains="us", sort_by="CreationTime", sort_order="Descending"
+    )
+
+    assert result == [{"DomainId": "d-abc123", "UserProfileName": "user"}]
+    client.get_paginator.assert_called_once_with("list_user_profiles")
+    paginator.paginate.assert_called_once_with(
+        DomainIdEquals="d-abc123", UserProfileNameContains="us", SortBy="CreationTime", SortOrder="Descending"
+    )
+
+
+def test_list_user_profiles_omits_unset_filters():
+    client = MagicMock()
+    paginator = client.get_paginator.return_value
+    paginator.paginate.return_value.build_full_result.return_value = {"UserProfiles": []}
+
+    assert list_user_profiles(client) == []
+    paginator.paginate.assert_called_once_with()
