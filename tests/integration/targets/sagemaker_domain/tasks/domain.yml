@@ -23,7 +23,8 @@
     auth_mode: IAM
     app_network_access_type: VpcOnly
     vpc_id: "{{ vpc.vpc.id }}"
-    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    subnet_ids:
+      - "{{ vpc_subnet.subnet.id }}"
     default_user_settings:
       execution_role: "{{ domain_role.iam_role.arn }}"
       security_groups: "{{ vpc_security_group.group_id }}"
@@ -58,7 +59,8 @@
     auth_mode: IAM
     app_network_access_type: VpcOnly
     vpc_id: "{{ vpc.vpc.id }}"
-    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    subnet_ids:
+      - "{{ vpc_subnet.subnet.id }}"
     default_user_settings:
       execution_role: "{{ domain_role.iam_role.arn }}"
       security_groups: "{{ vpc_security_group.group_id }}"
@@ -79,7 +81,8 @@
     auth_mode: IAM
     app_network_access_type: VpcOnly
     vpc_id: "{{ vpc.vpc.id }}"
-    subnet_ids: "{{ vpc_subnet.subnet.id }}"
+    subnet_ids:
+      - "{{ vpc_subnet.subnet.id }}"
     default_user_settings:
       execution_role: "{{ domain_role.iam_role.arn }}"
       security_groups: "{{ vpc_security_group.group_id }}"

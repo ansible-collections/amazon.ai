@@ -197,7 +197,7 @@ def wait_for_domain_status(
                 module.fail_json(
                     msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for {status.value}."
                 )
-        if attempt < max_attempts - 1:
+        if attempt > 0:
             time.sleep(sleep_time)
     module.fail_json(
         msg=(
@@ -313,7 +313,8 @@ def delete_domain(client, module, domain_id: str) -> Tuple[bool, str]:
                 f"Delete those resources before retrying. AWS error: {e}"
             )
         )
-    wait_for_domain_status(client, module, domain_id, DomainStatus.DELETED)
+    if module.params.get("wait", False):
+        wait_for_domain_status(client, module, domain_id, DomainStatus.DELETED)
     return True, f"Domain {domain_id} deleted successfully."
 
 
