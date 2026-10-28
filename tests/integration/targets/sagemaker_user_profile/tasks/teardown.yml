@@ -1,0 +1,35 @@
+---
+- name: Delete the user profiles
+  amazon.ai.sagemaker_user_profile:
+    state: absent
+    domain_id: "{{ domain_id }}"
+    user_profile_name: "{{ item }}"
+    wait: true
+  loop:
+    - "{{ full_profile_name }}"
+    - "{{ minimal_profile_name }}"
+  when: domain_id is defined
+  ignore_errors: true
+
+- name: Delete the SageMaker domain and its home EFS file system
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ domain_name }}"
+    retention_policy: Delete
+    wait_timeout: "{{ domain_wait_timeout }}"
+  ignore_errors: true
+
+- name: Delete the security groups
+  amazon.aws.ec2_security_group:
+    name: "{{ item }}"
+    vpc_id: "{{ default_vpc.vpcs[0].id }}"
+    state: absent
+  loop: "{{ security_group_names }}"
+  when: default_vpc.vpcs | default([]) | length == 1
+  ignore_errors: true
+
+- name: Delete the IAM role
+  amazon.aws.iam_role:
+    name: "{{ iam_role_name }}"
+    state: absent
+  ignore_errors: true
