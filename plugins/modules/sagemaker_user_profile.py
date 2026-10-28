@@ -2015,7 +2015,12 @@ def _user_profile_status_check(client, module, existing: Optional[Dict[str, Any]
         domain_id = module.params["domain_id"]
         user_profile_name = module.params["user_profile_name"]
 
-        if status == UserProfileStatus.IN_SERVICE:
+        if status in (
+            UserProfileStatus.IN_SERVICE,
+            UserProfileStatus.UPDATE_FAILED,
+            UserProfileStatus.DELETE_FAILED,
+            UserProfileStatus.FAILED,
+        ):
             return existing
 
         if module.check_mode:
@@ -2023,19 +2028,6 @@ def _user_profile_status_check(client, module, existing: Optional[Dict[str, Any]
                 changed=False,
                 msg=f"User profile {user_profile_name} in domain {domain_id} is currently in {status} state (check mode).",
                 user_profile={},
-            )
-
-        if status in (
-            UserProfileStatus.FAILED,
-            UserProfileStatus.UPDATE_FAILED,
-            UserProfileStatus.DELETE_FAILED,
-        ):
-            if (status in (UserProfileStatus.UPDATE_FAILED, UserProfileStatus.FAILED) and not present) or (
-                status == UserProfileStatus.DELETE_FAILED and present
-            ):
-                return existing
-            module.fail_json(
-                msg=f"Cannot manage User profile {user_profile_name} in domain {domain_id} while it is in terminal status {status}."
             )
 
         if not module.params["wait"]:
