@@ -402,8 +402,15 @@ def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict
         domain_id = domain["DomainId"]
         domain_name = domain["DomainName"]
         status = domain.get("Status")
+        is_present = module.params["state"] == "present"
 
-        if status == DomainStatus.IN_SERVICE:
+        if status in (
+            DomainStatus.IN_SERVICE,
+            DomainStatus.FAILED,
+            DomainStatus.UPDATE_FAILED,
+            DomainStatus.DELETE_FAILED,
+        ):
+            # Domain can be managed even if in FAILED state as long as the failure reason is fixed
             return
 
         if module.check_mode:
@@ -411,19 +418,6 @@ def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict
                 changed=False,
                 msg=f"Domain {domain_name} is currently in {status} state (check mode).",
             )
-
-        if status in (
-            DomainStatus.FAILED,
-            DomainStatus.UPDATE_FAILED,
-            DomainStatus.DELETE_FAILED,
-        ):
-            if status in (DomainStatus.UPDATE_FAILED, DomainStatus.FAILED) and module.params["state"] == "absent":
-                # Can be deleted but not updated
-                return
-            elif status == DomainStatus.DELETE_FAILED and module.params["state"] == "present":
-                # Can be updated but not deleted
-                return
-            module.fail_json(msg=f"Cannot manage Domain {domain_name} while it is in terminal status {status}.")
 
         if not module.params["wait"]:
             module.exit_json(
@@ -433,7 +427,7 @@ def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict
 
         if status == DomainStatus.DELETING:
             wait_for_domain_status(client, module, domain_id, DomainStatus.DELETED)
-            if module.params["state"] == "absent":
+            if not is_present:
                 module.exit_json(changed=False, msg=f"Domain {domain_name} is deleted.")
         elif status in (DomainStatus.PENDING, DomainStatus.UPDATING):
             wait_for_domain_status(client, module, domain_id, DomainStatus.IN_SERVICE)
