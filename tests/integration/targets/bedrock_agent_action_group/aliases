@@ -1,1 +1,5 @@
 cloud/aws
+
+# Deprecated due to AWS Bedrock Agents Classic entering maintenance mode
+disabled
+unsupported

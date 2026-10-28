@@ -11,6 +11,10 @@ short_description: Manage Amazon Bedrock Agent Aliases
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)
+deprecated:
+  removed_in: "3.0.0"
+  why: AWS Bedrock Agents (Classic) is in Maintenance Mode and new agent creation is restricted by AWS.
+  alternative: Use updated Bedrock AgentCore services/modules where available.
 description:
     - This module creates and deletes an alias for a Bedrock Agent.
 options:
@@ -212,6 +216,17 @@ def main():
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
+    )
+
+    # Issue the deprecation warning
+    module.deprecate(
+        msg=(
+            "AWS Bedrock Agents Classic is in Maintenance Mode. "
+            "New agent creation is restricted by AWS."
+            "Use updated Bedrock AgentCore services/modules where available."
+        ),
+        version="3.0.0",  # The future collection version when it will be removed
+        collection_name="amazon.ai",
     )
 
     state: str = module.params["state"]
