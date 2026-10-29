@@ -57,8 +57,9 @@
       ansible.builtin.command: >-
         skopeo copy
         --format v2s2
+        --retry-times 3
         --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ skopeo_source_image }}
         docker://{{ image_version_base_image }}
       no_log: true
 
