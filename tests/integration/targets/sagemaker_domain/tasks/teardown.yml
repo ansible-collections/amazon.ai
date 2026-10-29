@@ -1,0 +1,26 @@
+---
+- name: Ensure test Domain and empty home file system are deleted
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ domain_name }}"
+    retention_policy: Delete
+  ignore_errors: true
+
+- name: "Delete group by its id"
+  amazon.aws.ec2_security_group:
+    group_id: "{{ vpc_security_group.group_id }}"
+    state: absent
+  ignore_errors: true
+
+- name: Remove subnet
+  amazon.aws.ec2_vpc_subnet:
+    state: absent
+    vpc_id: "{{ vpc.vpc.id }}"
+    cidr: "{{ domain_subnet_cidr }}"
+  ignore_errors: true
+  
+- name: Delete an existing VPC
+  amazon.aws.ec2_vpc_net:
+    vpc_id: "{{ vpc.vpc.id }}"
+    state: absent
+  ignore_errors: true

@@ -35,7 +35,7 @@ For more information about communication, see the [Ansible communication guide](
 <!--start requires_ansible-->
 ## Ansible version compatibility
 
-This collection has been tested against the following Ansible versions: **>=2.17.0**.
+This collection has been tested against the following Ansible versions: **>=2.18.0**.
 
 Plugins and modules within a collection may be tested with only specific Ansible versions.
 A collection may contain metadata that identifies these versions.
@@ -78,6 +78,8 @@ Name | Description
 [amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
 [amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
 [amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
+[amazon.ai.sagemaker_domain](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_module.rst)|Manage Amazon SageMaker AI Domains
+[amazon.ai.sagemaker_domain_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_info_module.rst)|Gather information about SageMaker AI Domains
 [amazon.ai.sagemaker_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_module.rst)|Manage Amazon SageMaker endpoints
 [amazon.ai.sagemaker_endpoint_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_module.rst)|Manage Amazon SageMaker endpoint configurations
 [amazon.ai.sagemaker_endpoint_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_info_module.rst)|Gather information about SageMaker endpoint configurations
