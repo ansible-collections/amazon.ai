@@ -397,7 +397,9 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict[str, Any]]) -> None:
+def _domain_status_check(
+    client, module: AnsibleAWSModule, domain: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
     if domain:
         domain_id = domain["DomainId"]
         domain_name = domain["DomainName"]
@@ -411,7 +413,7 @@ def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict
             DomainStatus.DELETE_FAILED,
         ):
             # Domain can be managed even if in FAILED state as long as the failure reason is fixed
-            return
+            return domain
 
         if module.check_mode:
             module.exit_json(
@@ -434,6 +436,7 @@ def _domain_status_check(client, module: AnsibleAWSModule, domain: Optional[Dict
 
         # Refresh the domain information after waiting for the status change
         domain = describe_domain(client, domain_id)
+    return domain
 
 
 def _domain_by_name(client, domain_name: str) -> Optional[Dict[str, Any]]:
@@ -541,7 +544,7 @@ def main() -> None:
             module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
         existing = _domain_by_name(client, domain_name)
-        _domain_status_check(client, module, existing)
+        existing = _domain_status_check(client, module, existing)
         if module.params["state"] == "absent":
             _absent(client, module, domain_name, existing)
         else:
