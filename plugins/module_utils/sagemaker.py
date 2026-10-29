@@ -2,6 +2,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 import time
+from enum import Enum
 from typing import Any
 from typing import Dict
 from typing import List
@@ -31,6 +32,19 @@ try:
     import botocore
 except ImportError:
     pass
+
+
+class NotebookInstanceStatus(str, Enum):
+    DELETED = "Deleted"
+    PENDING = "Pending"
+    IN_SERVICE = "InService"
+    STOPPING = "Stopping"
+    STOPPED = "Stopped"
+    FAILED = "Failed"
+    DELETING = "Deleting"
+    UPDATING = "Updating"
+    PENDING_MAINTENANCE = "PendingMaintenance"
+    IN_MAINTENANCE = "InMaintenance"
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -163,6 +177,28 @@ def describe_image_version(
         return client.describe_image_version(**params)
     except is_boto3_error_code("ResourceNotFound"):
         return None
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_notebook_instance(client, notebook_instance_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific SageMaker notebook instance.
+    Args:
+        client: The boto3 SageMaker client.
+        notebook_instance_name: The name of the SageMaker notebook instance.
+
+    Returns:
+        A dictionary with the notebook instance details if found, otherwise None.
+
+    Raises:
+        ClientError: If AWS returns an error other than 'ValidationException' or 'RecordNotFound'.
+    """
+    try:
+        return client.describe_notebook_instance(NotebookInstanceName=notebook_instance_name)
+    except is_boto3_error_code("ValidationException") as e:
+        if "RecordNotFound" in e.response["Error"].get("Message", ""):
+            return None
+        raise
 
 
 @AWSRetry.jittered_backoff(retries=10)
@@ -470,6 +506,354 @@ def delete_image_version(client, module, existing: Optional[Dict[str, Any]]) -> 
         return False, f"SageMaker image version {image_name}:{version} does not exist."
     wait_for_image_version_deletion(client, module)
     return True, f"SageMaker image version {image_name}:{version} deleted successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def list_notebook_instances(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve a list of SageMaker notebook instances, limited to the name filter used by the collection.
+
+    Args:
+        client: The boto3 SageMaker client.
+        **params: Additional filter parameters for the list operation.
+
+    Returns:
+        A list of notebook instance summary dictionaries.
+    """
+    paginator = client.get_paginator("list_notebook_instances")
+    filtered_params = {key: value for key, value in params.items() if key in {"NameContains"}}
+    return paginator.paginate(**filtered_params).build_full_result()["NotebookInstances"]
+
+
+def notebook_instance_params(module) -> Dict[str, Any]:
+    """
+    Build the boto3 Create/Update NotebookInstance request parameters from module params.
+
+    Args:
+        module: The Ansible module containing the desired state.
+
+    Returns:
+        A dictionary of parameters suitable for the boto3 Create/Update NotebookInstance call.
+    """
+    values = {
+        field: module.params.get(field)
+        for field in (
+            "notebook_instance_name",
+            "instance_type",
+            "role_arn",
+            "subnet_id",
+            "security_groups",
+            "volume_size_in_gb",
+            "direct_internet_access",
+            "kms_key_id",
+            "lifecycle_config_name",
+            "default_code_repository",
+            "additional_code_repositories",
+            "root_access",
+            "platform_identifier",
+            "ip_address_type",
+        )
+    }
+    params = snake_dict_to_camel_dict(scrub_none_parameters(values), capitalize_first=True)
+    if "VolumeSizeInGb" in params:
+        params["VolumeSizeInGB"] = params.pop("VolumeSizeInGb")
+    if "SecurityGroups" in params:
+        params["SecurityGroupIds"] = params.pop("SecurityGroups")
+    if module.params.get("tags") is not None:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+    return params
+
+
+def notebook_instance_immutable_parameters_needs_replacement(existing_notebook: Dict[str, Any], module) -> bool:
+    """
+    Determine whether an existing notebook instance has immutable parameter drift.
+    Args:
+        existing_notebook: The existing notebook instance parameters.
+        module: The Ansible module containing the desired state.
+
+    Returns:
+        True if there are immutable parameter drifts, False otherwise.
+    """
+    existing_params = camel_dict_to_snake_dict(existing_notebook)
+    replacement_fields = (
+        "subnet_id",
+        "security_groups",
+        "direct_internet_access",
+        "kms_key_id",
+        "root_access",
+        "platform_identifier",
+    )
+    differing_fields = []
+    for field in replacement_fields:
+        desired_value = module.params.get(field)
+        if desired_value is None:
+            continue
+        existing_value = existing_params.get(field)
+        if field == "security_groups":
+            if set(desired_value) != set(existing_value or []):
+                differing_fields.append(field)
+        elif desired_value != existing_value:
+            differing_fields.append(field)
+    return bool(differing_fields)
+
+
+def notebook_instance_update_params(existing_notebook: Dict[str, Any], module) -> Dict[str, Any]:
+    """
+    Build an explicit UpdateNotebookInstance request for mutable drift.
+    Args:
+        existing_notebook: The existing notebook instance parameters.
+        module: The Ansible module containing the desired state.
+
+    Returns:
+        A dictionary of parameters to update for the notebook instance.
+    """
+    # module option -> (UpdateNotebookInstance key, DescribeNotebookInstance key, Disassociate* key)
+    mutable_fields = {
+        "instance_type": ("InstanceType", "InstanceType", None),
+        "role_arn": ("RoleArn", "RoleArn", None),
+        "volume_size_in_gb": ("VolumeSizeInGB", "VolumeSizeInGB", None),
+        "lifecycle_config_name": (
+            "LifecycleConfigName",
+            "NotebookInstanceLifecycleConfigName",
+            "DisassociateLifecycleConfig",
+        ),
+        "default_code_repository": (
+            "DefaultCodeRepository",
+            "DefaultCodeRepository",
+            "DisassociateDefaultCodeRepository",
+        ),
+        "additional_code_repositories": (
+            "AdditionalCodeRepositories",
+            "AdditionalCodeRepositories",
+            "DisassociateAdditionalCodeRepositories",
+        ),
+        "ip_address_type": ("IpAddressType", "IpAddressType", None),
+    }
+    params: Dict[str, Any] = dict()
+    for option, (update_key, describe_key, disassociate_key) in mutable_fields.items():
+        desired_value = module.params.get(option)
+        existing_value = existing_notebook.get(describe_key)
+        if option == "volume_size_in_gb" and desired_value is not None and existing_value is not None:
+            if desired_value < existing_value:
+                module.fail_json(
+                    msg=(
+                        "Notebook instance volume_size_in_gb cannot be reduced in place; "
+                        "create a replacement instance with the desired volume size."
+                    )
+                )
+        if desired_value == "" or desired_value == []:
+            if existing_value and disassociate_key:
+                params[disassociate_key] = True
+            continue
+        if option == "additional_code_repositories":
+            if set(desired_value) != set(existing_value or []):
+                params[update_key] = desired_value
+        elif desired_value != existing_value:
+            params[update_key] = desired_value
+    return params
+
+
+def notebook_instance_needs_update(existing_notebook: Dict[str, Any], module) -> Tuple[bool, Dict[str, Any]]:
+    """
+    Determine whether mutable notebook instance properties differ.
+
+    Args:
+        existing_notebook: The existing notebook instance parameters.
+        module: The Ansible module object.
+
+    Returns:
+        A tuple where the first element is True if the notebook instance needs an update.
+        False otherwise, and the second element is the dictionary of update parameters.
+    """
+    params = notebook_instance_update_params(existing_notebook, module)
+    needs_update = len(params) > 0
+    return needs_update, params
+
+
+def _notebook_instance_waiter_name(status: str) -> str:
+    return {
+        "InService": "notebook_instance_in_service",
+        "Stopped": "notebook_instance_stopped",
+        "Deleted": "notebook_instance_deleted",
+    }[status]
+
+
+def wait_for_notebook_instance_status(client, module, status: str) -> None:
+    """
+    Wait for a notebook instance status using SageMaker's botocore waiter.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+        status: The desired notebook instance status to wait for.
+    """
+    name = module.params["notebook_instance_name"]
+    wait_timeout = module.params.get("wait_timeout", 600)
+    delay = min(30, max(1, wait_timeout))
+    waiter = client.get_waiter(_notebook_instance_waiter_name(status))
+    try:
+        waiter.wait(
+            NotebookInstanceName=name,
+            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, wait_timeout // delay)),
+        )
+    except WaiterError as e:
+        failure_reason = ""
+        if status != "Deleted":
+            instance = describe_notebook_instance(client, name)
+            if instance:
+                failure_reason = instance.get("FailureReason", "")
+        module.fail_json(msg=f"Error waiting for notebook instance {name} to reach {status}: {failure_reason or e}")
+
+
+def create_notebook_instance(client, module) -> None:
+    """
+    Create a SageMaker notebook instance.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+    """
+    client.create_notebook_instance(**notebook_instance_params(module))
+    if module.params.get("wait", False):
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.IN_SERVICE)
+
+
+def update_notebook_instance(client, module, existing: Dict[str, Any], params: Dict[str, Any]) -> None:
+    """
+    Update mutable notebook instance properties, stopping and restoring notebook as needed.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+        existing: The existing notebook instance details.
+        params: The parameters to update.
+    """
+    if module.check_mode:
+        return
+
+    status = existing.get("NotebookInstanceStatus")
+    was_running = status == NotebookInstanceStatus.IN_SERVICE
+    name = existing["NotebookInstanceName"]
+    if existing.get("NotebookInstanceStatus") != NotebookInstanceStatus.STOPPED:
+        # Notebook has to be in Stopped state before updating
+        stop_notebook_instance(client, module, status)
+    client.update_notebook_instance(NotebookInstanceName=name, **params)
+    if module.params.get("wait", False):
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+    updated_status = describe_notebook_instance(client, name).get("NotebookInstanceStatus")
+    if was_running and updated_status == NotebookInstanceStatus.STOPPED:
+        # Restore the notebook to its previous running state
+        start_notebook_instance(client, module, updated_status)
+
+
+def start_notebook_instance(client, module, status, wait_for_start=True) -> None:
+    """
+    Start a stopped SageMaker notebook instance.
+    This operation will transition the notebook instance to the IN_SERVICE state.
+    The wait behavior can be controlled using the `wait_for_start` parameter.
+    There are instances when wait to start is required even if user chooses not to wait by default.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+        status: The current status of the notebook instance.
+        wait_for_start: Whether to wait for the notebook instance to reach the IN_SERVICE state.
+    """
+    if status == NotebookInstanceStatus.IN_SERVICE:
+        return
+    elif status == NotebookInstanceStatus.STOPPED:
+        # Cannot start the notebook instance if it is not in the STOPPED state.
+        client.start_notebook_instance(NotebookInstanceName=module.params["notebook_instance_name"])
+        if wait_for_start:
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.IN_SERVICE)
+    else:
+        module.fail_json(msg=f"Cannot start notebook instance while it is in status {status}.")
+
+
+def stop_notebook_instance(client, module, status) -> None:
+    """
+    Stop a running SageMaker notebook instance.
+    This operation will transition the notebook instance to the STOPPED state.
+    The wait behavior can be controlled using the `wait_for_stop` parameter.
+    There are instances when wait to stop is required even if user chooses not to wait by default.
+    The current status of the notebook instance is used to determine if stopping is necessary.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+        status: The current status of the notebook instance.
+        wait_for_stop: Whether to wait for the notebook instance to reach the STOPPED state.
+    """
+    if status in [NotebookInstanceStatus.STOPPED, NotebookInstanceStatus.DELETING]:
+        return
+    elif status == NotebookInstanceStatus.STOPPING:
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+        return
+    if status in (NotebookInstanceStatus.PENDING, NotebookInstanceStatus.UPDATING, NotebookInstanceStatus.IN_SERVICE):
+        # stop_notebook_instance can only be called if the notebook is in the IN_SERVICE state
+        # UPDATING and PENDING will resolve to STOPPED
+        if status == NotebookInstanceStatus.IN_SERVICE:
+            client.stop_notebook_instance(NotebookInstanceName=module.params["notebook_instance_name"])
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+    else:
+        module.fail_json(msg=f"Cannot stop notebook instance while it is in status {status}.")
+
+
+def reconcile_notebook_instance_tags(client, module, existing: Dict[str, Any]) -> bool:
+    """
+    Reconcile notebook instance tags, honoring purge_tags and check mode.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module object.
+        existing: The existing notebook instance details.
+
+    Returns:
+        bool: True if any tags were added or removed, False otherwise.
+    """
+    desired_tags = module.params.get("tags")
+    if desired_tags is None:
+        return False
+    current_tags = list_tags(client, existing["NotebookInstanceArn"])
+    tags_to_add, tags_to_remove = compare_aws_tags(current_tags, desired_tags, module.params.get("purge_tags", True))
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(
+            ResourceArn=existing["NotebookInstanceArn"],
+            Tags=ansible_dict_to_boto3_tag_list(tags_to_add),
+        )
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=existing["NotebookInstanceArn"], TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
+
+
+def delete_notebook_instance(client, module, existing: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Stop and delete a SageMaker notebook instance.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The existing notebook instance details.
+    Returns:
+        Tuple[bool, str]: Boolean indicating if any changes were made and a message string.
+    """
+    name = module.params["notebook_instance_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted Notebook instance {name}."
+    status = existing.get("NotebookInstanceStatus")
+    if status == NotebookInstanceStatus.DELETING:
+        if module.params.get("wait", False):
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.DELETED)
+        return True, f"Notebook instance {name} deleted successfully."
+    if status != NotebookInstanceStatus.STOPPED:
+        # Notebook has to be in Stopped state before deletion
+        stop_notebook_instance(client, module, status)
+    client.delete_notebook_instance(NotebookInstanceName=name)
+    if module.params.get("wait", False):
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.DELETED)
+    return True, f"Notebook instance {name} deleted successfully."
 
 
 @AWSRetry.jittered_backoff(retries=10)
