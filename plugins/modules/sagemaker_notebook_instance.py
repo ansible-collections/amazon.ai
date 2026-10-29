@@ -309,7 +309,7 @@ from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 def _notebook_instance_status_check(
     client, existing_notebook: Optional[Dict[str, Any]], module: AnsibleAWSModule
-) -> None:
+) -> Optional[Dict[str, Any]]:
     """
     Check the status of an existing SageMaker Notebook instance and handle various states.
     Acts as an early exit mechanism for various notebook instance states.
@@ -324,8 +324,9 @@ def _notebook_instance_status_check(
         name = existing_notebook.get("NotebookInstanceName")
         is_present = module.params.get("state") == "present"
 
-        if status == NotebookInstanceStatus.IN_SERVICE or status == NotebookInstanceStatus.STOPPED:
-            return
+        if status in (NotebookInstanceStatus.IN_SERVICE, NotebookInstanceStatus.STOPPED, NotebookInstanceStatus.FAILED):
+            # In case of previous FAILED state we allow to proceed with present or absent
+            return existing_notebook
 
         if module.check_mode:
             module.exit_json(
@@ -333,12 +334,7 @@ def _notebook_instance_status_check(
                 msg=f"Notebook instance {name} is currently in {status} state (check mode).",
             )
 
-        if status == NotebookInstanceStatus.FAILED:
-            if not is_present:
-                # Can be deleted but not updated
-                return
-            module.fail_json(msg=f"Cannot manage Notebook instance {name} while it is in terminal status {status}.")
-        elif status in (NotebookInstanceStatus.PENDING_MAINTENANCE, NotebookInstanceStatus.IN_MAINTENANCE):
+        if status in (NotebookInstanceStatus.PENDING_MAINTENANCE, NotebookInstanceStatus.IN_MAINTENANCE):
             module.fail_json(msg=f"Cannot manage Notebook instance {name} while it is in status {status}.")
 
         if not module.params["wait"]:
@@ -351,14 +347,15 @@ def _notebook_instance_status_check(
             wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.DELETED)
             if not is_present:
                 module.exit_json(changed=False, msg=f"Notebook instance {name} is deleted.")
-        elif status in (NotebookInstanceStatus.PENDING, NotebookInstanceStatus.UPDATING):
-            # Notebook is stopped when updating / pending and will resolve to STOPPED state
+        elif status in (NotebookInstanceStatus.STOPPING, NotebookInstanceStatus.UPDATING):
+            # Notebook is stopped when updating / stopping and will resolve to STOPPED state
             wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
-        elif status == NotebookInstanceStatus.STOPPING:
-            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
+        elif status == NotebookInstanceStatus.PENDING:
+            wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.IN_SERVICE)
 
         # Refresh the notebook information after waiting for the status change
         existing_notebook = describe_notebook_instance(client, name)
+    return existing_notebook
 
 
 def _notebook_instance_result(client, name: str) -> Dict[str, Any]:
@@ -466,7 +463,7 @@ def main() -> None:
             module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
         existing_notebook_instance = describe_notebook_instance(client, name)
-        _notebook_instance_status_check(client, existing_notebook_instance, module)
+        existing_notebook_instance = _notebook_instance_status_check(client, existing_notebook_instance, module)
 
         if module.params["state"] == "present":
             _present(module, client, name, existing_notebook_instance)
