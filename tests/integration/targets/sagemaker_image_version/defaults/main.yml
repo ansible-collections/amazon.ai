@@ -6,5 +6,8 @@ image_role_name: "ansible-test-sagemaker-image-version-role-{{ test_id }}"
 # the ECR repo and pushes a Docker V2 image via skopeo (installed inside the test container)
 # at the start of the test run.
 image_version_ecr_repository_name: "ansible-test-sm-image-version-{{ test_id }}"
+# Source of the image pushed to ECR. public.ecr.aws is not used: its anonymous pull quota is per
+# source IP, which CI runners share, and it fails with "toomanyrequests: Data limit exceeded".
+skopeo_source_image: "mirror.gcr.io/library/alpine:3.20"
 # Resolved at runtime from aws_account_id in tasks/main.yml.
 image_version_base_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ image_version_ecr_repository_name }}:latest"
