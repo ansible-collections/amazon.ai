@@ -1,0 +1,9 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Resources:
+  SpaceTestUserProfile:
+    Type: AWS::SageMaker::UserProfile
+    Properties:
+      DomainId: "{{ space_domain.domain.domain_id }}"
+      UserProfileName: "{{ space_user_profile_name }}"
+      UserSettings:
+        ExecutionRole: "{{ space_role.iam_role.arn }}"

@@ -1,0 +1,56 @@
+---
+- name: Create IAM role for SageMaker Space
+  amazon.aws.iam_role:
+    name: "{{ space_role_name }}"
+    assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker_space.json') }}"
+    state: present
+    managed_policies:
+      - arn:aws:iam::aws:policy/AmazonSageMakerFullAccess
+  register: space_role
+
+- name: Wait for IAM role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+
+- name: Create a VPC for SageMaker Space
+  amazon.aws.ec2_vpc_net:
+    name: "{{ space_vpc_name }}"
+    cidr_block: 10.101.0.0/16
+    region: "{{ aws_region }}"
+  register: space_vpc
+
+- name: Create a subnet for SageMaker Space
+  amazon.aws.ec2_vpc_subnet:
+    state: present
+    vpc_id: "{{ space_vpc.vpc.id }}"
+    cidr: "{{ space_subnet_cidr }}"
+  register: space_subnet
+
+- name: Create a security group for SageMaker Space
+  amazon.aws.ec2_security_group:
+    name: "{{ space_security_group_name }}"
+    description: Security group for amazon.ai SageMaker Space tests
+    vpc_id: "{{ space_vpc.vpc.id }}"
+  register: space_security_group
+
+- name: Create SageMaker Domain for Space tests
+  amazon.ai.sagemaker_domain:
+    domain_name: "{{ space_domain_name }}"
+    auth_mode: IAM
+    app_network_access_type: VpcOnly
+    vpc_id: "{{ space_vpc.vpc.id }}"
+    subnet_ids:
+      - "{{ space_subnet.subnet.id }}"
+    default_user_settings:
+      execution_role: "{{ space_role.iam_role.arn }}"
+      security_groups:
+        - "{{ space_security_group.group_id }}"
+    tag_propagation: DISABLED
+  register: space_domain
+
+- name: Create SageMaker UserProfile for Space ownership
+  amazon.aws.cloudformation:
+    stack_name: "{{ space_user_profile_stack_name }}"
+    state: present
+    template_body: "{{ lookup('template', 'user_profile.yml.j2') }}"
+  register: space_user_profile

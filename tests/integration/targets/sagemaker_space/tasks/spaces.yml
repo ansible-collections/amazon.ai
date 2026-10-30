@@ -1,0 +1,437 @@
+---
+- name: Check Space info returns a list for a missing exact name
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-missing"
+  register: missing_space
+
+- name: Assert missing Space lookup is non-fatal
+  ansible.builtin.assert:
+    that:
+      - missing_space.spaces == []
+
+- name: Create Space in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_display_name: "Integration Space"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+    tags:
+      Environment: "integration"
+      Owner: "ansible-test"
+  check_mode: true
+  register: create_check
+
+- name: Assert Space create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check.changed
+      - "create_check.msg.startswith('Check mode: would have ')"
+
+- name: Confirm check mode did not create the Space
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: create_check_info
+
+- name: Assert Space is absent after create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check_info.spaces == []
+
+- name: Create Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_display_name: "Integration Space"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+    tags:
+      Environment: "integration"
+      Owner: "ansible-test"
+  register: create_real
+
+- name: Assert Space was created and reached InService
+  ansible.builtin.assert:
+    that:
+      - create_real.changed
+      - create_real.space.status == 'InService'
+
+- name: Re-run Space creation
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_display_name: "Integration Space"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+    tags:
+      Environment: "integration"
+      Owner: "ansible-test"
+  register: create_rerun
+
+- name: Assert Space create idempotency
+  ansible.builtin.assert:
+    that:
+      - not create_rerun.changed
+      - create_rerun.msg == 'Space ' ~ space_name ~ ' is already up to date.'
+
+- name: Create a second Space in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+  check_mode: true
+  register: secondary_create_check
+
+- name: Assert second Space create check mode
+  ansible.builtin.assert:
+    that:
+      - secondary_create_check.changed
+      - "secondary_create_check.msg.startswith('Check mode: would have ')"
+
+- name: Create second Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+  register: secondary_create_real
+
+- name: Assert second Space was created
+  ansible.builtin.assert:
+    that:
+      - secondary_create_real.changed
+      - secondary_create_real.space.status == 'InService'
+
+- name: Re-run second Space creation
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    ownership_settings:
+      owner_user_profile_name: "{{ space_user_profile_name }}"
+    space_settings:
+      app_type: "JupyterLab"
+    space_sharing_settings:
+      sharing_type: "Private"
+  register: secondary_create_rerun
+
+- name: Assert second Space create idempotency
+  ansible.builtin.assert:
+    that:
+      - not secondary_create_rerun.changed
+      - secondary_create_rerun.msg == 'Space ' ~ space_name ~ '-secondary is already up to date.'
+
+- name: Query Space by exact Domain and name
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: space_by_name
+
+- name: Assert exact Space info result
+  ansible.builtin.assert:
+    that:
+      - space_by_name.spaces | length == 1
+      - space_by_name.spaces[0].space_name == space_name
+      - space_by_name.spaces[0].status == 'InService'
+
+- name: Update Space display name in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_display_name: "Updated Integration Space"
+    tags:
+      Environment: "integration-updated"
+      Team: "ai"
+  check_mode: true
+  register: update_check
+
+- name: Assert Space update check mode
+  ansible.builtin.assert:
+    that:
+      - update_check.changed
+      - "update_check.msg.startswith('Check mode: would have ')"
+
+- name: Update Space display name
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_display_name: "Updated Integration Space"
+    tags:
+      Environment: "integration-updated"
+      Team: "ai"
+  register: update_real
+
+- name: Assert Space was updated
+  ansible.builtin.assert:
+    that:
+      - update_real.changed
+      - update_real.space.status == 'InService'
+      - update_real.space.space_display_name == 'Updated Integration Space'
+
+- name: Re-query Space after update
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: update_info
+
+- name: Assert update preserved the Space ARN
+  ansible.builtin.assert:
+    that:
+      - update_info.spaces | length == 1
+      - update_info.spaces[0].space_arn == create_real.space.space_arn
+      - update_info.spaces[0].space_display_name == 'Updated Integration Space'
+
+- name: Re-run Space update
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_display_name: "Updated Integration Space"
+    tags:
+      Environment: "integration-updated"
+      Team: "ai"
+  register: update_rerun
+
+- name: Assert Space update idempotency
+  ansible.builtin.assert:
+    that:
+      - not update_rerun.changed
+      - update_rerun.msg == 'Space ' ~ space_name ~ ' is already up to date.'
+
+- name: Verify filtered Space listing and max_items
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name_contains: "{{ space_name }}"
+    max_items: 2
+    sort_by: "LastModifiedTime"
+    sort_order: "Descending"
+  register: filtered_spaces
+
+- name: Assert filtered Space list results
+  ansible.builtin.assert:
+    that:
+      - filtered_spaces.spaces | length == 2
+      - filtered_spaces.spaces[0].space_name == space_name
+      - filtered_spaces.spaces[1].space_name == space_name ~ '-secondary'
+
+- name: Verify max_items caps filtered Space listing
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name_contains: "{{ space_name }}"
+    max_items: 1
+    sort_by: "LastModifiedTime"
+    sort_order: "Descending"
+  register: limited_spaces
+
+- name: Assert max_items returns the first sorted Space
+  ansible.builtin.assert:
+    that:
+      - limited_spaces.spaces | length == 1
+      - limited_spaces.spaces[0].space_name == space_name
+
+- name: Detect immutable Space app type changes without force
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_settings:
+      app_type: "CodeEditor"
+  register: replacement_without_force
+
+- name: Assert immutable Space drift is warned and unchanged
+  ansible.builtin.assert:
+    that:
+      - not replacement_without_force.changed
+      - replacement_without_force.warnings | length > 0
+
+- name: Confirm immutable drift was not applied without force
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: replacement_without_force_info
+
+- name: Assert the Space app type remains unchanged without force
+  ansible.builtin.assert:
+    that:
+      - replacement_without_force_info.spaces | length == 1
+      - replacement_without_force_info.spaces[0].space_settings.app_type == 'JupyterLab'
+
+- name: Check forced Space replacement in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_settings:
+      app_type: "CodeEditor"
+    force: true
+  check_mode: true
+  register: replacement_check
+
+- name: Assert forced Space replacement check mode
+  ansible.builtin.assert:
+    that:
+      - replacement_check.changed
+      - "replacement_check.msg.startswith('Check mode: would have ')"
+      - "'would be replaced' in replacement_check.msg"
+
+- name: Confirm check mode preserved the existing Space
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: replacement_check_info
+
+- name: Assert Space app type remains unchanged after replacement check mode
+  ansible.builtin.assert:
+    that:
+      - replacement_check_info.spaces | length == 1
+      - replacement_check_info.spaces[0].space_settings.app_type == 'JupyterLab'
+
+- name: Replace Space with force
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_settings:
+      app_type: "CodeEditor"
+    force: true
+  register: replacement_real
+
+- name: Assert forced Space replacement reached InService
+  ansible.builtin.assert:
+    that:
+      - replacement_real.changed
+      - replacement_real.space.status == 'InService'
+      - replacement_real.space.space_settings.app_type == 'CodeEditor'
+
+- name: Re-run forced Space replacement
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    space_settings:
+      app_type: "CodeEditor"
+    force: true
+  register: replacement_rerun
+
+- name: Assert forced Space replacement idempotency
+  ansible.builtin.assert:
+    that:
+      - not replacement_rerun.changed
+      - replacement_rerun.msg == 'Space ' ~ space_name ~ ' is already up to date.'
+
+- name: Delete Space in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    state: absent
+  check_mode: true
+  register: delete_check
+
+- name: Assert Space delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check.changed
+      - "delete_check.msg.startswith('Check mode: would have ')"
+
+- name: Delete Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    state: absent
+  register: delete_real
+
+- name: Assert Space was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_real.changed
+
+- name: Confirm Space deletion
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+  register: deleted_space
+
+- name: Assert deleted Space is absent
+  ansible.builtin.assert:
+    that:
+      - deleted_space.spaces == []
+
+- name: Re-run Space deletion
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    state: absent
+  register: delete_rerun
+
+- name: Assert Space delete idempotency
+  ansible.builtin.assert:
+    that:
+      - not delete_rerun.changed
+      - delete_rerun.msg == 'Space ' ~ space_name ~ ' does not exist.'
+
+- name: Delete second Space in check mode
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    state: absent
+  check_mode: true
+  register: secondary_delete_check
+
+- name: Assert second Space delete check mode
+  ansible.builtin.assert:
+    that:
+      - secondary_delete_check.changed
+      - "secondary_delete_check.msg.startswith('Check mode: would have ')"
+
+- name: Delete second Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    state: absent
+  register: secondary_delete_real
+
+- name: Assert second Space was deleted
+  ansible.builtin.assert:
+    that:
+      - secondary_delete_real.changed
+
+- name: Confirm second Space deletion
+  amazon.ai.sagemaker_space_info:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+  register: deleted_secondary_space
+
+- name: Assert second Space is absent
+  ansible.builtin.assert:
+    that:
+      - deleted_secondary_space.spaces == []
+
+- name: Re-run second Space deletion
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    state: absent
+  register: secondary_delete_rerun
+
+- name: Assert second Space delete idempotency
+  ansible.builtin.assert:
+    that:
+      - not secondary_delete_rerun.changed
+      - secondary_delete_rerun.msg == 'Space ' ~ space_name ~ '-secondary does not exist.'

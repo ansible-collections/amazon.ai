@@ -9,6 +9,8 @@ from unittest.mock import patch
 
 import boto3
 import pytest
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import SpaceStatus
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_space_status
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import get_waiter
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
@@ -20,11 +22,21 @@ class SageMaker:
     def describe_model_package_group(self, **kwargs):
         return kwargs
 
+    def describe_space(self, **kwargs):
+        return kwargs
+
 
 def test_get_waiter_returns_model_package_group_deletion_waiter():
     waiter = get_waiter(SageMaker(), "model_package_group_deleted")
 
     assert waiter.name == "model_package_group_deleted"
+
+
+@pytest.mark.parametrize("waiter_name", ["space_in_service", "space_deleted"])
+def test_get_waiter_returns_space_waiter(waiter_name):
+    waiter = get_waiter(SageMaker(), waiter_name)
+
+    assert waiter.name == waiter_name
 
 
 @patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.get_waiter")
@@ -136,3 +148,26 @@ def test_wait_for_image_version_deletion_reports_other_waiter_errors():
         wait_for_image_version_deletion(client, module)
 
     assert "Error waiting for SageMaker image version img:1" in module.fail_json.call_args.kwargs["msg"]
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.get_waiter")
+def test_wait_for_space_status_uses_timeout(mock_get_waiter):
+    waiter = MagicMock()
+    mock_get_waiter.return_value = waiter
+    module = MagicMock()
+    module.params = {"wait_timeout": 30}
+
+    wait_for_space_status(
+        MagicMock(),
+        module,
+        "d-example",
+        "example-space",
+        SpaceStatus.IN_SERVICE,
+    )
+
+    mock_get_waiter.assert_called_once()
+    waiter.wait.assert_called_once_with(
+        DomainId="d-example",
+        SpaceName="example-space",
+        WaiterConfig={"Delay": 15, "MaxAttempts": 2},
+    )
