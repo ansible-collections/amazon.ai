@@ -10,6 +10,7 @@ from typing import Union
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 
@@ -240,3 +241,183 @@ def test_convert_time_ranges_edge_cases():
             assert to_time == expected_to
         else:
             assert to_time is None
+
+
+# -------------------------------------------
+# Tests for feature_group_properties_to_update
+# -------------------------------------------
+EXISTING_FEATURE_GROUP = {
+    "feature_group_name": "fg",
+    "record_identifier_feature_name": "id",
+    "event_time_feature_name": "ts",
+    "description": "probe",
+    "role_arn": "arn:aws:iam::123456789012:role/fg",
+    "feature_definitions": [
+        {"feature_name": "id", "feature_type": "String"},
+        {"feature_name": "ts", "feature_type": "Fractional"},
+        {
+            "feature_name": "embedding",
+            "feature_type": "Fractional",
+            "collection_type": "Vector",
+            "collection_config": {"vector_config": {"dimension": 4}},
+        },
+    ],
+    "online_store_config": {
+        "enable_online_store": True,
+        "storage_type": "Standard",
+        "ttl_duration": {"unit": "Hours", "value": 2},
+    },
+    "offline_store_config": {
+        "s3_storage_config": {"s3_uri": "s3://bucket/fg", "resolved_output_s3_uri": "s3://bucket/fg/data"},
+        "disable_glue_table_creation": True,
+    },
+    "throughput_config": {"throughput_mode": "OnDemand"},
+}
+
+
+def _desired(**overrides):
+    desired = {
+        "feature_group_name": "fg",
+        "record_identifier_feature_name": "id",
+        "event_time_feature_name": "ts",
+        "feature_definitions": [dict(feature) for feature in EXISTING_FEATURE_GROUP["feature_definitions"]],
+        "online_store_config": {"enable_online_store": True, "ttl_duration": {"unit": "Hours", "value": 2}},
+        "offline_store_config": {"s3_storage_config": {"s3_uri": "s3://bucket/fg"}},
+    }
+    desired.update(overrides)
+    return desired
+
+
+def test_feature_group_no_difference():
+    assert feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired()) == {}
+
+
+def test_feature_group_unset_options_are_ignored():
+    assert feature_group_properties_to_update(EXISTING_FEATURE_GROUP, {"feature_group_name": "fg"}) == {}
+
+
+def test_feature_group_new_feature():
+    features = _desired()["feature_definitions"] + [{"feature_name": "extra", "feature_type": "String"}]
+    result = feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(feature_definitions=features))
+    assert result == {"feature_additions": [{"feature_name": "extra", "feature_type": "String"}]}
+
+
+@pytest.mark.parametrize(
+    "feature",
+    [
+        {"feature_name": "ts", "feature_type": "String"},
+        {"feature_name": "embedding", "feature_type": "Fractional", "collection_type": "List"},
+        {
+            "feature_name": "embedding",
+            "feature_type": "Fractional",
+            "collection_config": {"vector_config": {"dimension": 8}},
+        },
+    ],
+)
+def test_feature_group_changed_feature(feature):
+    features = [f for f in _desired()["feature_definitions"] if f["feature_name"] != feature["feature_name"]]
+    with pytest.raises(ValueError, match="feature_definitions"):
+        feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(feature_definitions=features + [feature]))
+
+
+def test_feature_group_removed_feature():
+    features = _desired()["feature_definitions"][:2]
+    with pytest.raises(ValueError, match="cannot be removed"):
+        feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(feature_definitions=features))
+
+
+def test_feature_group_ttl_changed():
+    online = {"ttl_duration": {"unit": "Days", "value": 1}}
+    result = feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(online_store_config=online))
+    assert result == {"online_store_config": {"ttl_duration": {"unit": "Days", "value": 1}}}
+
+
+def test_feature_group_storage_type_standard_to_v2():
+    online = {"storage_type": "Standard_V2"}
+    result = feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(online_store_config=online))
+    assert result == {"online_store_config": {"storage_type": "Standard_V2"}}
+
+
+def test_feature_group_storage_type_other_transition():
+    with pytest.raises(ValueError, match="storage_type"):
+        feature_group_properties_to_update(
+            EXISTING_FEATURE_GROUP, _desired(online_store_config={"storage_type": "InMemory"})
+        )
+
+
+@pytest.mark.parametrize(
+    "online",
+    [{"enable_online_store": False}, {"security_config": {"kms_key_id": "alias/key"}}],
+)
+def test_feature_group_online_store_create_only(online):
+    with pytest.raises(ValueError, match="online_store_config"):
+        feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(online_store_config=online))
+
+
+def test_feature_group_online_store_added_to_offline_only_group():
+    existing = {key: value for key, value in EXISTING_FEATURE_GROUP.items() if key != "online_store_config"}
+    with pytest.raises(ValueError, match="online_store_config"):
+        feature_group_properties_to_update(
+            existing, {"online_store_config": {"ttl_duration": {"unit": "Days", "value": 1}}}
+        )
+
+
+def test_feature_group_throughput_only_differing_fields():
+    existing = dict(
+        EXISTING_FEATURE_GROUP,
+        throughput_config={
+            "throughput_mode": "Provisioned",
+            "provisioned_read_capacity_units": 1,
+            "provisioned_write_capacity_units": 1,
+        },
+    )
+    desired = {
+        "throughput_config": {
+            "throughput_mode": "Provisioned",
+            "provisioned_read_capacity_units": 1,
+            "provisioned_write_capacity_units": 2,
+        }
+    }
+    assert feature_group_properties_to_update(existing, desired) == {
+        "throughput_config": {"provisioned_write_capacity_units": 2}
+    }
+
+
+def test_feature_group_throughput_switch_to_provisioned_sends_all():
+    existing = dict(EXISTING_FEATURE_GROUP, throughput_config={"throughput_mode": "OnDemand"})
+    throughput = {
+        "throughput_mode": "Provisioned",
+        "provisioned_read_capacity_units": 1,
+        "provisioned_write_capacity_units": 1,
+    }
+    assert feature_group_properties_to_update(existing, {"throughput_config": throughput}) == {
+        "throughput_config": throughput
+    }
+
+
+def test_feature_group_throughput_switch_to_on_demand():
+    existing = dict(
+        EXISTING_FEATURE_GROUP,
+        throughput_config={
+            "throughput_mode": "Provisioned",
+            "provisioned_read_capacity_units": 1,
+            "provisioned_write_capacity_units": 1,
+        },
+    )
+    result = feature_group_properties_to_update(existing, {"throughput_config": {"throughput_mode": "OnDemand"}})
+    assert result == {"throughput_config": {"throughput_mode": "OnDemand"}}
+
+
+@pytest.mark.parametrize(
+    "option,value",
+    [
+        ("record_identifier_feature_name", "other"),
+        ("event_time_feature_name", "other"),
+        ("description", "changed"),
+        ("role_arn", "arn:aws:iam::123456789012:role/other"),
+        ("offline_store_config", {"s3_storage_config": {"s3_uri": "s3://other/fg"}}),
+    ],
+)
+def test_feature_group_create_only_property_changed(option, value):
+    with pytest.raises(ValueError, match=option):
+        feature_group_properties_to_update(EXISTING_FEATURE_GROUP, _desired(**{option: value}))

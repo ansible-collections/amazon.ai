@@ -1,0 +1,23 @@
+---
+- name: Create IAM role for the offline store
+  amazon.aws.iam_role:
+    name: "{{ feature_store_role_name }}"
+    assume_role_policy_document: "{{ lookup('file', 'assume_role_sagemaker.json') }}"
+    state: present
+    managed_policies:
+      - "arn:aws:iam::aws:policy/AmazonSageMakerFeatureStoreAccess"
+  register: feature_store_role
+
+- name: Wait for IAM role to propagate
+  ansible.builtin.pause:
+    seconds: 15
+
+- name: Create S3 bucket for the offline store
+  amazon.aws.s3_bucket:
+    name: "{{ feature_store_bucket_name }}"
+    state: present
+
+- name: Set the role ARNs used by the tests
+  ansible.builtin.set_fact:
+    feature_store_role_arn: "{{ feature_store_role.iam_role.arn }}"
+    missing_role_arn: "{{ feature_store_role.iam_role.arn | regex_replace('role/.*$', 'role/does-not-exist-' ~ test_id) }}"

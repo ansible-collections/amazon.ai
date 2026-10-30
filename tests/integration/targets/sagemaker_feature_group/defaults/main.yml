@@ -1,0 +1,22 @@
+test_id: "{{ tiny_prefix }}"
+feature_group_name: "test-sm-fg-{{ test_id }}"
+offline_feature_group_name: "test-sm-fg-off-{{ test_id }}"
+no_store_feature_group_name: "test-sm-fg-nostore-{{ test_id }}"
+bad_role_feature_group_name: "test-sm-fg-badrole-{{ test_id }}"
+# The bucket name must contain "sagemaker" for AmazonSageMakerFeatureStoreAccess to grant the role access to it.
+feature_store_bucket_name: "test-sagemaker-fg-{{ test_id }}"
+feature_store_s3_uri: "s3://{{ feature_store_bucket_name }}/feature-store"
+feature_store_role_name: "ansible-test-sagemaker-fg-role-{{ test_id }}"
+
+initial_features:
+  - feature_name: record_id
+    feature_type: String
+  - feature_name: event_time
+    feature_type: Fractional
+extended_features:
+  - feature_name: record_id
+    feature_type: String
+  - feature_name: event_time
+    feature_type: Fractional
+  - feature_name: score
+    feature_type: Integral

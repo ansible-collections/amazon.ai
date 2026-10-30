@@ -14,6 +14,7 @@ except ImportError:
     pass
 
 from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_feature_group_status
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
@@ -22,6 +23,7 @@ from ansible.module_utils.common.dict_transformations import snake_dict_to_camel
 
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_message
+from ansible_collections.amazon.aws.plugins.module_utils.errors import AWSErrorHandler
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import ansible_dict_to_boto3_tag_list
 from ansible_collections.amazon.aws.plugins.module_utils.tagging import compare_aws_tags
@@ -1262,3 +1264,218 @@ def _pipeline_properties_match(
         if actual != expected:
             return False
     return True
+
+
+class FeatureGroupErrorHandler(AWSErrorHandler):
+    """Raise AnsibleAWSError for botocore errors; DescribeFeatureGroup reports a missing group as ResourceNotFound."""
+
+    @classmethod
+    def _is_missing(cls):
+        return is_boto3_error_code("ResourceNotFound")
+
+
+FEATURE_GROUP_OPTIONS = (
+    "feature_group_name",
+    "record_identifier_feature_name",
+    "event_time_feature_name",
+    "feature_definitions",
+    "online_store_config",
+    "offline_store_config",
+    "throughput_config",
+    "role_arn",
+    "description",
+)
+
+# UpdateFeatureGroup accepts at most this many FeatureAdditions per call.
+FEATURE_ADDITIONS_PER_CALL = 100
+
+
+def feature_group_desired_config(module) -> Dict[str, Any]:
+    """
+    Collect the feature group options the user set, in snake_case with None values removed.
+
+    Args:
+        module: The Ansible module instance.
+
+    Returns:
+        A dictionary keyed by option name.
+    """
+    return scrub_none_parameters({option: module.params.get(option) for option in FEATURE_GROUP_OPTIONS})
+
+
+@FeatureGroupErrorHandler.list_error_handler("describe feature group")
+@AWSRetry.jittered_backoff(retries=10)
+def describe_feature_group(client, feature_group_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a SageMaker feature group with all of its feature definitions.
+
+    Args:
+        client: The boto3 SageMaker client.
+        feature_group_name: The name of the feature group.
+
+    Returns:
+        The describe_feature_group() response if found, otherwise None.
+    """
+    feature_group = client.describe_feature_group(FeatureGroupName=feature_group_name)
+    next_token = feature_group.pop("NextToken", None)
+    while next_token:
+        page = client.describe_feature_group(FeatureGroupName=feature_group_name, NextToken=next_token)
+        feature_group["FeatureDefinitions"].extend(page.get("FeatureDefinitions", []))
+        next_token = page.get("NextToken")
+    feature_group.pop("ResponseMetadata", None)
+    return feature_group
+
+
+@FeatureGroupErrorHandler.common_error_handler("list feature groups")
+@AWSRetry.jittered_backoff(retries=10)
+def list_feature_groups(client, **params: Any) -> List[Dict[str, Any]]:
+    """
+    Retrieve SageMaker feature group summaries using pagination.
+
+    Args:
+        client: The boto3 SageMaker client.
+        **params: Filter, sort and pagination parameters for the list operation.
+
+    Returns:
+        A list of feature group summary dictionaries.
+    """
+    paginator = client.get_paginator("list_feature_groups")
+    max_results = params.pop("MaxResults", None)
+    if max_results is not None:
+        params["PaginationConfig"] = dict(MaxItems=max_results)
+    return paginator.paginate(**params).build_full_result()["FeatureGroupSummaries"]
+
+
+@FeatureGroupErrorHandler.common_error_handler("list feature group tags")
+def list_feature_group_tags(client, feature_group_arn: str) -> Dict[str, str]:
+    """
+    Retrieve the tags of a SageMaker feature group.
+
+    Args:
+        client: The boto3 SageMaker client.
+        feature_group_arn: The ARN of the feature group.
+
+    Returns:
+        The tags as a dictionary.
+    """
+    return list_tags(client, feature_group_arn)
+
+
+@FeatureGroupErrorHandler.common_error_handler("create feature group")
+def create_feature_group(client, module) -> None:
+    """
+    Create a SageMaker feature group and, when O(wait=true), wait until it is Created.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+    """
+    feature_group_name = module.params["feature_group_name"]
+    if module.check_mode:
+        module.exit_json(changed=True, msg=f"Check mode: would have created feature group {feature_group_name}.")
+    params = snake_dict_to_camel_dict(feature_group_desired_config(module), capitalize_first=True)
+    if module.params.get("tags"):
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+    client.create_feature_group(**params)
+    wait_for_feature_group_status(client, module, feature_group_name, "feature_group_created")
+
+
+@FeatureGroupErrorHandler.common_error_handler("update feature group")
+def update_feature_group(client, module, properties_to_update: Dict[str, Any]) -> bool:
+    """
+    Apply the changes found by feature_group_properties_to_update().
+
+    UpdateFeatureGroup accepts one kind of change per call and rejects a call while another update is in
+    progress, so the changes go out one call at a time: feature additions, then the online store, then
+    throughput. Between calls the module always waits for the asynchronous ones (feature additions and
+    throughput); online store updates are applied synchronously. O(wait) only governs the final wait.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        properties_to_update: The snake_case changes to apply.
+
+    Returns:
+        True if anything was updated.
+    """
+    if not properties_to_update:
+        return False
+    feature_group_name = module.params["feature_group_name"]
+    if module.check_mode:
+        module.exit_json(
+            changed=True,
+            msg=(
+                f"Check mode: would have updated feature group {feature_group_name} "
+                f"({', '.join(properties_to_update)})."
+            ),
+        )
+
+    calls = []
+    feature_additions = properties_to_update.get("feature_additions", [])
+    for start in range(0, len(feature_additions), FEATURE_ADDITIONS_PER_CALL):
+        calls.append((dict(feature_additions=feature_additions[start : start + FEATURE_ADDITIONS_PER_CALL]), True))
+    if "online_store_config" in properties_to_update:
+        calls.append((dict(online_store_config=properties_to_update["online_store_config"]), False))
+    if "throughput_config" in properties_to_update:
+        calls.append((dict(throughput_config=properties_to_update["throughput_config"]), True))
+
+    for index, (change, is_async) in enumerate(calls):
+        client.update_feature_group(
+            FeatureGroupName=feature_group_name,
+            **snake_dict_to_camel_dict(change, capitalize_first=True),
+        )
+        if is_async:
+            is_last = index == len(calls) - 1
+            wait_for_feature_group_status(
+                client, module, feature_group_name, "feature_group_updated", force=not is_last
+            )
+    return True
+
+
+@FeatureGroupErrorHandler.deletion_error_handler("delete feature group")
+def delete_feature_group(client, module) -> bool:
+    """
+    Delete a SageMaker feature group and, when O(wait=true), wait until it is gone.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        True if the feature group was deleted, False if it no longer existed.
+    """
+    feature_group_name = module.params["feature_group_name"]
+    if module.check_mode:
+        module.exit_json(changed=True, msg=f"Check mode: would have deleted feature group {feature_group_name}.")
+    client.delete_feature_group(FeatureGroupName=feature_group_name)
+    wait_for_feature_group_status(client, module, feature_group_name, "feature_group_deleted")
+    return True
+
+
+@FeatureGroupErrorHandler.common_error_handler("update feature group tags")
+def reconcile_feature_group_tags(client, module, feature_group_arn: str) -> bool:
+    """
+    Reconcile SageMaker feature group tags in place, honouring purge_tags.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        feature_group_arn: The ARN of the feature group.
+
+    Returns:
+        True if tags were (or would be, in check mode) changed.
+    """
+    if module.params.get("tags") is None:
+        return False
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        list_tags(client, feature_group_arn),
+        module.params["tags"],
+        module.params["purge_tags"],
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(ResourceArn=feature_group_arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=feature_group_arn, TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
