@@ -633,6 +633,16 @@ def update_model_package_group_tags(
     return True, "Model package group tags updated successfully."
 
 
+def normalize_model_package(package: Dict[str, Any], tags: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+    """Normalize a model package response while preserving customer metadata and tag keys."""
+    normalized = camel_dict_to_snake_dict(package, ignore_list=["Tags", "tags"])
+    if "CustomerMetadataProperties" in package:
+        normalized["customer_metadata_properties"] = package["CustomerMetadataProperties"]
+    if tags is not None:
+        normalized["tags"] = tags
+    return normalized
+
+
 def _fix_model_package_api_key_names(value: Any) -> Any:
     """Normalize AWS API key names for model package dictionaries."""
     if isinstance(value, dict):
@@ -651,7 +661,7 @@ def _fix_model_package_api_key_names(value: Any) -> Any:
 
 def _model_package_dict_values_match(actual: Dict[str, Any], desired: Dict[str, Any]) -> bool:
     for key, desired_value in desired.items():
-        if key not in actual or not _model_package_values_match(actual[key], desired_value):
+        if key not in actual or not model_package_values_match(actual[key], desired_value):
             return False
     return True
 
@@ -665,7 +675,7 @@ def _model_package_list_values_match(actual: List[Any], desired: List[Any]) -> b
         for index, actual_item in enumerate(actual):
             if index in matched_ids or type(actual_item) is not type(desired_item):
                 continue
-            if _model_package_values_match(actual_item, desired_item):
+            if model_package_values_match(actual_item, desired_item):
                 matched_ids.add(index)
                 break
         else:
@@ -673,13 +683,13 @@ def _model_package_list_values_match(actual: List[Any], desired: List[Any]) -> b
     return True
 
 
-def _model_package_values_match(actual: Any, desired: Any) -> bool:
+def model_package_values_match(actual: Any, desired: Any) -> bool:
     """Compare model package values after normalizing AWS key casing and ignoring AWS-only extras."""
     if actual is None or desired is None:
         return actual is None and desired is None
 
-    actual = _normalize_model_package_compare_value(actual)
-    desired = _normalize_model_package_compare_value(desired)
+    actual = normalize_model_package_compare_value(actual)
+    desired = normalize_model_package_compare_value(desired)
 
     if isinstance(desired, dict):
         return isinstance(actual, dict) and _model_package_dict_values_match(actual, desired)
@@ -690,7 +700,7 @@ def _model_package_values_match(actual: Any, desired: Any) -> bool:
     return actual == desired
 
 
-def _normalize_model_package_compare_value(value: Any) -> Any:
+def normalize_model_package_compare_value(value: Any) -> Any:
     """Normalize user-supplied model package values to the AWS API shape for comparisons."""
     if value is None:
         return None
@@ -715,7 +725,7 @@ def _normalize_model_package_compare_value(value: Any) -> Any:
             normalized["CustomerMetadataProperties"] = customer_metadata_properties
         return normalized
     if isinstance(value, list):
-        return [_normalize_model_package_compare_value(item) for item in value]
+        return [normalize_model_package_compare_value(item) for item in value]
     return value
 
 
@@ -846,7 +856,7 @@ def model_package_needs_update(existing: Dict[str, Any], module) -> bool:
         desire_value = desired.get(key)
         if desire_value is None:
             continue
-        if not _model_package_values_match(existing.get(key), desire_value):
+        if not model_package_values_match(existing.get(key), desire_value):
             return True
 
     properties_to_remove = module.params.get("customer_metadata_properties_to_remove")
@@ -857,7 +867,7 @@ def model_package_needs_update(existing: Dict[str, Any], module) -> bool:
     specifications_to_add = module.params.get("additional_inference_specifications_to_add")
     existing_specifications = existing.get("AdditionalInferenceSpecifications", [])
     if specifications_to_add and any(
-        not any(_model_package_values_match(actual, desired) for actual in existing_specifications)
+        not any(model_package_values_match(actual, desired) for actual in existing_specifications)
         for desired in specifications_to_add
     ):
         return True

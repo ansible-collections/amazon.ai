@@ -217,6 +217,8 @@ options:
     wait:
         description:
             - Whether to wait until the model package reaches a terminal status.
+            - With O(state=present), also waits for an existing V(Pending) or V(InProgress) package before reconciliation.
+            - With O(wait=false), an existing in-flight package causes O(state=present) to fail outside check mode.
         type: bool
         default: true
     wait_timeout:
@@ -225,6 +227,8 @@ options:
         type: int
         default: 600
 notes:
+    - With O(state=present), packages in V(Failed) or V(Deleting) fail early. Failed packages can still be deleted.
+    - Check mode does not wait for an existing package to finish processing.
     - 'Requires the following IAM permissions:'
     - sagemaker:CreateModelPackage
     - sagemaker:DescribeModelPackage
@@ -333,19 +337,18 @@ from typing import List
 from typing import Optional
 from typing import Tuple
 
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _model_package_values_match
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _normalize_model_package_compare_value
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_needs_update
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_values_match
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package_compare_value
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
-
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
@@ -371,13 +374,6 @@ _CREATE_ONLY_FIELD_API_NAMES = {
     "metadata_properties": "MetadataProperties",
     "model_package_registration_type": "ModelPackageRegistrationType",
 }
-
-
-def _normalize_model_package(package: Dict[str, Any]) -> Dict[str, Any]:
-    normalized: Dict[str, Any] = camel_dict_to_snake_dict(package, ignore_list=["tags"])
-    if "CustomerMetadataProperties" in package:
-        normalized["customer_metadata_properties"] = package["CustomerMetadataProperties"]
-    return normalized
 
 
 def _wait_for_model_package_status(client, module, model_package_name: Optional[str]) -> None:
@@ -425,7 +421,7 @@ def _ensure_created(client, module) -> Tuple[bool, Dict[str, Any]]:
         if existing is not None:
             tag_arn = get_model_package_tag_arn(existing, client)
             result["tags"] = list_tags(client, tag_arn or existing["ModelPackageArn"])
-            result["model_package"] = _normalize_model_package(existing)
+            result["model_package"] = normalize_model_package(existing)
     return changed, result
 
 
@@ -433,8 +429,8 @@ def _ensure_updated(client, module, existing: Dict[str, Any]) -> Tuple[bool, Dic
     desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
     result: Dict[str, Any] = {"msg": "", "model_package": {}, "tags": {}}
     for param_name, api_name in _CREATE_ONLY_FIELD_API_NAMES.items():
-        desired_value = _normalize_model_package_compare_value(module.params.get(param_name))
-        if desired_value is not None and not _model_package_values_match(existing.get(api_name), desired_value):
+        desired_value = normalize_model_package_compare_value(module.params.get(param_name))
+        if desired_value is not None and not model_package_values_match(existing.get(api_name), desired_value):
             module.warn(
                 f"SageMaker model package field {param_name} is create-only and cannot be changed in place; "
                 "ignoring the requested value."
@@ -478,22 +474,51 @@ def _ensure_updated(client, module, existing: Dict[str, Any]) -> Tuple[bool, Dic
 
     effective_tag_arn = get_model_package_tag_arn(existing) or existing["ModelPackageArn"]
     result["tags"] = list_tags(client, effective_tag_arn)
-    result["model_package"] = _normalize_model_package(existing)
+    result["model_package"] = normalize_model_package(existing)
     result["msg"] = " ".join(messages) if messages else "No updates needed."
     return changed, result
 
 
-def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
-    if existing is not None and existing.get("ModelPackageStatus") == "Deleting":
+def _model_package_status_check(client, module, existing: Dict[str, Any]) -> Dict[str, Any]:
+    status = existing.get("ModelPackageStatus")
+    identifier = (
+        existing.get("ModelPackageArn") or existing.get("ModelPackageName") or module.params.get("model_package_name")
+    )
+    if status == "Deleting":
         module.fail_json(
             msg=(
-                f"Model package {existing.get('ModelPackageName', module.params.get('model_package_name'))} is currently "
+                f"Model package {identifier} is currently "
                 "being deleted. Wait for deletion to complete before recreating or updating it."
             )
         )
 
+    if status == "Failed":
+        module.fail_json(
+            msg=f"Model package {identifier} is in a failed state.",
+            status_details=existing.get("ModelPackageStatusDetails", {}),
+        )
+
+    if status in ("Pending", "InProgress") and not module.check_mode:
+        if not module.params["wait"]:
+            module.fail_json(
+                msg=(
+                    f"Model package {identifier} is currently {status}. "
+                    "Enable wait or retry after processing completes."
+                )
+            )
+        _wait_for_model_package_status(client, module, identifier)
+        existing = describe_model_package(client, identifier)
+        if existing is None:
+            module.fail_json(msg=f"Model package {identifier} disappeared while waiting.")
+
+    return existing
+
+
+def _ensure_present(client, module, existing: Optional[Dict[str, Any]]) -> Tuple[bool, Dict[str, Any]]:
     if existing is None:
         return _ensure_created(client, module)
+
+    existing = _model_package_status_check(client, module, existing)
     return _ensure_updated(client, module, existing)
 
 

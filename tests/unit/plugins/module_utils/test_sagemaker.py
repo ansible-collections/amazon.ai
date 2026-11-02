@@ -9,6 +9,7 @@
 from datetime import datetime
 from decimal import Decimal
 from unittest.mock import MagicMock
+from unittest.mock import call
 from unittest.mock import patch
 
 import pytest
@@ -16,8 +17,6 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_update_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _model_package_values_match
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _normalize_model_package_compare_value
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package_group
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
@@ -33,6 +32,9 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_mo
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_group_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_needs_update
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_values_match
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package_compare_value
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
@@ -40,19 +42,19 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_absent
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_present
-from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import (
-    _normalize_model_package as normalize_model_package_result,
-)
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _validate_model_package_create_params
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import main as model_package_main
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
-from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import (
-    _normalize_model_package as normalize_model_package_info_result,
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import (
+    main as model_package_group_info_main,
 )
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import find_model_packages
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import main as model_package_info_main
 from botocore.exceptions import ClientError
+from botocore.exceptions import EndpointConnectionError
+
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 
 
 @pytest.mark.parametrize(
@@ -192,11 +194,8 @@ def test_build_model_package_update_params_preserves_customer_metadata_keys():
     }
 
 
-@pytest.mark.parametrize(
-    "normalize",
-    [normalize_model_package_result, normalize_model_package_info_result],
-)
-def test_model_package_results_preserve_customer_metadata_keys(normalize):
+@pytest.mark.parametrize("tags", [None, {}, {"MixedCase-Key": "value", "snake_case_key": "other"}])
+def test_model_package_results_preserve_customer_metadata_keys(tags):
     package = {
         "ModelPackageName": "demo-package",
         "CustomerMetadataProperties": {
@@ -205,10 +204,14 @@ def test_model_package_results_preserve_customer_metadata_keys(normalize):
         },
     }
 
-    result = normalize(package)
+    result = normalize_model_package(package, tags)
 
     assert result["model_package_name"] == "demo-package"
     assert result["customer_metadata_properties"] == package["CustomerMetadataProperties"]
+    if tags is None:
+        assert "tags" not in result
+    else:
+        assert result["tags"] == tags
 
 
 def test_normalize_model_package_compare_value_preserves_aws_mime_key_name():
@@ -218,7 +221,7 @@ def test_normalize_model_package_compare_value_preserves_aws_mime_key_name():
         "supported_response_mime_types": ["application/json"],
     }
 
-    result = _normalize_model_package_compare_value(value)
+    result = normalize_model_package_compare_value(value)
 
     assert result["SupportedResponseMIMETypes"] == ["application/json"]
     assert "SupportedResponseMimeTypes" not in result
@@ -234,9 +237,9 @@ def test_model_package_values_match_preserves_other_fields_with_customer_metadat
     }
     desired = dict(actual)
 
-    assert _model_package_values_match(actual, desired)
+    assert model_package_values_match(actual, desired)
     desired["ModelApprovalStatus"] = "Rejected"
-    assert not _model_package_values_match(actual, desired)
+    assert not model_package_values_match(actual, desired)
 
 
 def test_model_package_values_match_handles_non_json_list_values():
@@ -244,10 +247,10 @@ def test_model_package_values_match_handles_non_json_list_values():
     actual = [timestamp, b"payload", Decimal("1.25"), float("nan"), 1]
     desired = [Decimal("1.25"), float("nan"), timestamp, b"payload", True]
 
-    assert not _model_package_values_match(actual, desired)
+    assert not model_package_values_match(actual, desired)
 
     desired[-1] = 1
-    assert _model_package_values_match(actual, desired)
+    assert model_package_values_match(actual, desired)
 
 
 def test_model_package_needs_update_does_not_repeat_completed_delta_updates():
@@ -343,7 +346,7 @@ def test_model_package_values_match_ignores_list_order_and_aws_only_container_fi
         ],
     }
 
-    assert _model_package_values_match(actual, desired)
+    assert model_package_values_match(actual, desired)
 
 
 def test_model_package_tag_arn_prefers_group_arn_when_present():
@@ -689,11 +692,89 @@ def test_ensure_present_rejects_package_already_being_deleted():
     assert "currently being deleted" in module.fail_json.call_args.kwargs["msg"]
 
 
+def test_ensure_present_rejects_failed_package_with_status_details():
+    module = _model_package_module()
+    module.fail_json.side_effect = RuntimeError("fail_json")
+    details = {"ValidationStatuses": [{"Name": "validation", "FailureReason": "invalid model"}]}
+    existing = {
+        "ModelPackageArn": "arn:package",
+        "ModelPackageStatus": "Failed",
+        "ModelPackageStatusDetails": details,
+    }
+
+    with patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._ensure_updated") as update:
+        with pytest.raises(RuntimeError, match="fail_json"):
+            _ensure_present(MagicMock(), module, existing)
+
+    module.fail_json.assert_called_once_with(
+        msg="Model package arn:package is in a failed state.", status_details=details
+    )
+    update.assert_not_called()
+
+
+@pytest.mark.parametrize("status", ["Pending", "InProgress"])
+@pytest.mark.parametrize("check_mode,wait", [(False, True), (False, False), (True, True), (True, False)])
+def test_ensure_present_handles_in_flight_package(status, check_mode, wait):
+    client = MagicMock()
+    module = _model_package_module(wait=wait)
+    module.check_mode = check_mode
+    module.fail_json.side_effect = RuntimeError("fail_json")
+    existing = {"ModelPackageArn": "arn:package", "ModelPackageStatus": status}
+    completed = {"ModelPackageArn": "arn:package", "ModelPackageStatus": "Completed"}
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._wait_for_model_package_status"
+    ) as poll, patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.describe_model_package",
+        return_value=completed,
+    ) as describe, patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._ensure_updated",
+        return_value=(False, {"msg": "No updates needed."}),
+    ) as update:
+        if not check_mode and not wait:
+            with pytest.raises(RuntimeError, match="fail_json"):
+                _ensure_present(client, module, existing)
+            assert f"currently {status}" in module.fail_json.call_args.kwargs["msg"]
+            update.assert_not_called()
+        else:
+            assert _ensure_present(client, module, existing) == (False, {"msg": "No updates needed."})
+            update.assert_called_once_with(client, module, existing if check_mode else completed)
+
+    if not check_mode and wait:
+        poll.assert_called_once_with(client, module, "arn:package")
+        describe.assert_called_once_with(client, "arn:package")
+    else:
+        poll.assert_not_called()
+        describe.assert_not_called()
+
+
+def test_ensure_present_reports_package_disappearing_while_waiting():
+    module = _model_package_module(wait=True)
+    module.fail_json.side_effect = RuntimeError("fail_json")
+    existing = {"ModelPackageName": "demo-package", "ModelPackageStatus": "Pending"}
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._wait_for_model_package_status"
+    ), patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.describe_model_package",
+        return_value=None,
+    ), patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._ensure_updated"
+    ) as update:
+        with pytest.raises(RuntimeError, match="fail_json"):
+            _ensure_present(MagicMock(), module, existing)
+
+    module.fail_json.assert_called_once_with(msg="Model package demo-package disappeared while waiting.")
+    update.assert_not_called()
+
+
 @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.list_tags")
 def test_ensure_present_returns_tags_without_a_tag_filter(mock_list_tags):
     client = MagicMock()
     module = _model_package_module()
-    existing = {"ModelPackageName": "demo-package", "ModelPackageArn": "arn:package"}
+    existing = {
+        "ModelPackageName": "demo-package",
+        "ModelPackageArn": "arn:package",
+        "ModelPackageStatus": "Completed",
+    }
     mock_list_tags.return_value = {"project": "demo"}
     with patch(
         "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.model_package_needs_update",
@@ -811,12 +892,13 @@ def test_ensure_absent_waits_for_package_already_deleting(mock_wait):
 
 @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package.delete_model_package")
 @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package._wait_for_model_package_status")
-def test_ensure_absent_deletes_package_and_waits(mock_wait, mock_delete):
+@pytest.mark.parametrize("status", ["Completed", "Failed"])
+def test_ensure_absent_deletes_package_and_waits(mock_wait, mock_delete, status):
     client = MagicMock()
     module = _model_package_module(wait=True)
     mock_delete.return_value = (True, "deleted")
 
-    changed, result = _ensure_absent(client, module, {"ModelPackageName": "demo-package"})
+    changed, result = _ensure_absent(client, module, {"ModelPackageName": "demo-package", "ModelPackageStatus": status})
 
     assert changed
     assert result == {"msg": "deleted"}
@@ -1623,6 +1705,7 @@ class TestFindModelPackageGroups:
         mock_describe_model_package_group.return_value = {
             "ModelPackageGroupName": "group-a",
             "ModelPackageGroupArn": "arn:a",
+            "CreatedBy": {"UserProfileName": "creator"},
         }
         mock_list_tags.return_value = {"project": "demo"}
 
@@ -1633,6 +1716,7 @@ class TestFindModelPackageGroups:
             {
                 "model_package_group_name": "group-a",
                 "model_package_group_arn": "arn:a",
+                "created_by": {"user_profile_name": "creator"},
                 "tags": {"project": "demo"},
             }
         ]
@@ -1656,6 +1740,7 @@ class TestFindModelPackageGroups:
         mock_list_tags.return_value = {"project": "other"}
 
         assert find_model_package_groups(client, module) == []
+        client.describe_model_package_group.assert_not_called()
 
     @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
     @patch(
@@ -1680,6 +1765,53 @@ class TestFindModelPackageGroups:
         mock_list_tags.return_value = {"project": "other"}
 
         assert find_model_package_groups(client, module) == []
+
+    @pytest.mark.parametrize("vanished", [False, True])
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_tags")
+    @patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.describe_model_package_group"
+    )
+    @patch("ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.list_model_package_groups")
+    def test_tag_filter_describes_only_matching_groups(
+        self, mock_list_model_package_groups, mock_describe_model_package_group, mock_list_tags, vanished
+    ):
+        client = MagicMock()
+        module = MagicMock()
+        module.params = {"tags": {"project": "demo"}}
+        mock_list_model_package_groups.return_value = [
+            {"ModelPackageGroupName": "group-a", "ModelPackageGroupArn": "arn:a"},
+            {"ModelPackageGroupName": "group-b", "ModelPackageGroupArn": "arn:b"},
+        ]
+        mock_list_tags.side_effect = [{"project": "other"}, {"project": "demo"}]
+        mock_describe_model_package_group.return_value = (
+            None
+            if vanished
+            else {
+                "ModelPackageGroupName": "group-b",
+                "ModelPackageGroupArn": "arn:b",
+                "CreatedBy": {"UserProfileName": "creator"},
+            }
+        )
+
+        result = find_model_package_groups(client, module)
+
+        mock_describe_model_package_group.assert_called_once_with(client, "group-b")
+        assert mock_list_tags.call_args_list == [
+            call(client, "arn:a"),
+            call(client, "arn:b"),
+        ]
+        assert result == (
+            []
+            if vanished
+            else [
+                {
+                    "model_package_group_name": "group-b",
+                    "model_package_group_arn": "arn:b",
+                    "created_by": {"user_profile_name": "creator"},
+                    "tags": {"project": "demo"},
+                }
+            ]
+        )
 
     @patch(
         "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.describe_model_package_group"
@@ -1752,6 +1884,46 @@ class TestFindModelPackageGroups:
                 "tags": {"project": "demo", "owner": "platform"},
             }
         ]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        ClientError({"Error": {"Code": "AccessDeniedException", "Message": "Access denied."}}, "CreateClient"),
+        EndpointConnectionError(endpoint_url="https://sagemaker.example.com"),
+    ],
+)
+def test_model_package_group_info_main_reports_connection_errors(error):
+    module = MagicMock()
+    module.client.side_effect = error
+    module.fail_json_aws.side_effect = RuntimeError("fail_json_aws")
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.AnsibleAWSModule",
+        return_value=module,
+    ):
+        with pytest.raises(RuntimeError, match="fail_json_aws"):
+            model_package_group_info_main()
+
+    module.fail_json_aws.assert_called_once_with(error, msg="Failed to connect to AWS.")
+    module.fail_json_aws_error.assert_not_called()
+
+
+def test_model_package_group_info_main_reports_operation_errors():
+    module = MagicMock()
+    error = AnsibleAWSError("Unable to describe model package group.")
+    module.fail_json_aws_error.side_effect = RuntimeError("fail_json_aws_error")
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.AnsibleAWSModule",
+        return_value=module,
+    ), patch(
+        "ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info.find_model_package_groups",
+        side_effect=error,
+    ):
+        with pytest.raises(RuntimeError, match="fail_json_aws_error"):
+            model_package_group_info_main()
+
+    module.fail_json_aws_error.assert_called_once_with(error)
+    module.fail_json_aws.assert_not_called()
 
 
 class TestFindModelPackages:

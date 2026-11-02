@@ -167,23 +167,14 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_packages
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
 
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
-
-
-def _normalize_model_package(package: Dict[str, Any], tags: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
-    normalized: Dict[str, Any] = camel_dict_to_snake_dict(package, ignore_list=["tags"])
-    if "CustomerMetadataProperties" in package:
-        normalized["customer_metadata_properties"] = package["CustomerMetadataProperties"]
-    if tags is not None:
-        normalized["tags"] = tags
-    return normalized
 
 
 def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
@@ -202,7 +193,7 @@ def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]
         if tag_arn is None:
             module.fail_json(msg=f"Unable to determine the tag ARN for model package {model_package_name}.")
         tags = list_tags(client, tag_arn)
-        return [_normalize_model_package(package, tags)]
+        return [normalize_model_package(package, tags)]
 
     params: Dict[str, Any] = snake_dict_to_camel_dict(
         scrub_none_parameters(
@@ -254,7 +245,7 @@ def find_model_packages(client, module: AnsibleAWSModule) -> List[Dict[str, Any]
             package = describe_model_package(client, model_package_identifier, **describe_params)
             if package is None:
                 continue
-        packages.append(_normalize_model_package(package, tags))
+        packages.append(normalize_model_package(package, tags))
 
     return packages
 

@@ -374,6 +374,8 @@ Notes
 -----
 
 .. note::
+   - Listing retrieves tags for each group and describes each matching group to return its full configuration.
+   - When O(tags) is supplied, nonmatching groups are excluded before their detailed configuration is retrieved.
    - Requires the following IAM permissions:
    - sagemaker:DescribeModelPackageGroup
    - sagemaker:ListModelPackageGroups

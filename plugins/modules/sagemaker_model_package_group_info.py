@@ -60,6 +60,8 @@ options:
             - Ignored when O(model_package_group_name) is provided.
         type: int
 notes:
+    - Listing retrieves tags for each group and describes each matching group to return its full configuration.
+    - When O(tags) is supplied, nonmatching groups are excluded before their detailed configuration is retrieved.
     - 'Requires the following IAM permissions:'
     - sagemaker:DescribeModelPackageGroup
     - sagemaker:ListModelPackageGroups
@@ -197,10 +199,13 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         group_identifier = summary.get("ModelPackageGroupName") or summary.get("ModelPackageGroupArn")
         if not group_identifier:
             continue
-        group = describe_model_package_group(client, group_identifier)
-        if group is None:
-            continue
-        group_arn = group.get("ModelPackageGroupArn") or summary.get("ModelPackageGroupArn")
+        group = None
+        group_arn = summary.get("ModelPackageGroupArn")
+        if desired_tags is None or group_arn is None:
+            group = describe_model_package_group(client, group_identifier)
+            if group is None:
+                continue
+            group_arn = group.get("ModelPackageGroupArn") or group_arn
         if not group_arn:
             continue
         tags = list_tags(client, group_arn)
@@ -208,6 +213,10 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         if desired_tags is not None and not desired_tags.items() <= tags.items():
             continue
 
+        if group is None:
+            group = describe_model_package_group(client, group_identifier)
+            if group is None:
+                continue
         groups.append(_normalize_model_package_group(group, tags))
 
     return groups
@@ -228,11 +237,13 @@ def main() -> None:
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 
     try:
-        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        try:
+            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+            module.fail_json_aws(e, msg="Failed to connect to AWS.")
+
         model_package_groups = find_model_package_groups(client, module)
         module.exit_json(changed=False, model_package_groups=model_package_groups)
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

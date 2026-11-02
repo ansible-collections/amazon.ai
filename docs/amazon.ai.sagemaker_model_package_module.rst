@@ -28,8 +28,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
@@ -730,6 +730,8 @@ Parameters
                 </td>
                 <td>
                         <div>Whether to wait until the model package reaches a terminal status.</div>
+                        <div>With O(state=present), also waits for an existing V(Pending) or V(InProgress) package before reconciliation.</div>
+                        <div>With O(wait=false), an existing in-flight package causes O(state=present) to fail outside check mode.</div>
                 </td>
             </tr>
             <tr>
@@ -756,6 +758,8 @@ Notes
 -----
 
 .. note::
+   - With O(state=present), packages in V(Failed) or V(Deleting) fail early. Failed packages can still be deleted.
+   - Check mode does not wait for an existing package to finish processing.
    - Requires the following IAM permissions:
    - sagemaker:CreateModelPackage
    - sagemaker:DescribeModelPackage
