@@ -14,6 +14,13 @@ Version added: 1.0.0
    :local:
    :depth: 1
 
+DEPRECATED
+----------
+:Removed in collection release after 
+:Why: AWS Bedrock Agents (Classic) is in Maintenance Mode and new agent creation is restricted by AWS.
+:Alternative: Use updated Bedrock AgentCore services/modules where available.
+
+
 
 Synopsis
 --------
@@ -289,7 +296,7 @@ Examples
 
 Return Values
 -------------
-Common return values are documented `here <https://docs.ansible.com/ansible/latest/reference_appendices/common_return_values.html#common-return-values>`_, the following are the fields unique to this module:
+Common return values are documented `here <https://docs.ansible.com/projects/ansible/latest/reference_appendices/common_return_values.html#common-return-values>`_, the following are the fields unique to this module:
 
 .. raw:: html
 
@@ -591,6 +598,10 @@ Common return values are documented `here <https://docs.ansible.com/ansible/late
 
 Status
 ------
+
+
+- This module will be removed in version 3.0.0. *[deprecated]*
+- For more information see `DEPRECATED`_.
 
 
 Authors

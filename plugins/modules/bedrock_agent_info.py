@@ -11,6 +11,10 @@ short_description: Gather information about Bedrock Agents
 version_added: "1.0.0"
 author:
     - Alina Buzachis (@alinabuzachis)
+deprecated:
+  removed_in: "3.0.0"
+  why: AWS Bedrock Agents (Classic) is in Maintenance Mode and new agent creation is restricted by AWS.
+  alternative: Use updated Bedrock AgentCore services/modules where available.
 description:
     - This module gets details for a single Bedrock Agent or lists all agents.
 options:
@@ -210,6 +214,17 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
         required_if=[("list_action_groups", True, ["agent_version"])],
+    )
+
+    # Issue the deprecation warning
+    module.deprecate(
+        msg=(
+            "AWS Bedrock Agents Classic is in Maintenance Mode. "
+            "New agent creation is restricted by AWS."
+            "Use updated Bedrock AgentCore services/modules where available."
+        ),
+        version="3.0.0",  # The future collection version when it will be removed
+        collection_name="amazon.ai",
     )
 
     agent_name: Optional[str] = module.params.get("agent_name")

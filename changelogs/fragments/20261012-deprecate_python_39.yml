@@ -1,0 +1,2 @@
+deprecated_features:
+  - Collection - Support for Python 3.9 is deprecated and will be removed in a release after 2027-04-01, following AWS SDK for Python's end of support for Python 3.9 in April 2026 (https://github.com/ansible-collections/amazon.ai/pull/76).
