@@ -4,6 +4,32 @@ amazon.ai Release Notes
 
 .. contents:: Topics
 
+v1.1.0
+======
+
+Release Summary
+---------------
+
+This minor release adds the ``sagemaker_code_repository`` modules and announces deprecation of the Amazon Bedrock Classic modules, ``bedrock_invoke_agent``, and Python 3.9 support.
+
+Deprecated Features
+-------------------
+
+- Collection - Support for Python 3.9 is deprecated and will be removed in a release after 2027-04-01, following AWS SDK for Python's end of support for Python 3.9 in April 2026 (https://github.com/ansible-collections/amazon.ai/pull/76).
+- bedrock_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_agent_action_group - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_agent_action_group_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_agent_alias - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_agent_alias_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_agent_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+- bedrock_invoke_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/82).
+
+New Modules
+-----------
+
+- amazon.ai.sagemaker_code_repository - Manage Amazon SageMaker Code Repositories.
+- amazon.ai.sagemaker_code_repository_info - Gather information about SageMaker Code Repositories.
+
 v1.0.1
 ======
 
