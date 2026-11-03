@@ -1,7 +1,7 @@
 ---
 namespace: amazon
 name: ai
-version: 1.0.1
+version: 1.1.0
 readme: README.md
 authors:
   - Ansible (https://github.com/ansible)
