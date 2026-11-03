@@ -61,15 +61,52 @@
       register: ecr_token
       no_log: true
 
-    # Avoid public ECR's unauthenticated pull data limit in CI.
+    - name: Create temporary Skopeo authfile
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .json
+      register: ecr_authfile
+
     - name: Push Docker V2 image to ECR
-      ansible.builtin.command: >-
-        skopeo copy --format v2s2
-        --retry-times 3
-        --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://{{ skopeo_source_image }}
-        docker://{{ model_image }}
-      no_log: true
+      block:
+        - name: Restrict temporary Skopeo authfile permissions
+          ansible.builtin.file:
+            path: "{{ ecr_authfile.path }}"
+            mode: "0600"
+
+        - name: Log in to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - login
+              - --authfile
+              - "{{ ecr_authfile.path }}"
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ model_image.split('/')[0] }}"
+            stdin: "{{ ecr_token.stdout }}"
+          no_log: true
+
+        - name: Copy Docker V2 image to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - copy
+              - --format
+              - v2s2
+              - --retry-times
+              - "3"
+              - --dest-authfile
+              - "{{ ecr_authfile.path }}"
+              - "docker://{{ skopeo_source_image }}"
+              - "docker://{{ model_image }}"
+          no_log: true
+      always:
+        - name: Remove temporary Skopeo authfile
+          ansible.builtin.file:
+            path: "{{ ecr_authfile.path }}"
+            state: absent
 
     - name: Create S3 bucket for model artifacts
       amazon.aws.s3_bucket:
