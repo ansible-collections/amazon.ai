@@ -633,6 +633,8 @@ def notebook_instance_update_params(existing_notebook: Dict[str, Any], module) -
     for option, (update_key, describe_key, disassociate_key) in mutable_fields.items():
         desired_value = module.params.get(option)
         existing_value = existing_notebook.get(describe_key)
+        if desired_value is None:
+            continue
         if option == "volume_size_in_gb" and desired_value is not None and existing_value is not None:
             if desired_value < existing_value:
                 module.fail_json(
