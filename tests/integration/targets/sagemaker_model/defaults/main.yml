@@ -9,6 +9,9 @@ model_bucket_name: "test-sagemaker-model-bucket-{{ test_id }}"
 # model_image is resolved at runtime from aws_account_id in tasks/main.yml.
 model_ecr_repository_name: "ansible-test-sagemaker-model-{{ test_id }}"
 model_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_ecr_repository_name }}:latest"
+# Source of the image pushed to ECR. public.ecr.aws is not used: its anonymous pull quota is per
+# source IP, which CI runners share, and it fails with "toomanyrequests: Data limit exceeded".
+skopeo_source_image: "mirror.gcr.io/library/alpine:3.20"
 model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
 model_data_url_updated: "s3://{{ model_bucket_name }}/model-v2.tar.gz"
 missing_model_name: "test-sagemaker-model-missing-{{ test_id }}"
