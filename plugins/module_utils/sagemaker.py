@@ -578,9 +578,9 @@ def describe_model_package(client, model_package_name: str, **kwargs: Any) -> Op
     except (
         is_boto3_error_code("ResourceNotFound"),
         is_boto3_error_message("does not exist"),
-        is_boto3_error_message("not found"),      
+        is_boto3_error_message("not found"),
     ):
-        return None      
+        return None
 
 
 @AWSRetry.jittered_backoff(retries=10)
