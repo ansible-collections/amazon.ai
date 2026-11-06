@@ -1,0 +1,10 @@
+---
+test_id: "{{ tiny_prefix }}"
+notebook_instance_name: "test-sm-notebook-{{ test_id }}"
+notebook_instance_name_no_match: "no-sm-notebook-match-{{ test_id }}"
+notebook_instance_role_arn: "{{ lookup('env', 'SAGEMAKER_EXECUTION_ROLE_ARN') }}"
+notebook_instance_type: ml.t3.medium
+notebook_volume_initial: 5
+notebook_volume_updated: 6
+notebook_instance_role_name: "ansible-test-sagemaker-notebook-insance-role-{{ test_id }}"
+notebook_ip_address_type: ipv4
