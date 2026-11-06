@@ -64,8 +64,9 @@
     - name: Push Docker V2 image to ECR
       ansible.builtin.command: >-
         skopeo copy --format v2s2
+        --retry-times 3
         --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://public.ecr.aws/docker/library/alpine:3.20
+        docker://{{ skopeo_source_image }}
         docker://{{ model_image }}
       no_log: true
 
