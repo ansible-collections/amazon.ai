@@ -12,7 +12,7 @@ version_added: "2.0.0"
 author:
     - Jan Likar (@janlikar)
 description:
-    - This module retrieves details for a single Amazon SageMaker model package group or lists all model package groups.
+    - Retrieve details for a single Amazon SageMaker model package group or list all model package groups.
 options:
     model_package_group_name:
         description:
@@ -60,6 +60,8 @@ options:
             - Ignored when O(model_package_group_name) is provided.
         type: int
 notes:
+    - Listing retrieves tags for each group and describes each matching group to return its full configuration.
+    - When O(tags) is supplied, nonmatching groups are excluded before their detailed configuration is retrieved.
     - 'Requires the following IAM permissions:'
     - sagemaker:DescribeModelPackageGroup
     - sagemaker:ListModelPackageGroups
@@ -131,8 +133,9 @@ model_package_groups:
             type: str
             sample: Completed
         tags:
-            description: A dictionary containing the model package group tags.
+            description: A dictionary containing the model package group tags, or an empty dictionary when no tags are associated.
             type: dict
+            returned: always
             sample:
                 project: demo
 """
@@ -166,12 +169,14 @@ def _normalize_model_package_group(group: Dict[str, Any], tags: Dict[str, str]) 
 
 def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str, Any]]:
     model_package_group_name: Optional[str] = module.params.get("model_package_group_name")
+    desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
 
     if model_package_group_name:
         group: Optional[Dict[str, Any]] = describe_model_package_group(client, model_package_group_name)
         if group is None:
             return list()
-        return [_normalize_model_package_group(group, list_tags(client, group["ModelPackageGroupArn"]))]
+        tags = list_tags(client, group["ModelPackageGroupArn"])
+        return [_normalize_model_package_group(group, tags)]
 
     params: Dict[str, Any] = dict()
     if module.params.get("name_contains"):
@@ -190,15 +195,29 @@ def find_model_package_groups(client, module: AnsibleAWSModule) -> List[Dict[str
         **params,
     )
     groups: List[Dict[str, Any]] = []
-    desired_tags: Optional[Dict[str, str]] = module.params.get("tags")
-
     for summary in summaries:
-        tags: Dict[str, str] = list_tags(client, summary["ModelPackageGroupArn"])
+        group_identifier = summary.get("ModelPackageGroupName") or summary.get("ModelPackageGroupArn")
+        if not group_identifier:
+            continue
+        group = None
+        group_arn = summary.get("ModelPackageGroupArn")
+        if desired_tags is None or group_arn is None:
+            group = describe_model_package_group(client, group_identifier)
+            if group is None:
+                continue
+            group_arn = group.get("ModelPackageGroupArn") or group_arn
+        if not group_arn:
+            continue
+        tags = list_tags(client, group_arn)
 
-        if desired_tags and not desired_tags.items() <= tags.items():
+        if desired_tags is not None and not desired_tags.items() <= tags.items():
             continue
 
-        groups.append(_normalize_model_package_group(summary, tags))
+        if group is None:
+            group = describe_model_package_group(client, group_identifier)
+            if group is None:
+                continue
+        groups.append(_normalize_model_package_group(group, tags))
 
     return groups
 
@@ -218,11 +237,11 @@ def main() -> None:
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
 
     try:
-        client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
-    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
-        module.fail_json_aws(e, msg="Failed to connect to AWS.")
+        try:
+            client = module.client("sagemaker", retry_decorator=AWSRetry.jittered_backoff())
+        except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+            module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    try:
         model_package_groups = find_model_package_groups(client, module)
         module.exit_json(changed=False, model_package_groups=model_package_groups)
     except AnsibleAWSError as e:

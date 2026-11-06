@@ -1,0 +1,22 @@
+---
+test_id: "{{ tiny_prefix }}"
+model_package_group_name: "test-sagemaker-model-package-group-{{ test_id }}"
+model_package_name: "test-sagemaker-model-package-{{ test_id }}"
+model_package_description: "Integration test model package for {{ test_id }}"
+model_package_description_updated: "Updated integration test model package for {{ test_id }}"
+model_package_group_description: "Integration test model package group for {{ test_id }}"
+model_package_tags_initial:
+  project: demo
+  environment: dev
+model_package_tags_updated:
+  project: demo
+  environment: prod
+  owner: platform
+model_package_bucket_name: "ansible-test-sagemaker-model-package-{{ test_id }}"
+# SageMaker requires a Docker V2 manifest (OCI manifests are rejected). The test creates
+# the ECR repo and pushes a Docker V2 image via skopeo (installed inside the test container)
+# at the start of the test run.
+# model_package_container_image is resolved at runtime from aws_account_id in tasks/main.yml.
+model_package_ecr_repository_name: "ansible-test-sagemaker-model-package-{{ test_id }}"
+model_package_container_image: "{{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ model_package_ecr_repository_name }}:latest"
+model_package_data_url: "s3://{{ model_package_bucket_name }}/models/{{ test_id }}/model.tar.gz"

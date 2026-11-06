@@ -9,7 +9,10 @@ on: [workflow_call]  # allow this workflow to be called from other workflows
 
 jobs:
   sanity:
-    runs-on: ubuntu-latest
+    # devel fails to start ansible-test's default container on the 7.0 azure kernel of
+    # ubuntu-24.04+ runners (https://github.com/ansible/ansible/issues/87731). Run it on
+    # ubuntu-22.04 (6.8 kernel); revert once the issue is fixed.
+    runs-on: ${{ matrix.ansible-core-version == 'devel' && 'ubuntu-22.04' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +69,10 @@ jobs:
           test-deps: -r ansible_collections/amazon/ai/tests/sanity/requirements.yml
 
   units:
-    runs-on: ubuntu-latest
+    # devel fails to start ansible-test's default container on the 7.0 azure kernel of
+    # ubuntu-24.04+ runners (https://github.com/ansible/ansible/issues/87731). Run it on
+    # ubuntu-22.04 (6.8 kernel); revert once the issue is fixed.
+    runs-on: ${{ matrix.ansible-core-version == 'devel' && 'ubuntu-22.04' || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
