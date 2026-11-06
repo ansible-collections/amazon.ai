@@ -1,0 +1,22 @@
+---
+- name: SageMaker feature group integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Set up prerequisites (IAM role, S3 bucket)
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the feature group modules
+      ansible.builtin.include_tasks: feature_group.yml
+  always:
+    - name: Tear down all resources
+      ansible.builtin.include_tasks: teardown.yml
