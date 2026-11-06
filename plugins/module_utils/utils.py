@@ -8,9 +8,13 @@ from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
 from urllib.parse import urlunparse
+
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 
 def parse_json(value: str, module, option: str) -> Any:
@@ -115,3 +119,92 @@ def convert_time_ranges(status_filter: Dict[str, Any]) -> Dict[str, Any]:
                 time_range_dict[time_key] = convert_time(time_range_dict[time_key], set_midnight)
 
     return status_filter
+
+
+def config_block_differs(existing: Optional[Dict[str, Any]], desired: Dict[str, Any]) -> bool:
+    """
+    Check whether a desired configuration block differs from the existing one.
+
+    The desired block is the complete desired state, so the comparison is an exact
+    recursive equality: a key present on only one side is a difference. Both sides
+    must use the same key case.
+
+    Args:
+        existing: The block as currently configured, or None when it is not set.
+        desired: The block the user wants, with unset (None) values already removed.
+
+    Returns:
+        True if the blocks differ, False if they are equal.
+    """
+    if existing is None:
+        return True
+    return existing != desired
+
+
+def stringify_values(values: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Convert the values of a dictionary to strings, leaving the keys alone.
+
+    Booleans become ``"true"`` / ``"false"`` (not Python's ``"True"`` / ``"False"``); everything else
+    goes through ``str()``. YAML turns ``PORT: 8080`` and ``DEBUG: true`` into an int and a bool, but
+    AWS APIs that take string maps (environment variables, tags) only accept strings.
+
+    Args:
+        values: The dictionary to convert.
+
+    Returns:
+        A new dictionary with the same keys and string values.
+    """
+    return {k: str(v).lower() if isinstance(v, bool) else str(v) for k, v in values.items()}
+
+
+def _snake_to_camel_key(key: str) -> str:
+    return next(iter(snake_dict_to_camel_dict({key: None}, capitalize_first=True)))
+
+
+def _camel_to_snake_key(key: str) -> str:
+    return next(iter(camel_dict_to_snake_dict({key: None})))
+
+
+def _convert_keys(value: Any, convert_key, keep_keys: List[str]) -> Any:
+    if isinstance(value, list):
+        return [_convert_keys(item, convert_key, keep_keys) for item in value]
+    if not isinstance(value, dict):
+        return value
+    converted: Dict[str, Any] = dict()
+    for key, item in value.items():
+        new_key: str = convert_key(key)
+        converted[new_key] = item if new_key in keep_keys else _convert_keys(item, convert_key, keep_keys)
+    return converted
+
+
+def snake_dict_to_camel_dict_keeping(params: Dict[str, Any], keep_keys: List[str]) -> Dict[str, Any]:
+    """
+    Convert snake_case keys to CamelCase, leaving the contents of some keys untouched.
+
+    ``snake_dict_to_camel_dict`` also rewrites the keys of free-form maps (for example
+    environment variable names), which are user data and must be sent as given.
+
+    Args:
+        params: The snake_case dictionary to convert.
+        keep_keys: snake_case names of the keys whose values must not be converted.
+
+    Returns:
+        A new dictionary with CamelCase keys.
+    """
+    keep: List[str] = [_snake_to_camel_key(k) for k in keep_keys]
+    return _convert_keys(params, _snake_to_camel_key, keep)
+
+
+def camel_dict_to_snake_dict_keeping(params: Dict[str, Any], keep_keys: List[str]) -> Dict[str, Any]:
+    """
+    Convert CamelCase keys to snake_case, leaving the contents of some keys untouched.
+
+    Args:
+        params: The CamelCase dictionary to convert.
+        keep_keys: snake_case names of the keys whose values must not be converted.
+
+    Returns:
+        A new dictionary with snake_case keys.
+    """
+    return _convert_keys(params, _camel_to_snake_key, keep_keys)

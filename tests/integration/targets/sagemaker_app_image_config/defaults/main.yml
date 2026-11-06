@@ -1,0 +1,11 @@
+---
+test_id: "{{ tiny_prefix }}"
+aic_jupyter: "test-aic-jl-{{ test_id }}"
+aic_kernel: "test-aic-kg-{{ test_id }}"
+aic_invalid: "-test-aic-bad-{{ test_id }}"
+aic_two_blocks: "test-aic-two-{{ test_id }}"
+aic_entrypoint: "test-aic-ep-{{ test_id }}"
+aic_fs: "test-aic-fs-{{ test_id }}"
+aic_tags: {project: aic-test, owner: ansible}
+aic_tags_extra: {project: aic-test, owner: ansible, extra: x}
+aic_one_day_ago: "{{ '%Y-%m-%dT%H:%M:%SZ' | strftime((now(utc=true).timestamp() | int) - 86400) }}"

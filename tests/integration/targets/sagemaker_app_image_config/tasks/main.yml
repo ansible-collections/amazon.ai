@@ -1,0 +1,584 @@
+---
+- name: SageMaker AppImageConfig integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    # -------------------------------------------------------
+    # 1. KernelGateway config — create ladder
+    # -------------------------------------------------------
+    - name: Create KernelGateway AppImageConfig (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config:
+          kernel_specs:
+            - name: python3
+              display_name: Python 3
+          file_system_config:
+            mount_path: /home/sagemaker-user/kg
+        tags: "{{ aic_tags | combine({'kind': 'kernel'}) }}"
+      check_mode: true
+      register: kernel_create_check
+
+    - name: Assert check_mode reports a creation
+      ansible.builtin.assert:
+        that:
+          - kernel_create_check is changed
+          - "kernel_create_check.msg is match('Check mode: would have created')"
+
+    - name: Confirm the KernelGateway AppImageConfig was not created
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_kernel }}"
+      register: kernel_missing
+
+    - name: Assert a missing AppImageConfig gives an empty list (not a failure)
+      ansible.builtin.assert:
+        that:
+          - kernel_missing is not failed
+          - kernel_missing is not changed
+          - kernel_missing.app_image_configs == []
+
+    - name: Create KernelGateway AppImageConfig
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config:
+          kernel_specs:
+            - name: python3
+              display_name: Python 3
+          file_system_config:
+            mount_path: /home/sagemaker-user/kg
+        tags: "{{ aic_tags | combine({'kind': 'kernel'}) }}"
+      register: kernel_create
+
+    - name: Assert the KernelGateway AppImageConfig was created
+      ansible.builtin.assert:
+        that:
+          - kernel_create is changed
+          - kernel_create.msg is search('created successfully')
+          - kernel_create.app_image_config.app_image_config_arn is search(':app-image-config/' ~ aic_kernel)
+          - kernel_create.app_image_config.kernel_gateway_image_config.kernel_specs[0].name == 'python3'
+          - kernel_create.app_image_config.tags.kind == 'kernel'
+
+    - name: Create KernelGateway AppImageConfig again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config:
+          kernel_specs:
+            - name: python3
+              display_name: Python 3
+          file_system_config:
+            mount_path: /home/sagemaker-user/kg
+        tags: "{{ aic_tags | combine({'kind': 'kernel'}) }}"
+      register: kernel_create_again
+
+    - name: Assert nothing changed
+      ansible.builtin.assert:
+        that:
+          - kernel_create_again is not changed
+          - kernel_create_again.msg is search('already up to date')
+          - kernel_create_again.app_image_config.app_image_config_arn == kernel_create.app_image_config.app_image_config_arn
+
+    # -------------------------------------------------------
+    # 2. JupyterLab config — create ladder
+    # -------------------------------------------------------
+    - name: Create JupyterLab AppImageConfig (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: &jupyter_v1
+          container_config:
+            container_arguments: [a, b]
+            container_entrypoint: [/bin/x]
+            container_environment_variables:
+              my_var: v1
+              K2: v2
+          file_system_config:
+            mount_path: /home/sagemaker-user
+            default_uid: 1000
+            default_gid: 100
+        tags: "{{ aic_tags }}"
+      check_mode: true
+      register: jupyter_create_check
+
+    - name: Assert check_mode reports a creation
+      ansible.builtin.assert:
+        that:
+          - jupyter_create_check is changed
+          - "jupyter_create_check.msg is match('Check mode: would have created')"
+
+    - name: Create JupyterLab AppImageConfig
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: *jupyter_v1
+        tags: "{{ aic_tags }}"
+      register: jupyter_create
+
+    - name: Assert the JupyterLab AppImageConfig was created
+      ansible.builtin.assert:
+        that:
+          - jupyter_create is changed
+          - jupyter_create.msg is search('created successfully')
+
+    - name: Create JupyterLab AppImageConfig again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: *jupyter_v1
+        tags: "{{ aic_tags }}"
+      register: jupyter_create_again
+
+    - name: Assert nothing changed
+      ansible.builtin.assert:
+        that:
+          - jupyter_create_again is not changed
+          - jupyter_create_again.msg is search('already up to date')
+
+    # -------------------------------------------------------
+    # 3-4. _info by name
+    # -------------------------------------------------------
+    - name: Get the JupyterLab AppImageConfig without tags
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_jupyter }}"
+      register: jupyter_info_no_tags
+
+    - name: Assert tags are not read unless asked for
+      ansible.builtin.assert:
+        that:
+          - jupyter_info_no_tags.app_image_configs | length == 1
+          - jupyter_info_no_tags.app_image_configs[0].tags is not defined
+
+    - name: Get the JupyterLab AppImageConfig
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_jupyter }}"
+        include_tags: true
+      register: jupyter_info
+
+    - name: Assert the described content
+      ansible.builtin.assert:
+        that:
+          - jupyter_info is not changed
+          - jupyter_info.app_image_configs | length == 1
+          - jupyter_info.app_image_configs[0].app_image_config_arn == jupyter_create.app_image_config.app_image_config_arn
+          - jupyter_info.app_image_configs[0].jupyter_lab_app_image_config.container_config.container_arguments == ['a', 'b']
+          - jupyter_info.app_image_configs[0].jupyter_lab_app_image_config.container_config.container_entrypoint == ['/bin/x']
+          # environment variable names are user data and must not be re-cased
+          - "jupyter_info.app_image_configs[0].jupyter_lab_app_image_config.container_config.container_environment_variables == {'my_var': 'v1', 'K2': 'v2'}"
+          - jupyter_info.app_image_configs[0].jupyter_lab_app_image_config.file_system_config.default_uid == 1000
+          - jupyter_info.app_image_configs[0].tags == aic_tags
+          - jupyter_info.app_image_configs[0].kernel_gateway_image_config is not defined
+
+    # -------------------------------------------------------
+    # 5-6. _info listing, filters, sorting
+    # -------------------------------------------------------
+    - name: List AppImageConfigs by name prefix
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        include_tags: true
+      register: list_all
+
+    - name: Assert both AppImageConfigs are listed with their tags
+      ansible.builtin.assert:
+        that:
+          - list_all.app_image_configs | map(attribute='app_image_config_name') | sort == [aic_jupyter, aic_kernel] | sort
+          - list_all.app_image_configs | map(attribute='tags') | select('mapping') | list | length == 2
+
+    - name: List filtered by tags
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        tags:
+          kind: kernel
+      register: list_tags
+
+    - name: Assert only the tagged AppImageConfig is returned
+      ansible.builtin.assert:
+        that:
+          - list_tags.app_image_configs | length == 1
+          - list_tags.app_image_configs[0].app_image_config_name == aic_kernel
+          # the tags filter reads the tags even without include_tags
+          - list_tags.app_image_configs[0].tags.kind == 'kernel'
+
+    - name: List sorted by creation time, ascending
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        sort_by: CreationTime
+        sort_order: Ascending
+      register: list_asc
+
+    - name: List sorted by creation time, descending
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        sort_by: CreationTime
+        sort_order: Descending
+      register: list_desc
+
+    - name: Assert the ordering
+      ansible.builtin.assert:
+        that:
+          - list_asc.app_image_configs | map(attribute='app_image_config_name') | list == [aic_kernel, aic_jupyter]
+          - list_desc.app_image_configs | map(attribute='app_image_config_name') | list == [aic_jupyter, aic_kernel]
+
+    - name: List with time filters
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        creation_time_after: "{{ aic_one_day_ago }}"
+        modified_time_after: "{{ aic_one_day_ago }}"
+      register: list_recent
+
+    - name: List with filters that exclude everything
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+        creation_time_before: "{{ aic_one_day_ago }}"
+        modified_time_before: "{{ aic_one_day_ago }}"
+      register: list_old
+
+    - name: Assert the time filters
+      ansible.builtin.assert:
+        that:
+          - list_recent.app_image_configs | length == 2
+          - list_old.app_image_configs == []
+
+    # -------------------------------------------------------
+    # 7. Update in place (KernelGateway)
+    # -------------------------------------------------------
+    - name: Update the kernel display name (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config: &kernel_v2
+          kernel_specs:
+            - name: python3
+              display_name: Python 3 updated
+          file_system_config:
+            mount_path: /home/sagemaker-user/kg
+      check_mode: true
+      register: kernel_update_check
+
+    - name: Assert check_mode reports an update
+      ansible.builtin.assert:
+        that:
+          - kernel_update_check is changed
+          - "kernel_update_check.msg is match('Check mode: would have updated')"
+
+    - name: Update the kernel display name
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config: *kernel_v2
+      register: kernel_update
+
+    - name: Update the kernel display name again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_kernel }}"
+        kernel_gateway_image_config: *kernel_v2
+      register: kernel_update_again
+
+    - name: Re-read the KernelGateway AppImageConfig
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_kernel }}"
+        include_tags: true
+      register: kernel_info
+
+    - name: Assert the update happened in place
+      ansible.builtin.assert:
+        that:
+          - kernel_update is changed
+          - kernel_update.msg is search('updated successfully')
+          - kernel_update_again is not changed
+          - kernel_update_again.msg is search('already up to date')
+          - kernel_info.app_image_configs | length == 1
+          - kernel_info.app_image_configs[0].app_image_config_arn == kernel_create.app_image_config.app_image_config_arn
+          - kernel_info.app_image_configs[0].kernel_gateway_image_config.kernel_specs[0].display_name == 'Python 3 updated'
+          # tags were not given, so they were left alone
+          - kernel_info.app_image_configs[0].tags.kind == 'kernel'
+
+    # -------------------------------------------------------
+    # 8. A supplied block replaces the old one; sub-keys left out are removed
+    # -------------------------------------------------------
+    - name: Drop sub-keys from the JupyterLab block (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: &jupyter_v2
+          container_config:
+            container_environment_variables:
+              my_var: v1
+      check_mode: true
+      register: jupyter_drop_check
+
+    - name: Drop sub-keys from the JupyterLab block
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: *jupyter_v2
+      register: jupyter_drop
+
+    - name: Drop sub-keys from the JupyterLab block again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        jupyter_lab_app_image_config: *jupyter_v2
+      register: jupyter_drop_again
+
+    - name: Run without any block or tags
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+      register: jupyter_no_block
+
+    - name: Re-read the JupyterLab AppImageConfig
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_jupyter }}"
+      register: jupyter_info_v2
+
+    - name: Assert replace semantics
+      ansible.builtin.assert:
+        that:
+          - jupyter_drop_check is changed
+          - "jupyter_drop_check.msg is match('Check mode: would have updated')"
+          - jupyter_drop is changed
+          - jupyter_drop.msg is search('updated successfully')
+          - jupyter_drop_again is not changed
+          - jupyter_drop_again.msg is search('already up to date')
+          - jupyter_no_block is not changed
+          - jupyter_no_block.msg is search('already up to date')
+          - "jupyter_info_v2.app_image_configs[0].jupyter_lab_app_image_config == {'container_config': {'container_environment_variables': {'my_var': 'v1'}}}"
+
+    # -------------------------------------------------------
+    # 9. Tags
+    # -------------------------------------------------------
+    - name: Add tags (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags_extra }}"
+      check_mode: true
+      register: tags_add_check
+
+    - name: Add tags
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags_extra }}"
+      register: tags_add
+
+    - name: Add tags again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags_extra }}"
+      register: tags_add_again
+
+    - name: Give a subset of the tags without purging
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags }}"
+        purge_tags: false
+      register: tags_no_purge
+
+    - name: Assert tags were added and kept
+      ansible.builtin.assert:
+        that:
+          - tags_add_check is changed
+          - "tags_add_check.msg is match('Check mode: would have updated')"
+          - tags_add is changed
+          - tags_add.msg is search('updated successfully')
+          - tags_add.app_image_config.tags == aic_tags_extra
+          - tags_add_again is not changed
+          - tags_add_again.msg is search('already up to date')
+          - tags_no_purge is not changed
+          - tags_no_purge.msg is search('already up to date')
+          - tags_no_purge.app_image_config.tags == aic_tags_extra
+
+    - name: Purge tags (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags }}"
+      check_mode: true
+      register: tags_purge_check
+
+    - name: Purge tags
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags }}"
+      register: tags_purge
+
+    - name: Purge tags again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        tags: "{{ aic_tags }}"
+      register: tags_purge_again
+
+    - name: Assert tags were purged
+      ansible.builtin.assert:
+        that:
+          - tags_purge_check is changed
+          - "tags_purge_check.msg is match('Check mode: would have updated')"
+          - tags_purge is changed
+          - tags_purge.msg is search('updated successfully')
+          - tags_purge.app_image_config.tags == aic_tags
+          - tags_purge_again is not changed
+          - tags_purge_again.msg is search('already up to date')
+
+    # -------------------------------------------------------
+    # 10. A second block kind is added next to the first; empty block
+    # -------------------------------------------------------
+    - name: Add a Code Editor block (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        code_editor_app_image_config: &code_editor_v1
+          container_config:
+            container_arguments: [z]
+      check_mode: true
+      register: code_editor_add_check
+
+    - name: Add a Code Editor block
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        code_editor_app_image_config: *code_editor_v1
+      register: code_editor_add
+
+    - name: Add a Code Editor block again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        code_editor_app_image_config: *code_editor_v1
+      register: code_editor_add_again
+
+    - name: Replace the Code Editor block with an empty one
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        code_editor_app_image_config: {}
+      register: code_editor_empty
+
+    - name: Replace the Code Editor block with an empty one again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_jupyter }}"
+        code_editor_app_image_config: {}
+      register: code_editor_empty_again
+
+    - name: Re-read the AppImageConfig
+      amazon.ai.sagemaker_app_image_config_info:
+        name: "{{ aic_jupyter }}"
+      register: both_blocks_info
+
+    - name: Assert the old block was kept and the empty block is distinct from an absent one
+      ansible.builtin.assert:
+        that:
+          - code_editor_add_check is changed
+          - "code_editor_add_check.msg is match('Check mode: would have updated')"
+          - code_editor_add is changed
+          - code_editor_add.msg is search('updated successfully')
+          - code_editor_add_again is not changed
+          - code_editor_add_again.msg is search('already up to date')
+          - code_editor_empty is changed
+          - code_editor_empty.msg is search('updated successfully')
+          - code_editor_empty_again is not changed
+          - code_editor_empty_again.msg is search('already up to date')
+          - both_blocks_info.app_image_configs[0].code_editor_app_image_config == {}
+          - "both_blocks_info.app_image_configs[0].jupyter_lab_app_image_config.container_config.container_environment_variables == {'my_var': 'v1'}"
+
+    # -------------------------------------------------------
+    # 11-12. Failure paths
+    # -------------------------------------------------------
+    - name: Give two blocks at once
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_two_blocks }}"
+        jupyter_lab_app_image_config: {}
+        code_editor_app_image_config: {}
+      register: fail_two_blocks
+      ignore_errors: true
+
+    - name: Use an invalid name
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_invalid }}"
+      register: fail_name
+      ignore_errors: true
+
+    - name: Use two container entrypoints
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_entrypoint }}"
+        jupyter_lab_app_image_config:
+          container_config:
+            container_entrypoint: [a, b]
+      register: fail_entrypoint
+      ignore_errors: true
+
+    - name: Use an unsupported JupyterLab mount path
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ aic_fs }}"
+        jupyter_lab_app_image_config:
+          file_system_config:
+            mount_path: /home/other
+      register: fail_fs
+      ignore_errors: true
+
+    - name: Assert the failures are reported cleanly
+      ansible.builtin.assert:
+        that:
+          - fail_two_blocks is failed
+          - fail_two_blocks.msg is search('mutually exclusive')
+          - fail_name is failed
+          - fail_name.msg is search('ValidationException|validation error')
+          - fail_entrypoint is failed
+          - fail_entrypoint.msg is search('containerEntrypoint')
+          - fail_fs is failed
+          - fail_fs.msg is search('FileSystemConfig')
+
+    # -------------------------------------------------------
+    # 13. Delete ladder
+    # -------------------------------------------------------
+    - name: Delete the AppImageConfigs (check_mode)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ item }}"
+        state: absent
+      check_mode: true
+      loop: ["{{ aic_jupyter }}", "{{ aic_kernel }}"]
+      register: delete_check
+
+    - name: Confirm check_mode deleted nothing
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+      register: after_delete_check
+
+    - name: Assert check_mode deleted nothing
+      ansible.builtin.assert:
+        that:
+          - delete_check.results | map(attribute='changed') | unique | list == [true]
+          - "delete_check.results | map(attribute='msg') | select('match', 'Check mode: would have deleted') | list | length == 2"
+          - after_delete_check.app_image_configs | length == 2
+
+    - name: Delete the AppImageConfigs
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ item }}"
+        state: absent
+      loop: ["{{ aic_jupyter }}", "{{ aic_kernel }}"]
+      register: delete_real
+
+    - name: Delete the AppImageConfigs again (idempotency)
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ item }}"
+        state: absent
+      loop: ["{{ aic_jupyter }}", "{{ aic_kernel }}"]
+      register: delete_again
+
+    - name: Confirm they are gone
+      amazon.ai.sagemaker_app_image_config_info:
+        name_contains: "{{ test_id }}"
+      register: after_delete
+
+    - name: Assert deletion
+      ansible.builtin.assert:
+        that:
+          - delete_real.results | map(attribute='changed') | unique | list == [true]
+          - delete_again.results | map(attribute='changed') | unique | list == [false]
+          - delete_again.results | map(attribute='msg') | select('search', 'does not exist') | list | length == 2
+          - after_delete.app_image_configs == []
+
+  always:
+    - name: Delete the AppImageConfigs
+      amazon.ai.sagemaker_app_image_config:
+        name: "{{ item }}"
+        state: absent
+      loop:
+        - "{{ aic_jupyter }}"
+        - "{{ aic_kernel }}"
+        - "{{ aic_two_blocks }}"
+        - "{{ aic_entrypoint }}"
+        - "{{ aic_fs }}"
+      ignore_errors: true
