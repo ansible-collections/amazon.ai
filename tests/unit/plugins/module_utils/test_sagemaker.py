@@ -18,12 +18,11 @@ import pytest
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_OPTIONS
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_REQUEST_RENAMES
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import USER_SETTINGS_RESPONSE_RENAMES
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import build_user_settings
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_group_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_update_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import build_user_settings
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package_group
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
@@ -48,10 +47,8 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normali
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import user_settings_to_update
-from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
-from ansible_collections.amazon.ai.plugins.modules.sagemaker_user_profile import _user_settings_options
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import user_settings_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_absent
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_present
@@ -64,12 +61,13 @@ from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group
 )
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import find_model_packages
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import main as model_package_info_main
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_user_profile import _user_settings_options
 from botocore.exceptions import ClientError
 from botocore.exceptions import EndpointConnectionError
 
-from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
+from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 
 
 @pytest.mark.parametrize(
