@@ -53,15 +53,52 @@
       register: ecr_token
       no_log: true
 
+    - name: Create temporary Skopeo authfile
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .json
+      register: ecr_authfile
+
     - name: Push Docker V2 image to ECR
-      ansible.builtin.command: >-
-        skopeo copy
-        --format v2s2
-        --retry-times 3
-        --dest-creds AWS:{{ ecr_token.stdout }}
-        docker://{{ skopeo_source_image }}
-        docker://{{ image_version_base_image }}
-      no_log: true
+      block:
+        - name: Restrict temporary Skopeo authfile permissions
+          ansible.builtin.file:
+            path: "{{ ecr_authfile.path }}"
+            mode: "0600"
+
+        - name: Log in to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - login
+              - --authfile
+              - "{{ ecr_authfile.path }}"
+              - --username
+              - AWS
+              - --password-stdin
+              - "{{ image_version_base_image.split('/')[0] }}"
+            stdin: "{{ ecr_token.stdout }}"
+          no_log: true
+
+        - name: Copy Docker V2 image to ECR
+          ansible.builtin.command:
+            argv:
+              - skopeo
+              - copy
+              - --format
+              - v2s2
+              - --retry-times
+              - "3"
+              - --dest-authfile
+              - "{{ ecr_authfile.path }}"
+              - "docker://{{ skopeo_source_image }}"
+              - "docker://{{ image_version_base_image }}"
+          no_log: true
+      always:
+        - name: Remove temporary Skopeo authfile
+          ansible.builtin.file:
+            path: "{{ ecr_authfile.path }}"
+            state: absent
 
     # -------------------------------------------------------
     # SETUP — IAM role and parent image
@@ -690,11 +727,16 @@
         image_name: "{{ image_name }}"
       ignore_errors: true
 
+    - name: Cleanup - Delete IAM instance profile for SageMaker Image
+      amazon.aws.iam_instance_profile:
+        name: "{{ image_role_name }}"
+        state: absent
+      ignore_errors: true
+
     - name: Cleanup - Delete IAM role for SageMaker Image
       amazon.aws.iam_role:
         name: "{{ image_role_name }}"
         state: absent
-        delete_instance_profile: true
       ignore_errors: true
 
     - name: Cleanup - Delete ECR repository

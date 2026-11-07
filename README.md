@@ -3,7 +3,7 @@
 The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
 - **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
 - **Amazon Bedrock**: interact with foundation models for AI/ML applications.
-- **Amazon SageMaker**: manage SageMaker Code Repositories.
+- **Amazon SageMaker**: manage SageMaker Code Repositories, endpoints, model package groups, and training jobs.
 
 The collection is designed to be extensible and will grow to support additional services such as Rekognition, Comprehend, Translate, and Textract.
 
@@ -98,6 +98,8 @@ Name | Description
 [amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
 [amazon.ai.sagemaker_notebook_instance_lifecycle_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_module.rst)|Manage Amazon SageMaker notebook instance lifecycle configurations
 [amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
+[amazon.ai.sagemaker_training_job](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_module.rst)|Manage Amazon SageMaker training jobs
+[amazon.ai.sagemaker_training_job_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_info_module.rst)|Gather information about SageMaker training jobs
 
 <!--end collection content-->
 
@@ -246,4 +248,3 @@ See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/C
 GNU General Public License v3.0 or later.
 
 See [LICENSE](https://www.gnu.org/licenses/gpl-3.0.txt) to see the full text.
-
