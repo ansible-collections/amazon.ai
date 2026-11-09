@@ -540,12 +540,18 @@ class TestWaitForDomainStatus:
     @pytest.mark.parametrize("status", ["Failed", "Update_Failed", "Delete_Failed", "Deleted"])
     def test_terminal_status_fails_early(self, status, mock_describe_domain):
         module = _domain_module()
-        mock_describe_domain.side_effect = self._statuses("Pending", status, "InService")
+        mock_describe_domain.side_effect = [
+            {"DomainId": "d-123", "Status": "Pending"},
+            {"DomainId": "d-123", "Status": status, "FailureReason": "boom"},
+            {"DomainId": "d-123", "Status": "InService"},
+        ]
 
         with pytest.raises(ModuleFailure):
             wait_for_domain_status(MagicMock(), module, "d-123", DomainStatus.IN_SERVICE)
 
-        assert _fail_msg(module) == f"Domain d-123 entered terminal status {status} while waiting for InService."
+        assert _fail_msg(module) == (
+            f"Domain d-123 entered terminal status {status} while waiting for InService with failure reason: boom."
+        )
         assert mock_describe_domain.call_count == 2
 
     def test_missing_domain_fails_when_waiting_for_in_service(self, mock_describe_domain):
@@ -569,12 +575,18 @@ class TestWaitForDomainStatus:
     @pytest.mark.parametrize("status", ["Delete_Failed", "Failed"])
     def test_failed_deletion_fails_early(self, status, mock_describe_domain):
         module = _domain_module()
-        mock_describe_domain.side_effect = self._statuses("Deleting", status, None)
+        mock_describe_domain.side_effect = [
+            {"DomainId": "d-123", "Status": "Deleting"},
+            {"DomainId": "d-123", "Status": status, "FailureReason": "boom"},
+            None,
+        ]
 
         with pytest.raises(ModuleFailure):
             wait_for_domain_status(MagicMock(), module, "d-123", DomainStatus.DELETED)
 
-        assert _fail_msg(module) == f"Domain d-123 entered terminal status {status} while waiting for deletion."
+        assert _fail_msg(module) == (
+            f"Domain d-123 entered terminal status {status} while waiting for deletion with failure reason: boom."
+        )
         assert mock_describe_domain.call_count == 2
 
     @pytest.mark.parametrize(
@@ -3207,10 +3219,6 @@ class TestUpdateAppImageConfig:
         )
 
 
-def _client_error(code):
-    return ClientError({"Error": {"Code": code, "Message": "boom"}}, "Operation")
-
-
 class TestDescribeAndListAppImageConfig:
     def test_describe_returns_config(self):
         client = MagicMock()
@@ -3221,13 +3229,13 @@ class TestDescribeAndListAppImageConfig:
 
     def test_describe_returns_none_when_missing(self):
         client = MagicMock()
-        client.describe_app_image_config.side_effect = _client_error("ResourceNotFound")
+        client.describe_app_image_config.side_effect = _client_error("ResourceNotFound", None)
 
         assert describe_app_image_config(client, "cfg") is None
 
     def test_describe_reraises_other_errors(self):
         client = MagicMock()
-        client.describe_app_image_config.side_effect = _client_error("AccessDeniedException")
+        client.describe_app_image_config.side_effect = _client_error("AccessDeniedException", None)
 
         with pytest.raises(ClientError):
             describe_app_image_config(client, "cfg")
@@ -3280,7 +3288,7 @@ class TestDeleteAppImageConfig:
 
     def test_already_deleted_by_someone_else_is_not_a_change(self):
         client = MagicMock()
-        client.delete_app_image_config.side_effect = _client_error("ResourceNotFound")
+        client.delete_app_image_config.side_effect = _client_error("ResourceNotFound", None)
 
         changed, msg = delete_app_image_config(client, _app_image_config_module())
 
@@ -3289,7 +3297,7 @@ class TestDeleteAppImageConfig:
 
     def test_other_errors_propagate(self):
         client = MagicMock()
-        client.delete_app_image_config.side_effect = _client_error("AccessDeniedException")
+        client.delete_app_image_config.side_effect = _client_error("AccessDeniedException", None)
         module = _app_image_config_module()
 
         with pytest.raises(ClientError):
@@ -3298,7 +3306,7 @@ class TestDeleteAppImageConfig:
 
 def test_update_fails_when_config_is_deleted_concurrently():
     client = MagicMock()
-    client.update_app_image_config.side_effect = _client_error("ResourceNotFound")
+    client.update_app_image_config.side_effect = _client_error("ResourceNotFound", None)
     module = _app_image_config_module(jupyter_lab_app_image_config={"container_config": {"container_arguments": ["x"]}})
     module.fail_json.side_effect = SystemExit
     existing = _existing(JupyterLabAppImageConfig=JUPYTER_BLOCK)

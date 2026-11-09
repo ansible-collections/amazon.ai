@@ -205,8 +205,9 @@ def wait_for_domain_status(
                 return
             last_status = domain.get("Status")
             if last_status in (DomainStatus.DELETE_FAILED.value, DomainStatus.FAILED.value):
+                failure_reason = domain.get("FailureReason")
                 module.fail_json(
-                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for deletion."
+                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for deletion with failure reason: {failure_reason}."
                 )
         else:
             if domain is None:
@@ -215,8 +216,9 @@ def wait_for_domain_status(
             if last_status == status.value:
                 return
             if last_status in failure_statuses or last_status == DomainStatus.DELETED.value:
+                failure_reason = domain.get("FailureReason")
                 module.fail_json(
-                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for {status.value}."
+                    msg=f"Domain {domain_id} entered terminal status {last_status} while waiting for {status.value} with failure reason: {failure_reason}."
                 )
         if attempt > 0:
             time.sleep(sleep_time)
