@@ -102,6 +102,8 @@ Name | Description
 [amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
 [amazon.ai.sagemaker_user_profile](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_module.rst)|Manage Amazon SageMaker AI user profiles
 [amazon.ai.sagemaker_user_profile_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_info_module.rst)|Gather information about Amazon SageMaker AI user profiles
+[amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
 
 <!--end collection content-->
 
