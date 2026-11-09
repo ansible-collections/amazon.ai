@@ -13,39 +13,30 @@ from unittest.mock import call
 from unittest.mock import patch
 
 import pytest
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_group_params
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_params
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_update_params
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_app_image_config
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package_group
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_app_image_config
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package_group
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import DomainStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_domain_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_group_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_update_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import domain_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_domain_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_domains
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
@@ -71,11 +62,6 @@ from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package impor
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _validate_model_package_create_params
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import main as model_package_main
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_domain_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_domain
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_domain_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import (
     main as model_package_group_info_main,

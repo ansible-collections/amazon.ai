@@ -52,7 +52,6 @@ class DomainStatus(str, Enum):
     DELETED = "Deleted"
 
 
-
 def encode_lifecycle_script(content: Optional[str]) -> List[Dict[str, str]]:
     """Encode a lifecycle script in the shape expected by SageMaker."""
     if content is None:
