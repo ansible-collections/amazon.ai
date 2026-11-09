@@ -1042,11 +1042,16 @@ def notebook_instance_needs_update(existing_notebook: Dict[str, Any], module) ->
 
 
 def _notebook_instance_waiter_name(status: str) -> str:
-    return {
+    waiter_names = {
         "InService": "notebook_instance_in_service",
         "Stopped": "notebook_instance_stopped",
         "Deleted": "notebook_instance_deleted",
-    }[status]
+    }
+    if status not in waiter_names:
+        raise ValueError(
+            f"Unsupported waiter status '{status}'. " f"Supported statuses: {', '.join(waiter_names.keys())}"
+        )
+    return waiter_names[status]
 
 
 def wait_for_notebook_instance_status(client, module, status: str) -> None:
@@ -1061,11 +1066,12 @@ def wait_for_notebook_instance_status(client, module, status: str) -> None:
     name = module.params["notebook_instance_name"]
     wait_timeout = module.params.get("wait_timeout", 600)
     delay = min(30, max(1, wait_timeout))
+    max_attempts = math.ceil(wait_timeout / delay)
     waiter = client.get_waiter(_notebook_instance_waiter_name(status))
     try:
         waiter.wait(
             NotebookInstanceName=name,
-            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, wait_timeout // delay)),
+            WaiterConfig=dict(Delay=delay, MaxAttempts=max(1, max_attempts)),
         )
     except WaiterError as e:
         failure_reason = ""
@@ -1111,7 +1117,8 @@ def update_notebook_instance(client, module, existing: Dict[str, Any], params: D
     client.update_notebook_instance(NotebookInstanceName=name, **params)
     if module.params.get("wait", False):
         wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
-    updated_status = describe_notebook_instance(client, name).get("NotebookInstanceStatus")
+    updated_notebook = describe_notebook_instance(client, name)
+    updated_status = updated_notebook.get("NotebookInstanceStatus") if updated_notebook is not None else None
     if was_running and updated_status == NotebookInstanceStatus.STOPPED:
         # Restore the notebook to its previous running state
         start_notebook_instance(client, module, updated_status)
@@ -1145,7 +1152,6 @@ def stop_notebook_instance(client, module, status) -> None:
     """
     Stop a running SageMaker notebook instance.
     This operation will transition the notebook instance to the STOPPED state.
-    The wait behavior can be controlled using the `wait_for_stop` parameter.
     There are instances when wait to stop is required even if user chooses not to wait by default.
     The current status of the notebook instance is used to determine if stopping is necessary.
 
@@ -1153,16 +1159,16 @@ def stop_notebook_instance(client, module, status) -> None:
         client: The boto3 SageMaker client.
         module: The Ansible module object.
         status: The current status of the notebook instance.
-        wait_for_stop: Whether to wait for the notebook instance to reach the STOPPED state.
     """
     if status in [NotebookInstanceStatus.STOPPED, NotebookInstanceStatus.DELETING]:
         return
-    elif status == NotebookInstanceStatus.STOPPING:
-        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
-        return
-    if status in (NotebookInstanceStatus.PENDING, NotebookInstanceStatus.UPDATING, NotebookInstanceStatus.IN_SERVICE):
+    elif status == NotebookInstanceStatus.PENDING:
+        # PENDING will resolve to IN_SERVICE
+        wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.IN_SERVICE)
+        status = NotebookInstanceStatus.IN_SERVICE
+    if status in (NotebookInstanceStatus.STOPPING, NotebookInstanceStatus.UPDATING, NotebookInstanceStatus.IN_SERVICE):
         # stop_notebook_instance can only be called if the notebook is in the IN_SERVICE state
-        # UPDATING and PENDING will resolve to STOPPED
+        # UPDATING will resolve to STOPPED
         if status == NotebookInstanceStatus.IN_SERVICE:
             client.stop_notebook_instance(NotebookInstanceName=module.params["notebook_instance_name"])
         wait_for_notebook_instance_status(client, module, NotebookInstanceStatus.STOPPED)
