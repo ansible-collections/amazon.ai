@@ -3,6 +3,7 @@
 
 
 import json
+from copy import deepcopy
 from datetime import date
 from datetime import datetime
 from typing import Any
@@ -208,3 +209,46 @@ def camel_dict_to_snake_dict_keeping(params: Dict[str, Any], keep_keys: List[str
         A new dictionary with snake_case keys.
     """
     return _convert_keys(params, _camel_to_snake_key, keep_keys)
+
+
+def deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively merge ``override`` into ``base``.
+
+    Nested dicts are merged; any other value from ``override`` (lists included) replaces the one in
+    ``base``. ``None`` values in ``override`` are skipped, so they never clear a ``base`` value.
+
+    Args:
+        base: The dict to merge into.
+        override: The dict whose values win.
+
+    Returns:
+        A new, merged dict. Neither input is mutated.
+    """
+    result = deepcopy(base)
+    for key, value in override.items():
+        if value is None:
+            continue
+        if isinstance(value, dict) and isinstance(result.get(key), dict):
+            result[key] = deep_merge(result[key], value)
+        else:
+            result[key] = deepcopy(value)
+    return result
+
+
+def rename_keys(data: Any, renames: Dict[str, str]) -> Any:
+    """
+    Recursively rename dict keys found in ``renames``, through nested dicts and lists.
+
+    Args:
+        data: A dict, list or scalar.
+        renames: Mapping of old key name to new key name. Keys not in it are kept as they are.
+
+    Returns:
+        A new structure with the keys renamed. ``data`` is not mutated.
+    """
+    if isinstance(data, dict):
+        return {renames.get(key, key): rename_keys(value, renames) for key, value in data.items()}
+    if isinstance(data, list):
+        return [rename_keys(item, renames) for item in data]
+    return data
