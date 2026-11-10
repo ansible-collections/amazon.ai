@@ -14,6 +14,9 @@ author:
 description:
     - Retrieve one training job by name or list matching jobs.
     - Listing consumes all pages returned by SageMaker.
+    - Training job details include hyperparameters and environment variables, which can contain sensitive values.
+      Do not include credentials, secrets, or tokens in either field. Use task-level C(no_log=true) when querying a job
+      that might already contain sensitive values.
 options:
     training_job_name:
         description: The name of the training job to retrieve.
@@ -120,6 +123,22 @@ training_jobs:
             type: dict
             returned: always
             sample: {project: demo}
+        hyper_parameters:
+            description:
+                - The training algorithm hyperparameters.
+                - Do not include credentials, secrets, or tokens in this field. Use task-level C(no_log=true) when
+                  querying a job that might already contain sensitive values.
+            type: dict
+            returned: when returned by SageMaker
+            sample: {}
+        environment:
+            description:
+                - The environment variables passed to the training container.
+                - Do not include credentials, secrets, or tokens in this field. Use task-level C(no_log=true) when
+                  querying a job that might already contain sensitive values.
+            type: dict
+            returned: when returned by SageMaker
+            sample: {}
     sample:
         - training_job_name: example-training-job
           training_job_status: Completed

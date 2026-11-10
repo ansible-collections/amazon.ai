@@ -392,6 +392,7 @@ Parameters
                 </td>
                 <td>
                         <div>Environment variables passed to the training container.</div>
+                        <div>Do not include credentials, secrets, or tokens. AWS warns that sensitive information in environment fields may be exposed.</div>
                 </td>
             </tr>
             <tr>
@@ -428,6 +429,7 @@ Parameters
                 </td>
                 <td>
                         <div>String key/value hyperparameters passed to the training algorithm.</div>
+                        <div>Do not include credentials, secrets, or tokens. AWS warns that sensitive information in hyperparameter fields may be exposed.</div>
                 </td>
             </tr>
             <tr>

@@ -188,10 +188,16 @@ options:
                 type: list
                 elements: str
     hyper_parameters:
-        description: String key/value hyperparameters passed to the training algorithm.
+        description:
+            - String key/value hyperparameters passed to the training algorithm.
+            - Do not include credentials, secrets, or tokens. AWS warns that sensitive information in hyperparameter
+              fields may be exposed.
         type: dict
     environment:
-        description: Environment variables passed to the training container.
+        description:
+            - Environment variables passed to the training container.
+            - Do not include credentials, secrets, or tokens. AWS warns that sensitive information in environment
+              fields may be exposed.
         type: dict
     enable_network_isolation:
         description: Whether to isolate the training container from the network.
@@ -458,6 +464,14 @@ from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleA
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
+def _normalize_training_job_output(training_job: dict) -> dict:
+    normalized = normalize_training_job(training_job)
+    # Do not expose values that may contain credentials or tokens.
+    normalized.pop("hyper_parameters", None)
+    normalized.pop("environment", None)
+    return normalized
+
+
 def main() -> None:
     argument_spec = dict(
         state=dict(type="str", default="present", choices=["present", "stopped", "absent"]),
@@ -542,8 +556,8 @@ def main() -> None:
                 subnets=dict(type="list", elements="str"),
             ),
         ),
-        hyper_parameters=dict(type="dict"),
-        environment=dict(type="dict"),
+        hyper_parameters=dict(type="dict", no_log=True),
+        environment=dict(type="dict", no_log=True),
         enable_network_isolation=dict(type="bool", default=False),
         enable_inter_container_traffic_encryption=dict(type="bool", default=False),
         enable_managed_spot_training=dict(type="bool", default=False),
@@ -596,7 +610,7 @@ def main() -> None:
         module.exit_json(
             changed=changed,
             msg=msg,
-            training_job=normalize_training_job(job or {}),
+            training_job=_normalize_training_job_output(job or {}),
         )
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)

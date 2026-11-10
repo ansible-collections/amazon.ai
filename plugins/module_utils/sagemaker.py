@@ -609,6 +609,8 @@ def reconcile_space_tags(client, module, existing: Dict[str, Any]) -> bool:
         client.add_tags(ResourceArn=resource_arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
     if tags_to_remove:
         client.delete_tags(ResourceArn=resource_arn, TagKeys=tags_to_remove)
+
+
 def reconcile_sagemaker_tags(client, module, resource_arn: str) -> bool:
     """Reconcile SageMaker resource tags using the shared ResourceArn tagging API."""
     desired_tags = module.params.get("tags")
@@ -3202,6 +3204,8 @@ def delete_user_profile(client, module) -> Tuple[bool, str]:
     if module.params.get("wait"):
         wait_for_user_profile_status(client, module, domain_id, user_profile_name, deleted=True)
     return True, f"Deleted {_user_profile_label(module)}."
+
+
 def describe_training_job(client, training_job_name: str) -> Optional[Dict[str, Any]]:
     """Retrieve details for a SageMaker training job, or None when it does not exist."""
     try:

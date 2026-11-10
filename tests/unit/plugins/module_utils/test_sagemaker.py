@@ -26,6 +26,14 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_model_package_update_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _build_replacement_space_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _endpoint_config_properties_differ
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _fresh_training_job
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_absent
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_present
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_stopped
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _prepare_training_job_deletion
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _replace_training_job
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _training_job_mapping_differs
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _wait_for_warm_pool_termination
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import build_user_settings
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_app_image_config
@@ -36,20 +44,13 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_domain
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _fresh_training_job
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_absent
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_present
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _manage_training_job_stopped
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _prepare_training_job_deletion
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _replace_training_job
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _training_job_mapping_differs
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import _wait_for_warm_pool_termination
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package_group
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_user_profile
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import domain_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import format_user_profile
@@ -57,7 +58,6 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_dom
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_domains
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_package_groups
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_packages
@@ -70,29 +70,29 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_p
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import model_package_values_match
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_model_package_compare_value
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_domain_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_training_job
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_domain_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_endpoint_config_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_sagemaker_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_replacement
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import space_needs_update
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import training_job_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_sagemaker_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import training_job_params
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_model_package_tags
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import user_settings_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_domain_status
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job_deletion
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_absent
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_present
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _validate_model_package_create_params
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import main as model_package_main
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_training_job
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job_deletion
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import find_model_package_groups
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group_info import (
     main as model_package_group_info_main,
@@ -100,7 +100,6 @@ from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_group
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import find_model_packages
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package_info import main as model_package_info_main
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_user_profile import _user_settings_options
-from ansible_collections.amazon.ai.plugins.modules.sagemaker_training_job import _validate_nested_params
 from botocore.exceptions import ClientError
 from botocore.exceptions import EndpointConnectionError
 from botocore.exceptions import WaiterError
@@ -717,6 +716,8 @@ class TestReconcileDomainTags:
         assert reconcile_domain_tags(client, module, _existing_domain()) is True
         client.add_tags.assert_not_called()
         client.delete_tags.assert_not_called()
+
+
 @pytest.mark.parametrize(
     ("training_job", "expected"),
     [
@@ -790,6 +791,8 @@ def test_delete_training_job_reports_aws_error_message():
             "and must not have an Available warm pool. AWS returned: The training job is not terminal."
         )
     )
+
+
 def test_describe_training_job_returns_none_when_missing():
     client = MagicMock()
     client.describe_training_job.side_effect = ClientError(

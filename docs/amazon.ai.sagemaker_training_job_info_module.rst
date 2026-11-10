@@ -19,6 +19,7 @@ Synopsis
 --------
 - Retrieve one training job by name or list matching jobs.
 - Listing consumes all pages returned by SageMaker.
+- Training job details include hyperparameters and environment variables, which can contain sensitive values. Do not include credentials, secrets, or tokens in either field. Use task-level ``no_log=true`` when querying a job that might already contain sensitive values.
 
 
 
@@ -487,6 +488,40 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                 </td>
             </tr>
                                 <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>environment</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td>when returned by SageMaker</td>
+                <td>
+                            <div>The environment variables passed to the training container.</div>
+                            <div>Do not include credentials, secrets, or tokens in this field. Use task-level <code>no_log=true</code> when querying a job that might already contain sensitive values.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder">&nbsp;</td>
+                <td colspan="1">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>hyper_parameters</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">dictionary</span>
+                    </div>
+                </td>
+                <td>when returned by SageMaker</td>
+                <td>
+                            <div>The training algorithm hyperparameters.</div>
+                            <div>Do not include credentials, secrets, or tokens in this field. Use task-level <code>no_log=true</code> when querying a job that might already contain sensitive values.</div>
+                    <br/>
+                </td>
+            </tr>
+            <tr>
                     <td class="elbow-placeholder">&nbsp;</td>
                 <td colspan="1">
                     <div class="ansibleOptionAnchor" id="return-"></div>
