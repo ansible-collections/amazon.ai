@@ -1,0 +1,22 @@
+---
+- name: SageMaker Space integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create the SageMaker Space test prerequisites
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the SageMaker Space modules
+      ansible.builtin.include_tasks: spaces.yml
+  always:
+    - name: Tear down the SageMaker Space test resources
+      ansible.builtin.include_tasks: teardown.yml

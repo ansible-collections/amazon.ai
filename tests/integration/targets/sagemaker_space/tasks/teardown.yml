@@ -1,0 +1,67 @@
+- name: Delete secondary test Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}-secondary"
+    state: absent
+  when:
+    - space_domain is defined
+    - space_domain.domain is defined
+  ignore_errors: true
+
+- name: Delete test Space
+  amazon.ai.sagemaker_space:
+    domain_id: "{{ space_domain.domain.domain_id }}"
+    space_name: "{{ space_name }}"
+    state: absent
+  when:
+    - space_domain is defined
+    - space_domain.domain is defined
+  ignore_errors: true
+
+- name: Delete SageMaker UserProfile stack
+  amazon.aws.cloudformation:
+    stack_name: "{{ space_user_profile_stack_name }}"
+    state: absent
+  when: space_user_profile is defined
+  ignore_errors: true
+
+- name: Delete SageMaker Domain
+  amazon.ai.sagemaker_domain:
+    state: absent
+    domain_name: "{{ space_domain_name }}"
+    retention_policy: Delete
+  when: space_domain is defined
+  ignore_errors: true
+
+- name: Delete security group
+  amazon.aws.ec2_security_group:
+    group_id: "{{ space_security_group.group_id }}"
+    state: absent
+  when: space_security_group is defined
+  ignore_errors: true
+
+- name: Delete subnet
+  amazon.aws.ec2_vpc_subnet:
+    state: absent
+    vpc_id: "{{ space_vpc.vpc.id }}"
+    cidr: "{{ space_subnet_cidr }}"
+  when:
+    - space_vpc is defined
+    - space_vpc.vpc is defined
+  ignore_errors: true
+
+- name: Delete VPC
+  amazon.aws.ec2_vpc_net:
+    vpc_id: "{{ space_vpc.vpc.id }}"
+    state: absent
+  when:
+    - space_vpc is defined
+    - space_vpc.vpc is defined
+  ignore_errors: true
+
+- name: Delete IAM role
+  amazon.aws.iam_role:
+    name: "{{ space_role_name }}"
+    state: absent
+  when: space_role is defined
+  ignore_errors: true
