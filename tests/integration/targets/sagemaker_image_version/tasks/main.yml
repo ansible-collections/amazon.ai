@@ -61,9 +61,10 @@
 
     - name: Push Docker V2 image to ECR
       block:
-        - name: Restrict temporary Skopeo authfile permissions
-          ansible.builtin.file:
-            path: "{{ ecr_authfile.path }}"
+        - name: Initialize temporary Skopeo authfile
+          ansible.builtin.copy:
+            dest: "{{ ecr_authfile.path }}"
+            content: "{}\n"
             mode: "0600"
 
         - name: Log in to ECR
