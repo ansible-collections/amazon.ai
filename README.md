@@ -3,7 +3,7 @@
 The ``amazon.ai`` Ansible Collection provides automation modules for AWS AI and ML services. Currently, the collection includes modules for:
 - **Amazon DevOps Guru**: configure monitoring, manage insights, and integrate notification channels.
 - **Amazon Bedrock**: interact with foundation models for AI/ML applications.
-- **Amazon SageMaker**: manage SageMaker Code Repositories.
+- **Amazon SageMaker**: manage SageMaker Code Repositories, endpoints, model package groups, and training jobs.
 
 The collection is designed to be extensible and will grow to support additional services such as Rekognition, Comprehend, Translate, and Textract.
 
@@ -106,6 +106,8 @@ Name | Description
 [amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
 [amazon.ai.sagemaker_space](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_module.rst)|Manage Amazon SageMaker AI Spaces
 [amazon.ai.sagemaker_space_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_info_module.rst)|Gather information about SageMaker AI Spaces
+[amazon.ai.sagemaker_training_job](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_module.rst)|Manage Amazon SageMaker training jobs
+[amazon.ai.sagemaker_training_job_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_info_module.rst)|Gather information about SageMaker training jobs
 
 <!--end collection content-->
 

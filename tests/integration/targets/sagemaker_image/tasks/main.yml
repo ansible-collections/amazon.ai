@@ -459,9 +459,14 @@
         image_name: "{{ image_name }}"
       ignore_errors: true
 
+    - name: Cleanup - Delete IAM instance profile for SageMaker Image
+      amazon.aws.iam_instance_profile:
+        name: "{{ image_role_name }}"
+        state: absent
+      ignore_errors: true
+
     - name: Cleanup - Delete IAM role for SageMaker Image
       amazon.aws.iam_role:
         name: "{{ image_role_name }}"
         state: absent
-        delete_instance_profile: true
       ignore_errors: true
