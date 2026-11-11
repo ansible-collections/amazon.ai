@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
@@ -75,7 +75,7 @@ Parameters
                 </td>
                 <td>
                         <div>An alias of the image version to retrieve.</div>
-                        <div>Mutually exclusive with O(version), O(sort_by), and O(sort_order).</div>
+                        <div>Mutually exclusive with O(version).</div>
                 </td>
             </tr>
             <tr>
@@ -259,7 +259,7 @@ Parameters
                 </td>
                 <td>
                         <div>The field to sort the listed versions by.</div>
-                        <div>Mutually exclusive with O(version) and O(alias).</div>
+                        <div>Ignored when O(version) or O(alias) is set.</div>
                 </td>
             </tr>
             <tr>
@@ -279,7 +279,7 @@ Parameters
                 </td>
                 <td>
                         <div>The sort order for the listed versions.</div>
-                        <div>Mutually exclusive with O(version) and O(alias).</div>
+                        <div>Ignored when O(version) or O(alias) is set.</div>
                 </td>
             </tr>
             <tr>
@@ -316,7 +316,7 @@ Parameters
                 <td>
                         <div>The version number of the image version to retrieve.</div>
                         <div>If neither O(version) nor O(alias) is provided, all versions of the image are listed.</div>
-                        <div>Mutually exclusive with O(alias), O(sort_by), and O(sort_order).</div>
+                        <div>Mutually exclusive with O(alias).</div>
                 </td>
             </tr>
     </table>

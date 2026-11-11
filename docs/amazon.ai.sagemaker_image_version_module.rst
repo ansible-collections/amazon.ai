@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.35.0
-- botocore >= 1.35.0
+- boto3 >= 1.38.0
+- botocore >= 1.38.0
 
 
 Parameters
@@ -126,7 +126,7 @@ Parameters
                 <td>
                         <div>The registry path of the container image in Amazon ECR that the version is based on.</div>
                         <div>Required when O(state=present) and O(version) is not set.</div>
-                        <div>This value cannot be changed after the version is created. When O(version) is set, the module fails if this option differs from the value of the existing version.</div>
+                        <div>This option is create-only. It cannot be changed after the version is created. When O(version) is set, the module fails if this option differs from the base image of the existing version.</div>
                 </td>
             </tr>
             <tr>
@@ -467,6 +467,7 @@ Parameters
                 </td>
                 <td>
                         <div>Whether to wait for the create or delete operation to complete.</div>
+                        <div>Also controls whether an update or a delete waits for a version that is still being created. With O(wait=false) an update does not wait, so the returned status may still be V(CREATING). With O(wait=false) a delete of a version that is still being created fails, because the service rejects the deletion until creation finishes.</div>
                 </td>
             </tr>
             <tr>
@@ -496,6 +497,7 @@ Notes
    - Required IAM actions include sagemaker:CreateImageVersion, sagemaker:DescribeImageVersion, sagemaker:UpdateImageVersion, sagemaker:DeleteImageVersion, sagemaker:ListImageVersions, sagemaker:ListAliases and sagemaker:DescribeImage.
    - The service reads the container image in Amazon ECR when a version is created, so it needs access to it.
    - Image versions cannot be tagged.
+   - With O(state=present) and O(version) set, the module fails for a version that is being deleted or whose creation or deletion failed. Use O(state=absent) to remove a failed version.
    - Without O(version) the module is not idempotent, every run with O(state=present) creates a new version. Register the version number from the first run and pass it as O(version) on later runs.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
