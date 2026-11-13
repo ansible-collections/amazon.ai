@@ -6,80 +6,235 @@ releases:
         featuring several modules designed for Amazon DevOps Guru and Amazon Bedrock
         integration.
     fragments:
-      - release_summary.yml
+    - release_summary.yml
     modules:
-      - description: Manage Amazon Bedrock Agents
-        name: bedrock_agent
-        namespace: ''
-      - description: Manage Amazon Bedrock Agent Action Groups
-        name: bedrock_agent_action_group
-        namespace: ''
-      - description: Gather information about a Bedrock Agent's Action Groups
-        name: bedrock_agent_action_group_info
-        namespace: ''
-      - description: Manage Amazon Bedrock Agent Aliases
-        name: bedrock_agent_alias
-        namespace: ''
-      - description: Gather information about a Bedrock Agent's Aliases
-        name: bedrock_agent_alias_info
-        namespace: ''
-      - description: Gather information about Bedrock Agents
-        name: bedrock_agent_info
-        namespace: ''
-      - description: List or get details for Amazon Bedrock foundation models
-        name: bedrock_foundation_models_info
-        namespace: ''
-      - description: Invoke an Amazon Bedrock agent with a prompt
-        name: bedrock_invoke_agent
-        namespace: ''
-      - description: Run inference using Amazon Bedrock models
-        name: bedrock_invoke_model
-        namespace: ''
-      - description: Fetch information about Amazon DevOps Guru insights
-        name: devopsguru_insight_info
-        namespace: ''
-      - description: Manage DevOps Guru resource collections
-        name: devopsguru_resource_collection
-        namespace: ''
-      - description: Fetch information about Amazon DevOps Guru resource collection
-        name: devopsguru_resource_collection_info
-        namespace: ''
+    - description: Manage Amazon Bedrock Agents.
+      name: bedrock_agent
+      namespace: ''
+    - description: Manage Amazon Bedrock Agent Action Groups.
+      name: bedrock_agent_action_group
+      namespace: ''
+    - description: Gather information about a Bedrock Agent's Action Groups.
+      name: bedrock_agent_action_group_info
+      namespace: ''
+    - description: Manage Amazon Bedrock Agent Aliases.
+      name: bedrock_agent_alias
+      namespace: ''
+    - description: Gather information about a Bedrock Agent's Aliases.
+      name: bedrock_agent_alias_info
+      namespace: ''
+    - description: Gather information about Bedrock Agents.
+      name: bedrock_agent_info
+      namespace: ''
+    - description: List or get details for Amazon Bedrock foundation models.
+      name: bedrock_foundation_models_info
+      namespace: ''
+    - description: Invoke an Amazon Bedrock agent with a prompt.
+      name: bedrock_invoke_agent
+      namespace: ''
+    - description: Run inference using Amazon Bedrock models.
+      name: bedrock_invoke_model
+      namespace: ''
+    - description: Fetch information about Amazon DevOps Guru insights.
+      name: devopsguru_insight_info
+      namespace: ''
+    - description: Manage DevOps Guru resource collections.
+      name: devopsguru_resource_collection
+      namespace: ''
+    - description: Fetch information about Amazon DevOps Guru resource collection.
+      name: devopsguru_resource_collection_info
+      namespace: ''
     release_date: '2025-11-18'
   1.0.1:
     changes:
       bugfixes:
-        - devopsguru_resource_collection - Fix devopsguru_resource_collection module
-          correctly handle notification channels.
+      - devopsguru_resource_collection - Fix devopsguru_resource_collection module
+        correctly handle notification channels.
       release_summary: This patch release includes bugfixes for the ``devopsguru_resource_collection``
         module(s).
     fragments:
-      - 1.0.1.yml
-      - 20260122-devopsguru-notification_channel.yml
+    - 1.0.1.yml
+    - 20260122-devopsguru-notification_channel.yml
     release_date: '2026-05-07'
   1.1.0:
     changes:
       deprecated_features:
-        - Collection - Support for Python 3.9 is deprecated and will be removed in a release after 2027-04-01, following AWS SDK for Python's end of support for Python 3.9 in April 2026 (https://github.com/ansible-collections/amazon.ai/pull/76).
-        - bedrock_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_agent_action_group - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_agent_action_group_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_agent_alias - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_agent_alias_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_agent_info - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
-        - bedrock_invoke_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance mode. New agent creation via this module is restricted by AWS to accounts with prior service usage. Use updated Bedrock AgentCore services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/82).
+      - Collection - Support for Python 3.9 is deprecated and will be removed in a
+        release after 2027-04-01, following AWS SDK for Python's end of support for
+        Python 3.9 in April 2026 (https://github.com/ansible-collections/amazon.ai/pull/76).
+      - bedrock_agent - Deprecated due to AWS Bedrock Agents Classic entering maintenance
+        mode. New agent creation via this module is restricted by AWS to accounts
+        with prior service usage. Use updated Bedrock AgentCore services/modules where
+        available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_agent_action_group - Deprecated due to AWS Bedrock Agents Classic
+        entering maintenance mode. New agent creation via this module is restricted
+        by AWS to accounts with prior service usage. Use updated Bedrock AgentCore
+        services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_agent_action_group_info - Deprecated due to AWS Bedrock Agents Classic
+        entering maintenance mode. New agent creation via this module is restricted
+        by AWS to accounts with prior service usage. Use updated Bedrock AgentCore
+        services/modules where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_agent_alias - Deprecated due to AWS Bedrock Agents Classic entering
+        maintenance mode. New agent creation via this module is restricted by AWS
+        to accounts with prior service usage. Use updated Bedrock AgentCore services/modules
+        where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_agent_alias_info - Deprecated due to AWS Bedrock Agents Classic entering
+        maintenance mode. New agent creation via this module is restricted by AWS
+        to accounts with prior service usage. Use updated Bedrock AgentCore services/modules
+        where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_agent_info - Deprecated due to AWS Bedrock Agents Classic entering
+        maintenance mode. New agent creation via this module is restricted by AWS
+        to accounts with prior service usage. Use updated Bedrock AgentCore services/modules
+        where available (https://github.com/ansible-collections/amazon.ai/pull/78).
+      - bedrock_invoke_agent - Deprecated due to AWS Bedrock Agents Classic entering
+        maintenance mode. New agent creation via this module is restricted by AWS
+        to accounts with prior service usage. Use updated Bedrock AgentCore services/modules
+        where available (https://github.com/ansible-collections/amazon.ai/pull/82).
       release_summary: This minor release adds the ``sagemaker_code_repository`` modules
-        and announces deprecation of the Amazon Bedrock Classic modules,
-        ``bedrock_invoke_agent``, and Python 3.9 support.
+        and announces deprecation of the Amazon Bedrock Classic modules, ``bedrock_invoke_agent``,
+        and Python 3.9 support.
     fragments:
-      - 1.1.0.yml
-      - 20261012-deprecate_python_39.yml
-      - bedrock_classic_maintenance_mode.yml
-      - deprecate-bedrock_invoke_agent.yml
+    - 1.1.0.yml
+    - 20261012-deprecate_python_39.yml
+    - bedrock_classic_maintenance_mode.yml
+    - deprecate-bedrock_invoke_agent.yml
     modules:
-      - description: Manage Amazon SageMaker Code Repositories.
-        name: sagemaker_code_repository
-        namespace: ''
-      - description: Gather information about SageMaker Code Repositories.
-        name: sagemaker_code_repository_info
-        namespace: ''
+    - description: Manage Amazon SageMaker Code Repositories.
+      name: sagemaker_code_repository
+      namespace: ''
+    - description: Gather information about SageMaker Code Repositories.
+      name: sagemaker_code_repository_info
+      namespace: ''
     release_date: '2026-11-03'
+  2.0.0:
+    changes:
+      breaking_changes:
+      - Collection - Minimum supported boto3 version is now 1.38.0 (https://github.com/ansible-collections/amazon.ai/pull/75).
+      - Collection - Minimum supported botocore version is now 1.38.0 (https://github.com/ansible-collections/amazon.ai/pull/75).
+      - Support for ansible-core < 2.18 has been dropped. The collection now requires
+        ansible-core >= 2.18.0 (https://github.com/ansible-collections/amazon.ai/pull/77).
+      release_summary: 'amazon.ai 2.0.0 is a major release featuring extensive automation
+        coverage for AWS AI/ML infrastructure and modernized platform dependencies:
+
+
+        * **Amazon SageMaker Suite:** Comprehensive lifecycle support across SageMaker
+        AI Domains, Spaces, User Profiles, Notebook Instances, Lifecycle Configurations,
+        Training Jobs, Pipelines, Models, and Endpoints.
+
+        * **Amazon Bedrock AgentCore:** Added management and info modules for Bedrock
+        AgentCore runtimes and runtime endpoints.
+
+        * **Platform & Dependency Updates:** Raised minimum requirements to `ansible-core
+        >= 2.18.0` and `boto3` / `botocore >= 1.38.0`.
+
+        '
+    fragments:
+    - 20261001-bedrock_agentcore_runtime_endpoint-deleting-status.yml
+    - 20261012-bump-botocore.yml
+    - drop_ansible_core_2.17.yml
+    - release_summary.yml
+    modules:
+    - description: Manage Amazon Bedrock AgentCore runtimes.
+      name: bedrock_agentcore_runtime
+      namespace: ''
+    - description: Manage Amazon Bedrock AgentCore runtime endpoints.
+      name: bedrock_agentcore_runtime_endpoint
+      namespace: ''
+    - description: Gather information about Bedrock AgentCore runtime endpoints.
+      name: bedrock_agentcore_runtime_endpoint_info
+      namespace: ''
+    - description: Gather information about Bedrock AgentCore runtimes.
+      name: bedrock_agentcore_runtime_info
+      namespace: ''
+    - description: Manage Amazon SageMaker AppImageConfigs.
+      name: sagemaker_app_image_config
+      namespace: ''
+    - description: Gather information about Amazon SageMaker AppImageConfigs.
+      name: sagemaker_app_image_config_info
+      namespace: ''
+    - description: Manage Amazon SageMaker AI Domains.
+      name: sagemaker_domain
+      namespace: ''
+    - description: Gather information about SageMaker AI Domains.
+      name: sagemaker_domain_info
+      namespace: ''
+    - description: Manage Amazon SageMaker endpoints.
+      name: sagemaker_endpoint
+      namespace: ''
+    - description: Manage Amazon SageMaker endpoint configurations.
+      name: sagemaker_endpoint_config
+      namespace: ''
+    - description: Gather information about SageMaker endpoint configurations.
+      name: sagemaker_endpoint_config_info
+      namespace: ''
+    - description: Gather information about SageMaker endpoints.
+      name: sagemaker_endpoint_info
+      namespace: ''
+    - description: Manage Amazon SageMaker Images.
+      name: sagemaker_image
+      namespace: ''
+    - description: Gather information about SageMaker Images.
+      name: sagemaker_image_info
+      namespace: ''
+    - description: Manage Amazon SageMaker Image Versions.
+      name: sagemaker_image_version
+      namespace: ''
+    - description: Gather information about SageMaker Image Versions.
+      name: sagemaker_image_version_info
+      namespace: ''
+    - description: Manage Amazon SageMaker Models.
+      name: sagemaker_model
+      namespace: ''
+    - description: Gather information about Amazon SageMaker Models.
+      name: sagemaker_model_info
+      namespace: ''
+    - description: Manage Amazon SageMaker model packages.
+      name: sagemaker_model_package
+      namespace: ''
+    - description: Manage Amazon SageMaker Model Package Groups.
+      name: sagemaker_model_package_group
+      namespace: ''
+    - description: Gather information about Amazon SageMaker Model Package Groups.
+      name: sagemaker_model_package_group_info
+      namespace: ''
+    - description: Gather information about Amazon SageMaker Model Packages.
+      name: sagemaker_model_package_info
+      namespace: ''
+    - description: Manage Amazon SageMaker notebook instances.
+      name: sagemaker_notebook_instance
+      namespace: ''
+    - description: Gather information about SageMaker notebook instances.
+      name: sagemaker_notebook_instance_info
+      namespace: ''
+    - description: Manage Amazon SageMaker notebook instance lifecycle configurations.
+      name: sagemaker_notebook_instance_lifecycle_config
+      namespace: ''
+    - description: Gather information about Amazon SageMaker notebook instance lifecycle
+        configurations.
+      name: sagemaker_notebook_instance_lifecycle_config_info
+      namespace: ''
+    - description: Manage Amazon SageMaker Pipelines.
+      name: sagemaker_pipeline
+      namespace: ''
+    - description: Gather information about Amazon SageMaker Pipelines.
+      name: sagemaker_pipeline_info
+      namespace: ''
+    - description: Manage Amazon SageMaker AI Spaces.
+      name: sagemaker_space
+      namespace: ''
+    - description: Gather information about SageMaker AI Spaces.
+      name: sagemaker_space_info
+      namespace: ''
+    - description: Manage Amazon SageMaker training jobs.
+      name: sagemaker_training_job
+      namespace: ''
+    - description: Gather information about SageMaker training jobs.
+      name: sagemaker_training_job_info
+      namespace: ''
+    - description: Manage Amazon SageMaker AI user profiles.
+      name: sagemaker_user_profile
+      namespace: ''
+    - description: Gather information about Amazon SageMaker AI user profiles.
+      name: sagemaker_user_profile_info
+      namespace: ''
+    release_date: '2026-11-16'
