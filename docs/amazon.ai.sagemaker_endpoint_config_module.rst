@@ -329,13 +329,13 @@ Parameters
                     <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
                     <div style="font-size: small">
                         <span style="color: purple">string</span>
-                         / <span style="color: red">required</span>
                     </div>
                 </td>
                 <td>
                 </td>
                 <td>
                         <div>The name of the SageMaker model.</div>
+                        <div>Omit it for a variant that hosts inference components, see <span class='module'>amazon.ai.sagemaker_inference_component</span>.</div>
                 </td>
             </tr>
             <tr>

@@ -52,9 +52,12 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describ
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_user_profile
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import domain_needs_update
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_inference_component
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import ensure_inference_component_single_specification
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import format_user_profile
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_domain_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import inference_component_needs_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_domains
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoint_configs
@@ -84,9 +87,13 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import user_settings_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_domain_status
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_inference_component_status
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_training_job_deletion
+from ansible_collections.amazon.ai.plugins.modules.sagemaker_inference_component import (
+    _inference_component_status_check,
+)
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_absent
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _ensure_present
 from ansible_collections.amazon.ai.plugins.modules.sagemaker_model_package import _validate_model_package_create_params
@@ -4299,3 +4306,150 @@ def test_list_user_profiles_omits_unset_filters():
 
     assert list_user_profiles(client) == []
     paginator.paginate.assert_called_once_with()
+
+
+def test_inference_component_needs_update_keeps_existing_model_or_container():
+    existing = {
+        "Specification": {
+            "Container": {
+                "DeployedImage": {"SpecifiedImage": "img:1", "ResolvedImage": "img@sha"},
+                "Environment": {"A": "b"},
+            },
+            "ComputeResourceRequirements": {"MinMemoryRequiredInMb": 1024},
+        }
+    }
+    module = MagicMock()
+    module.params = {"specification": {"compute_resource_requirements": {"min_memory_required_in_mb": 2048}}}
+    result = inference_component_needs_update(existing, module)
+    assert result["Specification"] == {
+        "Container": {"Image": "img:1", "Environment": {"A": "b"}},
+        "ComputeResourceRequirements": {"MinMemoryRequiredInMb": 2048},
+    }
+
+
+def test_inference_component_needs_update_keeps_settings_the_module_does_not_manage():
+    existing = {
+        "Specification": {
+            "ModelName": "m",
+            "InstanceType": "ml.m5.xlarge",
+            "DataCacheConfig": {"EnableCaching": True},
+            "SchedulingConfig": {"PlacementStrategy": "SPREAD"},
+            "ComputeResourceRequirements": {"MinMemoryRequiredInMb": 1024},
+            "Container": {
+                "DeployedImage": {"SpecifiedImage": "img:1", "ResolvedImage": "img@sha"},
+                "ContainerMetricsConfig": {"MetricsEndpoints": [{"MetricsEndpointPath": "/metrics"}]},
+            },
+        }
+    }
+    module = MagicMock()
+    module.params = {"specification": {"compute_resource_requirements": {"min_memory_required_in_mb": 2048}}}
+
+    result = inference_component_needs_update(existing, module)
+
+    assert result["Specification"] == {
+        "ModelName": "m",
+        "InstanceType": "ml.m5.xlarge",
+        "DataCacheConfig": {"EnableCaching": True},
+        "SchedulingConfig": {"PlacementStrategy": "SPREAD"},
+        "ComputeResourceRequirements": {"MinMemoryRequiredInMb": 2048},
+        "Container": {
+            "Image": "img:1",
+            "ContainerMetricsConfig": {"MetricsEndpoints": [{"MetricsEndpointPath": "/metrics"}]},
+        },
+    }
+
+
+def test_ensure_inference_component_single_specification_rejects_several_specifications():
+    existing = {"Specifications": [{"InstanceType": "ml.m5.xlarge"}, {"InstanceType": "ml.g5.xlarge"}]}
+    module = MagicMock()
+    module.params = {"inference_component_name": "ic", "specification": {"model_name": "m"}}
+    module.fail_json.side_effect = SystemExit
+
+    with pytest.raises(SystemExit):
+        ensure_inference_component_single_specification(existing, module)
+    assert "several specifications" in module.fail_json.call_args.kwargs["msg"]
+
+
+def test_ensure_inference_component_single_specification_allows_runtime_config_only():
+    existing = {"Specifications": [{"InstanceType": "ml.m5.xlarge"}]}
+    module = MagicMock()
+    module.params = {"inference_component_name": "ic", "specification": None, "runtime_config": {"copy_count": 2}}
+
+    ensure_inference_component_single_specification(existing, module)
+
+    module.fail_json.assert_not_called()
+
+
+IC_MODULE = "ansible_collections.amazon.ai.plugins.modules.sagemaker_inference_component"
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.sagemaker._wait_for_inference_component_status")
+def test_wait_for_inference_component_status_delegates_to_waiter(mock_waiter):
+    client = MagicMock()
+    module = MagicMock()
+
+    result = wait_for_inference_component_status(client, module, deleted=True, sleep_time=1)
+
+    assert result is mock_waiter.return_value
+    mock_waiter.assert_called_once_with(
+        client,
+        module,
+        describe_inference_component,
+        inference_component_needs_update,
+        deleted=True,
+        previous=None,
+        settle=False,
+        sleep_time=1,
+        max_sleep_time=60,
+    )
+
+
+@pytest.mark.parametrize("status", ["Creating", "Updating"])
+@patch(f"{IC_MODULE}.wait_for_inference_component_status")
+def test_inference_component_status_check_absent_waits_for_transitional_status(mock_wait, status):
+    existing = {"InferenceComponentStatus": status}
+    settled = {"InferenceComponentStatus": "InService"}
+    mock_wait.return_value = settled
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"inference_component_name": "ic", "wait": True}
+    client = MagicMock()
+
+    assert _inference_component_status_check(client, existing, "absent", module) is settled
+    mock_wait.assert_called_once_with(client, module, settle=True)
+
+
+@patch(f"{IC_MODULE}.wait_for_inference_component_status")
+def test_inference_component_status_check_absent_returns_none_when_component_disappears(mock_wait):
+    mock_wait.return_value = None
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"inference_component_name": "ic", "wait": True}
+    existing = {"InferenceComponentStatus": "Creating"}
+
+    assert _inference_component_status_check(MagicMock(), existing, "absent", module) is None
+
+
+@patch(f"{IC_MODULE}.wait_for_inference_component_status")
+def test_inference_component_status_check_absent_fails_without_wait(mock_wait):
+    existing = {"InferenceComponentStatus": "Updating"}
+    module = MagicMock()
+    module.params = {"inference_component_name": "ic", "wait": False}
+    module.fail_json.side_effect = SystemExit
+    client = MagicMock()
+
+    with pytest.raises(SystemExit):
+        _inference_component_status_check(client, existing, "absent", module)
+    assert "cannot be deleted until it finishes" in module.fail_json.call_args.kwargs["msg"]
+    mock_wait.assert_not_called()
+
+
+@patch(f"{IC_MODULE}.wait_for_inference_component_status")
+def test_inference_component_status_check_absent_check_mode_does_not_wait(mock_wait):
+    existing = {"InferenceComponentStatus": "Creating"}
+    module = MagicMock()
+    module.check_mode = True
+    module.params = {"inference_component_name": "ic", "wait": True}
+
+    assert _inference_component_status_check(MagicMock(), existing, "absent", module) is existing
+    mock_wait.assert_not_called()

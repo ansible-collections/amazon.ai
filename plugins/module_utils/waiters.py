@@ -1,7 +1,11 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
+import time
 from typing import Any
+from typing import Callable
+from typing import Dict
+from typing import Optional
 
 try:
     import botocore.waiter as core_waiter
@@ -297,3 +301,74 @@ def wait_for_image_version_deletion(client, module) -> None:
                 )
             )
         module.fail_json(msg=f"Error waiting for SageMaker image version {image_name}:{version} to be deleted: {e}")
+
+
+def wait_for_inference_component_status(
+    client,
+    module,
+    describe: Callable[[Any, str], Optional[Dict[str, Any]]],
+    needs_update: Callable[[Dict[str, Any], Any], Any],
+    deleted: bool = False,
+    previous: Optional[Dict[str, Any]] = None,
+    settle: bool = False,
+    sleep_time: int = 5,
+    max_sleep_time: int = 60,
+) -> Optional[Dict[str, Any]]:
+    """
+    Poll a SageMaker inference component until it is InService, or until it is gone when deleted is True.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance (provides inference_component_name and wait_timeout).
+        describe: Callable(client, name) returning the describe response, or None when the component does not exist.
+        needs_update: Callable(existing, module) returning the pending changes, falsy when existing matches the module.
+        deleted: When True, wait for the inference component to be deleted.
+        previous: The describe response from before an update. When given, InService is only accepted once the
+            requested Specification and RuntimeConfig are reported, because the status can still read InService,
+            with the old values, just after UpdateInferenceComponent. A rolled-back update (InService, old values,
+            new FailureReason) fails instead of polling until the timeout.
+        settle: When True, wait until the inference component is InService or Failed, which are the statuses it
+            can be deleted from, instead of failing on Failed. Returns None if it is gone by then.
+        sleep_time: Seconds to sleep after the first poll; the pause doubles after each poll.
+        max_sleep_time: Upper bound, in seconds, for the pause between polls.
+
+    Returns:
+        The final describe response, or None once the inference component is deleted.
+    """
+    name = module.params["inference_component_name"]
+    wait_timeout = module.params.get("wait_timeout", 600)
+    deadline = time.monotonic() + wait_timeout
+    delay = sleep_time
+    last_status = None
+
+    while True:
+        existing = describe(client, name)
+        if existing is None:
+            if deleted or settle:
+                return None
+            module.fail_json(msg=f"Inference component {name} disappeared while waiting for it to become InService.")
+
+        last_status = existing["InferenceComponentStatus"]
+        if settle:
+            if last_status in ("InService", "Failed"):
+                return existing
+        elif last_status == "Failed":
+            module.fail_json(
+                msg=f"Inference component {name} failed: {existing.get('FailureReason', 'unknown reason')}"
+            )
+        if not deleted and not settle:
+            if last_status == "Deleting":
+                module.fail_json(msg=f"Inference component {name} is being deleted.")
+            if last_status == "InService":
+                if previous is None or not needs_update(existing, module):
+                    return existing
+                if existing.get("FailureReason") not in (None, previous.get("FailureReason")):
+                    module.fail_json(msg=f"Inference component {name} update failed: {existing['FailureReason']}")
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            module.fail_json(
+                msg=f"Timed out waiting for inference component {name} to reach the desired state. "
+                f"Last known status: '{last_status}'."
+            )
+        time.sleep(min(delay, remaining))
+        delay = min(delay * 2, max_sleep_time)

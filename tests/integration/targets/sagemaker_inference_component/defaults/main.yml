@@ -1,0 +1,21 @@
+test_id: "{{ tiny_prefix }}"
+inference_component_name: "test-sm-ic-{{ test_id }}"
+endpoint_name: "test-sm-ic-endpoint-{{ test_id }}"
+endpoint_config_name: "test-sm-ic-endpoint-config-{{ test_id }}"
+variant_name: AllTraffic
+model_name: "test-sm-ic-model-{{ test_id }}"
+model_role_name: "ansible-test-sm-ic-role-{{ test_id }}"
+# AmazonSageMakerFullAccess only grants S3 access to buckets with "sagemaker" in the name.
+model_bucket_name: "test-sagemaker-ic-bucket-{{ test_id }}"
+model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
+
+# SageMaker built-in XGBoost serving image. The account owning the image is
+# region-specific; add the region's account to run the target elsewhere.
+xgboost_version: "1.7-1"
+sagemaker_xgboost_accounts:
+  us-east-1: "683313688378"
+  us-east-2: "257758044811"
+  us-west-2: "246618743249"
+  eu-west-1: "141502667606"
+  eu-central-1: "492215442770"
+model_image: "{{ sagemaker_xgboost_accounts[aws_region] }}.dkr.ecr.{{ aws_region }}.amazonaws.com/sagemaker-xgboost:{{ xgboost_version }}"

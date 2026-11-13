@@ -1,0 +1,24 @@
+---
+- name: SageMaker inference component integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Set up prerequisites (role, model, endpoint config, endpoint)
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the inference component module
+      ansible.builtin.include_tasks: inference_component.yml
+
+  always:
+    - name: Tear down all resources
+      ansible.builtin.include_tasks: teardown.yml
+      when: teardown | default(true) | bool
