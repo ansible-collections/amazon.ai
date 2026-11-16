@@ -60,54 +60,54 @@ Version 2.0.0 of this collection supports ``boto3 >= 1.38.0`` and ``botocore >= 
 ### Modules
 Name | Description
 --- | ---
-[amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
-[amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
-[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gather information about a Bedrock Agent's Action Groups
-[amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
-[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
-[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
-[amazon.ai.bedrock_agentcore_runtime](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_module.rst)|Manage Amazon Bedrock AgentCore runtimes
-[amazon.ai.bedrock_agentcore_runtime_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_module.rst)|Manage Amazon Bedrock AgentCore runtime endpoints
-[amazon.ai.bedrock_agentcore_runtime_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_info_module.rst)|Gather information about Bedrock AgentCore runtime endpoints
-[amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
-[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
-[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
-[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models
-[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
-[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
-[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
-[amazon.ai.sagemaker_app_image_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_app_image_config_module.rst)|Manage Amazon SageMaker AppImageConfigs
-[amazon.ai.sagemaker_app_image_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_app_image_config_info_module.rst)|Gather information about Amazon SageMaker AppImageConfigs
-[amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
-[amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
-[amazon.ai.sagemaker_domain](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_module.rst)|Manage Amazon SageMaker AI Domains
-[amazon.ai.sagemaker_domain_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_domain_info_module.rst)|Gather information about SageMaker AI Domains
-[amazon.ai.sagemaker_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_module.rst)|Manage Amazon SageMaker endpoints
-[amazon.ai.sagemaker_endpoint_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_module.rst)|Manage Amazon SageMaker endpoint configurations
-[amazon.ai.sagemaker_endpoint_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_config_info_module.rst)|Gather information about SageMaker endpoint configurations
-[amazon.ai.sagemaker_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_endpoint_info_module.rst)|Gather information about SageMaker endpoints
-[amazon.ai.sagemaker_image](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_module.rst)|Manage Amazon SageMaker Images
-[amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
-[amazon.ai.sagemaker_image_version](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_version_module.rst)|Manage Amazon SageMaker Image Versions
-[amazon.ai.sagemaker_image_version_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_version_info_module.rst)|Gather information about SageMaker Image Versions
-[amazon.ai.sagemaker_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_module.rst)|Manage Amazon SageMaker Models
-[amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
-[amazon.ai.sagemaker_model_package](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_module.rst)|Manage Amazon SageMaker model packages
-[amazon.ai.sagemaker_model_package_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_module.rst)|Manage Amazon SageMaker Model Package Groups
-[amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
-[amazon.ai.sagemaker_model_package_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_info_module.rst)|Gather information about Amazon SageMaker Model Packages
-[amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
-[amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
-[amazon.ai.sagemaker_notebook_instance_lifecycle_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_module.rst)|Manage Amazon SageMaker notebook instance lifecycle configurations
-[amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
-[amazon.ai.sagemaker_user_profile](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_module.rst)|Manage Amazon SageMaker AI user profiles
-[amazon.ai.sagemaker_user_profile_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_info_module.rst)|Gather information about Amazon SageMaker AI user profiles
-[amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
-[amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
-[amazon.ai.sagemaker_space](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_module.rst)|Manage Amazon SageMaker AI Spaces
-[amazon.ai.sagemaker_space_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_info_module.rst)|Gather information about SageMaker AI Spaces
-[amazon.ai.sagemaker_training_job](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_module.rst)|Manage Amazon SageMaker training jobs
-[amazon.ai.sagemaker_training_job_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_info_module.rst)|Gather information about SageMaker training jobs
+[amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
+[amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
+[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gather information about a Bedrock Agent's Action Groups
+[amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
+[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
+[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
+[amazon.ai.bedrock_agentcore_runtime](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agentcore_runtime_module.rst)|Manage Amazon Bedrock AgentCore runtimes
+[amazon.ai.bedrock_agentcore_runtime_endpoint](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_module.rst)|Manage Amazon Bedrock AgentCore runtime endpoints
+[amazon.ai.bedrock_agentcore_runtime_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_info_module.rst)|Gather information about Bedrock AgentCore runtime endpoints
+[amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
+[amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
+[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
+[amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models
+[amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
+[amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
+[amazon.ai.devopsguru_resource_collection_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.devopsguru_resource_collection_info_module.rst)|Fetch information about Amazon DevOps Guru resource collection
+[amazon.ai.sagemaker_app_image_config](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_app_image_config_module.rst)|Manage Amazon SageMaker AppImageConfigs
+[amazon.ai.sagemaker_app_image_config_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_app_image_config_info_module.rst)|Gather information about Amazon SageMaker AppImageConfigs
+[amazon.ai.sagemaker_code_repository](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_code_repository_module.rst)|Manage Amazon SageMaker Code Repositories
+[amazon.ai.sagemaker_code_repository_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_code_repository_info_module.rst)|Gather information about SageMaker Code Repositories
+[amazon.ai.sagemaker_domain](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_domain_module.rst)|Manage Amazon SageMaker AI Domains
+[amazon.ai.sagemaker_domain_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_domain_info_module.rst)|Gather information about SageMaker AI Domains
+[amazon.ai.sagemaker_endpoint](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_endpoint_module.rst)|Manage Amazon SageMaker endpoints
+[amazon.ai.sagemaker_endpoint_config](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_endpoint_config_module.rst)|Manage Amazon SageMaker endpoint configurations
+[amazon.ai.sagemaker_endpoint_config_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_endpoint_config_info_module.rst)|Gather information about SageMaker endpoint configurations
+[amazon.ai.sagemaker_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_endpoint_info_module.rst)|Gather information about SageMaker endpoints
+[amazon.ai.sagemaker_image](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_image_module.rst)|Manage Amazon SageMaker Images
+[amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
+[amazon.ai.sagemaker_image_version](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_image_version_module.rst)|Manage Amazon SageMaker Image Versions
+[amazon.ai.sagemaker_image_version_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_image_version_info_module.rst)|Gather information about SageMaker Image Versions
+[amazon.ai.sagemaker_model](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_module.rst)|Manage Amazon SageMaker Models
+[amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
+[amazon.ai.sagemaker_model_package](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_package_module.rst)|Manage Amazon SageMaker model packages
+[amazon.ai.sagemaker_model_package_group](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_package_group_module.rst)|Manage Amazon SageMaker Model Package Groups
+[amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
+[amazon.ai.sagemaker_model_package_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_model_package_info_module.rst)|Gather information about Amazon SageMaker Model Packages
+[amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_lifecycle_config](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_module.rst)|Manage Amazon SageMaker notebook instance lifecycle configurations
+[amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
+[amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
+[amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
+[amazon.ai.sagemaker_space](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_space_module.rst)|Manage Amazon SageMaker AI Spaces
+[amazon.ai.sagemaker_space_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_space_info_module.rst)|Gather information about SageMaker AI Spaces
+[amazon.ai.sagemaker_training_job](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_training_job_module.rst)|Manage Amazon SageMaker training jobs
+[amazon.ai.sagemaker_training_job_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_training_job_info_module.rst)|Gather information about SageMaker training jobs
+[amazon.ai.sagemaker_user_profile](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_user_profile_module.rst)|Manage Amazon SageMaker AI user profiles
+[amazon.ai.sagemaker_user_profile_info](https://github.com/ansible-collections/amazon.ai/blob/stable-2/docs/amazon.ai.sagemaker_user_profile_info_module.rst)|Gather information about Amazon SageMaker AI user profiles
 
 <!--end collection content-->
 
@@ -249,7 +249,7 @@ You can also join us on:
 
 ## Release notes
 
-See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/main/CHANGELOG.rst).
+See the [changelog](https://github.com/ansible-collections/amazon.ai/tree/stable-2/CHANGELOG.rst).
 
 ## Licensing
 
