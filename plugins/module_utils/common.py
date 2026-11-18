@@ -4,5 +4,5 @@
 """Shared metadata for the amazon.ai collection."""
 
 AMAZON_AI_COLLECTION_NAME = "amazon.ai"
-# Keep this in sync with galaxy.yml, as amazon.aws does for its user-agent metadata.
+# Updated from galaxy.yml by the update-variables workflow.
 AMAZON_AI_COLLECTION_VERSION = "3.0.0-dev0"
