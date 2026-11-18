@@ -60,18 +60,11 @@ Version 2.0.0 of this collection supports ``boto3 >= 1.38.0`` and ``botocore >= 
 ### Modules
 Name | Description
 --- | ---
-[amazon.ai.bedrock_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_module.rst)|Manage Amazon Bedrock Agents
-[amazon.ai.bedrock_agent_action_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_module.rst)|Manage Amazon Bedrock Agent Action Groups
-[amazon.ai.bedrock_agent_action_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_action_group_info_module.rst)|Gather information about a Bedrock Agent's Action Groups
-[amazon.ai.bedrock_agent_alias](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_module.rst)|Manage Amazon Bedrock Agent Aliases
-[amazon.ai.bedrock_agent_alias_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_alias_info_module.rst)|Gather information about a Bedrock Agent's Aliases
-[amazon.ai.bedrock_agent_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agent_info_module.rst)|Gather information about Bedrock Agents
 [amazon.ai.bedrock_agentcore_runtime](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_module.rst)|Manage Amazon Bedrock AgentCore runtimes
 [amazon.ai.bedrock_agentcore_runtime_endpoint](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_module.rst)|Manage Amazon Bedrock AgentCore runtime endpoints
 [amazon.ai.bedrock_agentcore_runtime_endpoint_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_endpoint_info_module.rst)|Gather information about Bedrock AgentCore runtime endpoints
 [amazon.ai.bedrock_agentcore_runtime_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_agentcore_runtime_info_module.rst)|Gather information about Bedrock AgentCore runtimes
 [amazon.ai.bedrock_foundation_models_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_foundation_models_info_module.rst)|List or get details for Amazon Bedrock foundation models
-[amazon.ai.bedrock_invoke_agent](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_agent_module.rst)|Invoke an Amazon Bedrock agent with a prompt
 [amazon.ai.bedrock_invoke_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.bedrock_invoke_model_module.rst)|Run inference using Amazon Bedrock models
 [amazon.ai.devopsguru_insight_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_insight_info_module.rst)|Fetch information about Amazon DevOps Guru insights
 [amazon.ai.devopsguru_resource_collection](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.devopsguru_resource_collection_module.rst)|Manage DevOps Guru resource collections
@@ -170,23 +163,23 @@ Refer to the following resources for more details:
 
 ## Using this collection
 
-You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.bedrock_agent``, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
+You can either call modules, rulebooks and playbooks by their Fully Qualified Collection Name (FQCN), such as ``amazon.ai.sagemaker_code_repository``, or you can call modules by their short name if you list the ``amazon.ai`` collection in the playbook's ``collections`` keyword:
 
 ```yaml
 ---
-- name: Create Bedrock Agent
-  amazon.ai.bedrock_agent:
+- name: Create a SageMaker Code Repository
+  amazon.ai.sagemaker_code_repository:
     state: present
-    agent_name: "{{ agent_name }}"
-    foundation_model: "{{ foundation_model }}"
-    instruction: "{{ instruction }}"
-    agent_resource_role_arn: "{{ agent_role_arn }}"
+    name: "{{ code_repository_name }}"
+    git_config:
+      repository_url: "{{ code_repository_url }}"
+      branch: main
 
-- name: Create Bedrock Agent Alias
-  amazon.ai.bedrock_agent_alias:
+- name: Add a CloudFormation stack to a DevOps Guru resource collection
+  amazon.ai.devopsguru_resource_collection:
     state: present
-    agent_name: "{{ agent_name }}"
-    alias_name: "{{ alias_name }}"
+    cloudformation_stack_names:
+      - my-stack
 ```
 
 ## Testing
