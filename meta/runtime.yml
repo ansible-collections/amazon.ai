@@ -2,18 +2,11 @@
 requires_ansible: '>=2.18.0'
 action_groups:
   aws:
-    - bedrock_agent
-    - bedrock_agent_action_group
-    - bedrock_agent_action_group_info
-    - bedrock_agent_alias
-    - bedrock_agent_alias_info
-    - bedrock_agent_info
     - bedrock_agentcore_runtime
     - bedrock_agentcore_runtime_info
     - bedrock_agentcore_runtime_endpoint
     - bedrock_agentcore_runtime_endpoint_info
     - bedrock_foundation_models_info
-    - bedrock_invoke_agent
     - bedrock_invoke_model
     - devopsguru_insight_info
     - devopsguru_resource_collection
@@ -53,30 +46,44 @@ action_groups:
 plugin_routing:
   modules:
     bedrock_agent:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and new agent
+          creation is restricted by AWS.
     bedrock_agent_info:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent_info module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and new agent
+          creation is restricted by AWS.
     bedrock_agent_alias:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent_alias module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and new agent
+          creation is restricted by AWS.
     bedrock_agent_alias_info:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent_alias_info module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and new
+          agent creation is restricted by AWS.
     bedrock_agent_action_group:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent_action_group module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and
+          new agent creation is restricted by AWS.
     bedrock_agent_action_group_info:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_agent_action_group_info module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode
+          and new agent creation is restricted by AWS.
     bedrock_invoke_agent:
-      deprecation:
+      tombstone:
         removal_version: "3.0.0"
-        warning_text: "AWS Bedrock Agents Classic is in Maintenance Mode. New agent creation is restricted by AWS."
+        warning_text: >-
+          The bedrock_invoke_agent module has been removed because AWS Bedrock Agents Classic is in Maintenance Mode and new
+          agent creation is restricted by AWS.
