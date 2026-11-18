@@ -89,18 +89,18 @@ Name | Description
 [amazon.ai.sagemaker_model_package_group](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_module.rst)|Manage Amazon SageMaker Model Package Groups
 [amazon.ai.sagemaker_model_package_group_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_group_info_module.rst)|Gather information about Amazon SageMaker Model Package Groups
 [amazon.ai.sagemaker_model_package_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_info_module.rst)|Gather information about Amazon SageMaker Model Packages
-[amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
-[amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
-[amazon.ai.sagemaker_notebook_instance_lifecycle_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_module.rst)|Manage Amazon SageMaker notebook instance lifecycle configurations
-[amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
-[amazon.ai.sagemaker_user_profile](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_module.rst)|Manage Amazon SageMaker AI user profiles
-[amazon.ai.sagemaker_user_profile_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_info_module.rst)|Gather information about Amazon SageMaker AI user profiles
 [amazon.ai.sagemaker_notebook_instance](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_module.rst)|Manage Amazon SageMaker notebook instances
 [amazon.ai.sagemaker_notebook_instance_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_info_module.rst)|Gather information about SageMaker notebook instances
+[amazon.ai.sagemaker_notebook_instance_lifecycle_config](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_module.rst)|Manage Amazon SageMaker notebook instance lifecycle configurations
+[amazon.ai.sagemaker_notebook_instance_lifecycle_config_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_notebook_instance_lifecycle_config_info_module.rst)|Gather information about Amazon SageMaker notebook instance lifecycle configurations
+[amazon.ai.sagemaker_pipeline](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_module.rst)|Manage Amazon SageMaker Pipelines
+[amazon.ai.sagemaker_pipeline_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_pipeline_info_module.rst)|Gather information about Amazon SageMaker Pipelines
 [amazon.ai.sagemaker_space](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_module.rst)|Manage Amazon SageMaker AI Spaces
 [amazon.ai.sagemaker_space_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_space_info_module.rst)|Gather information about SageMaker AI Spaces
 [amazon.ai.sagemaker_training_job](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_module.rst)|Manage Amazon SageMaker training jobs
 [amazon.ai.sagemaker_training_job_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_training_job_info_module.rst)|Gather information about SageMaker training jobs
+[amazon.ai.sagemaker_user_profile](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_module.rst)|Manage Amazon SageMaker AI user profiles
+[amazon.ai.sagemaker_user_profile_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_user_profile_info_module.rst)|Gather information about Amazon SageMaker AI user profiles
 
 <!--end collection content-->
 
