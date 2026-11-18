@@ -286,6 +286,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import NotebookInstanceStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_notebook_instance
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_notebook_instance
@@ -302,7 +303,6 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_fo
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 

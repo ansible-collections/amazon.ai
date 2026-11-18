@@ -5,6 +5,7 @@
 
 from ansible_collections.amazon.ai.plugins.module_utils.common import AMAZON_AI_COLLECTION_NAME
 from ansible_collections.amazon.ai.plugins.module_utils.common import AMAZON_AI_COLLECTION_VERSION
+
 from ansible_collections.amazon.aws.plugins.module_utils.common import set_collection_info
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule as AmazonAWSModule
 

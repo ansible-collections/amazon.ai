@@ -307,6 +307,7 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import APP_IMAGE_CONFIG_BLOCK_OPTIONS
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_app_image_config
@@ -316,7 +317,6 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_ta
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_app_image_config
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
