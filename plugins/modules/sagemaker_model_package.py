@@ -350,7 +350,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_model_package_status
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 _CREATE_ONLY_FIELD_API_NAMES = {

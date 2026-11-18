@@ -944,7 +944,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import format_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_user_profiles
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 

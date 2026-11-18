@@ -459,7 +459,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import manage_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import normalize_training_job
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 

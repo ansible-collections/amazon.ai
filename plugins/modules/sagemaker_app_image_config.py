@@ -316,7 +316,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_ta
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_app_image_config
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
