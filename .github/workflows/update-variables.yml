@@ -14,4 +14,4 @@ on:
 
 jobs:
   update-variables:
-    uses: ansible-network/github_actions/.github/workflows/update_aws_variables.yml@main
+    uses: ansible-network/github_actions/.github/workflows/update_aws_variables.yml@e6c3ee8869da8d683fe04cb798d6830ec874f95f # main
