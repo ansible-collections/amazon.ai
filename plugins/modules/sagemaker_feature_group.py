@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_feature_group
 short_description: Manage Amazon SageMaker Feature Store feature groups
-version_added: "2.0.0"
+version_added: "2.1.0"
 author:
     - Matej Artač (@matejart)
 description:
@@ -306,9 +306,12 @@ EXAMPLES = r"""
 
 RETURN = r"""
 feature_group:
-    description: The feature group after the operation.
+    description:
+      - The feature group after the operation.
+      - In check mode it is the current feature group.
+      - An empty dict when the feature group does not exist, would be created in check mode, or was deleted.
     type: dict
-    returned: on success when O(state=present), except in check mode
+    returned: always
     contains:
         feature_group_arn:
             description: The ARN of the feature group.
@@ -611,7 +614,11 @@ def _feature_group_status_check(client, module, existing: Optional[Dict[str, Any
             module.fail_json(msg=f"Feature group {name} is being deleted; wait for the deletion to finish first.")
         if can_wait:
             wait_for_feature_group_status(client, module, name, "feature_group_deleted")
-        module.exit_json(changed=False, msg=f"Feature group {name} is already being deleted.")
+        module.exit_json(
+            changed=False,
+            msg=f"Feature group {name} is already being deleted.",
+            feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
+        )
 
     if status == "Creating" or update_status == "InProgress":
         transition = "being created" if status == "Creating" else "being updated"
@@ -651,9 +658,9 @@ def _exit_with_feature_group(client, module, changed: bool, msg: str, include_ta
 
 def _absent(client, module, existing: Optional[Dict[str, Any]]) -> None:
     name = module.params["feature_group_name"]
-    if not existing or not delete_feature_group(client, module):
-        module.exit_json(changed=False, msg=f"Feature group {name} does not exist.")
-    module.exit_json(changed=True, msg=f"Feature group {name} deleted successfully.")
+    if not existing or not delete_feature_group(client, module, existing):
+        module.exit_json(changed=False, msg=f"Feature group {name} does not exist.", feature_group={})
+    module.exit_json(changed=True, msg=f"Feature group {name} deleted successfully.", feature_group={})
 
 
 def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
@@ -684,7 +691,11 @@ def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
             msg = f"Check mode: would have updated feature group {name} ({', '.join(changes)})."
         else:
             msg = f"Feature group {name} already matches the requested configuration."
-        module.exit_json(changed=updated or tags_changed, msg=msg)
+        module.exit_json(
+            changed=updated or tags_changed,
+            msg=msg,
+            feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
+        )
     if updated:
         msg = update_msg
     elif tags_changed:

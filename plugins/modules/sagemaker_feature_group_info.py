@@ -8,7 +8,7 @@ DOCUMENTATION = r"""
 ---
 module: sagemaker_feature_group_info
 short_description: Gather information about Amazon SageMaker Feature Store feature groups
-version_added: "2.0.0"
+version_added: "2.1.0"
 author:
     - Matej Artač (@matejart)
 description:
@@ -79,6 +79,11 @@ EXAMPLES = r"""
 """
 
 RETURN = r"""
+msg:
+    description: Informative message about the lookup.
+    type: str
+    returned: always
+    sample: Found 1 feature group(s).
 feature_groups:
     description: The matching feature groups; an empty list when none match.
     type: list
@@ -418,7 +423,10 @@ def main() -> None:
                 for summary in summaries
                 if (feature_group := describe_feature_group(client, summary["FeatureGroupName"])) is not None
             ]
-        module.exit_json(feature_groups=[_with_tags(client, feature_group) for feature_group in feature_groups])
+        feature_groups = [_with_tags(client, feature_group) for feature_group in feature_groups]
+        module.exit_json(
+            changed=False, msg=f"Found {len(feature_groups)} feature group(s).", feature_groups=feature_groups
+        )
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

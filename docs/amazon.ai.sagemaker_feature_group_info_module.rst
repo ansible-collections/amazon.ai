@@ -8,7 +8,7 @@ amazon.ai.sagemaker_feature_group_info
 **Gather information about Amazon SageMaker Feature Store feature groups**
 
 
-Version added: 2.0.0
+Version added: 2.1.0
 
 .. contents::
    :local:
@@ -1373,6 +1373,23 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
             </tr>
 
 
+            <tr>
+                <td colspan="5">
+                    <div class="ansibleOptionAnchor" id="return-"></div>
+                    <b>msg</b>
+                    <a class="ansibleOptionLink" href="#return-" title="Permalink to this return value"></a>
+                    <div style="font-size: small">
+                      <span style="color: purple">string</span>
+                    </div>
+                </td>
+                <td>always</td>
+                <td>
+                            <div>Informative message about the lookup.</div>
+                    <br/>
+                        <div style="font-size: smaller"><b>Sample:</b></div>
+                        <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">Found 1 feature group(s).</div>
+                </td>
+            </tr>
     </table>
     <br/><br/>
 

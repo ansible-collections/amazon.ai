@@ -3868,7 +3868,11 @@ def create_feature_group(client, module) -> None:
     """
     feature_group_name = module.params["feature_group_name"]
     if module.check_mode:
-        module.exit_json(changed=True, msg=f"Check mode: would have created feature group {feature_group_name}.")
+        module.exit_json(
+            changed=True,
+            msg=f"Check mode: would have created feature group {feature_group_name}.",
+            feature_group={},
+        )
     params = snake_dict_to_camel_dict(feature_group_desired_config(module), capitalize_first=True)
     if module.params.get("tags"):
         params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
@@ -3926,20 +3930,25 @@ def update_feature_group(client, module, properties_to_update: Dict[str, Any]) -
 
 
 @FeatureGroupErrorHandler.deletion_error_handler("delete feature group")
-def delete_feature_group(client, module) -> bool:
+def delete_feature_group(client, module, existing: Optional[Dict[str, Any]] = None) -> bool:
     """
     Delete a SageMaker feature group and, when O(wait=true), wait until it is gone.
 
     Args:
         client: The boto3 SageMaker client.
         module: The Ansible module instance.
+        existing: The current feature group as returned by describe_feature_group(), reported in check mode.
 
     Returns:
         True if the feature group was deleted, False if it no longer existed.
     """
     feature_group_name = module.params["feature_group_name"]
     if module.check_mode:
-        module.exit_json(changed=True, msg=f"Check mode: would have deleted feature group {feature_group_name}.")
+        module.exit_json(
+            changed=True,
+            msg=f"Check mode: would have deleted feature group {feature_group_name}.",
+            feature_group=camel_dict_to_snake_dict(existing or {}, ignore_list=["Tags", "tags"]),
+        )
     client.delete_feature_group(FeatureGroupName=feature_group_name)
     wait_for_feature_group_status(client, module, feature_group_name, "feature_group_deleted")
     return True
