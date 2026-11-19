@@ -1,0 +1,32 @@
+---
+- name: SageMaker endpoint URL lookup integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Set connection arguments for the lookup
+      # As a lookup plugin it does not get module_defaults
+      ansible.builtin.set_fact:
+        connection_args:
+          region: "{{ aws_region }}"
+          access_key: "{{ aws_access_key }}"
+          secret_key: "{{ aws_secret_key }}"
+          session_token: "{{ security_token | default(omit) }}"
+      no_log: true
+
+    - name: Set up prerequisites (roles, model, endpoint configuration, endpoints)
+      ansible.builtin.include_tasks: setup.yml
+
+    - name: Exercise the lookup plugin
+      ansible.builtin.include_tasks: lookup.yml
+  always:
+    - name: Tear down all resources
+      ansible.builtin.include_tasks: teardown.yml
