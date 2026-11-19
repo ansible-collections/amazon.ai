@@ -1,0 +1,66 @@
+---
+- name: Amazon Nova Act model info integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Check mode list models
+      amazon.ai.nova_act_model_info:
+        client_compatibility_version: "{{ client_compatibility_version }}"
+      check_mode: true
+      register: models_info_check
+
+    - name: Assert check mode listing
+      ansible.builtin.assert:
+        that:
+          - not models_info_check.changed
+          - models_info_check.models is sequence
+          - models_info_check.msg is search('^Retrieved \d+ model\(s\)\.$')
+
+    - name: List models
+      amazon.ai.nova_act_model_info:
+        client_compatibility_version: "{{ client_compatibility_version }}"
+      register: models_info
+
+    - name: Assert listing
+      ansible.builtin.assert:
+        that:
+          - not models_info.changed
+          - models_info.models is sequence
+          - models_info.model_aliases is sequence
+          - models_info.compatibility_information is mapping
+          - models_info.compatibility_information.client_compatibility_version == client_compatibility_version
+          - models_info.msg is search('^Retrieved \d+ model\(s\)\.$')
+
+    - name: Re-run listing
+      amazon.ai.nova_act_model_info:
+        client_compatibility_version: "{{ client_compatibility_version }}"
+      register: models_info_rerun
+
+    - name: Assert re-run listing is unchanged and consistent
+      ansible.builtin.assert:
+        that:
+          - not models_info_rerun.changed
+          - models_info_rerun.models == models_info.models
+          - models_info_rerun.model_aliases == models_info.model_aliases
+          - models_info_rerun.compatibility_information == models_info.compatibility_information
+
+    - name: Attempt listing without the required option
+      amazon.ai.nova_act_model_info:
+      register: models_info_missing_option
+      ignore_errors: true
+
+    - name: Assert missing required option is rejected
+      ansible.builtin.assert:
+        that:
+          - models_info_missing_option is failed
+          - "'required' in models_info_missing_option.msg"
+  always: []
