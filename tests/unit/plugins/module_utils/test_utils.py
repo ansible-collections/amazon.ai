@@ -15,6 +15,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_in_memory_violations
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_status_decision
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
@@ -620,3 +621,71 @@ def test_feature_group_remove_ttl_duration_on_offline_only_group_is_a_no_op():
     existing = {key: value for key, value in EXISTING_FEATURE_GROUP.items() if key != "online_store_config"}
     desired = {"online_store_config": {"remove_ttl_duration": True}}
     assert feature_group_properties_to_update(existing, desired) == {}
+
+
+# -------------------------------------------
+# Tests for feature_group_status_decision
+# -------------------------------------------
+def _described(status, update_status=None, **extra):
+    described = {"FeatureGroupStatus": status, **extra}
+    if update_status:
+        described["LastUpdateStatus"] = {"Status": update_status}
+    return described
+
+
+@pytest.mark.parametrize(
+    "status, update_status, state, wait, check_mode, action, waiter, message",
+    [
+        # settled
+        ("Created", None, "present", True, False, "proceed", None, None),
+        ("Created", None, "absent", True, False, "proceed", None, None),
+        ("Created", "Successful", "present", True, False, "proceed", None, None),
+        ("Created", "Failed", "present", True, False, "proceed", None, None),
+        # being deleted
+        ("Deleting", None, "present", True, False, "fail", None, "is being deleted"),
+        ("Deleting", None, "present", False, False, "fail", None, "is being deleted"),
+        ("Deleting", None, "absent", True, False, "wait_and_exit", "feature_group_deleted", "already being deleted"),
+        ("Deleting", None, "absent", False, False, "exit", None, "already being deleted"),
+        ("Deleting", None, "absent", True, True, "exit", None, "already being deleted"),
+        ("Deleting", "InProgress", "absent", True, False, "wait_and_exit", "feature_group_deleted", "already"),
+        # being created
+        ("Creating", None, "present", True, False, "wait", "feature_group_created", None),
+        ("Creating", None, "absent", True, False, "wait", "feature_group_created", None),
+        ("Creating", None, "present", False, False, "exit", None, "is being created"),
+        ("Creating", None, "absent", False, False, "fail", None, "cannot be deleted while it is being created"),
+        ("Creating", None, "present", True, True, "proceed", None, None),
+        ("Creating", None, "absent", False, True, "proceed", None, None),
+        # being updated
+        ("Created", "InProgress", "present", True, False, "wait", "feature_group_updated", None),
+        ("Created", "InProgress", "absent", True, False, "wait", "feature_group_updated", None),
+        ("Created", "InProgress", "present", False, False, "exit", None, "is being updated"),
+        ("Created", "InProgress", "absent", False, False, "fail", None, "cannot be deleted while it is being updated"),
+        ("Created", "InProgress", "present", True, True, "proceed", None, None),
+        # failed
+        ("CreateFailed", None, "present", True, False, "fail", None, "CreateFailed"),
+        ("DeleteFailed", None, "present", True, False, "fail", None, "DeleteFailed"),
+        ("CreateFailed", None, "absent", True, False, "proceed", None, None),
+        ("DeleteFailed", None, "absent", False, False, "proceed", None, None),
+    ],
+)
+def test_feature_group_status_decision(status, update_status, state, wait, check_mode, action, waiter, message):
+    existing = _described(status, update_status)
+    decision = feature_group_status_decision("fg", existing, state, wait, check_mode)
+    assert decision.action == action
+    assert decision.waiter == waiter
+    if message is None:
+        assert decision.message is None
+    else:
+        assert message in decision.message
+        assert "fg" in decision.message
+
+
+@pytest.mark.parametrize(
+    "extra, reason",
+    [({"FailureReason": "The role is invalid."}, "The role is invalid."), ({}, "no reason reported")],
+)
+def test_feature_group_status_decision_reports_the_failure_reason(extra, reason):
+    existing = _described("CreateFailed", **extra)
+    decision = feature_group_status_decision("fg", existing, "present", True, False)
+    assert reason in decision.message
+    assert "state=absent" in decision.message
