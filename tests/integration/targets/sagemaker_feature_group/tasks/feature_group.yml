@@ -259,6 +259,41 @@
       - info_after_ttl.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
       - "info_after_ttl.feature_groups[0].online_store_config.ttl_duration == {'unit': 'Hours', 'value': 2}"
 
+# 6b. Remove the online store TTL — check / real / rerun
+- name: Remove the online store TTL (check mode)
+  amazon.ai.sagemaker_feature_group: &clear_ttl
+    feature_group_name: "{{ feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ extended_features }}"
+    online_store_config:
+      remove_ttl_duration: true
+  check_mode: true
+  register: clear_ttl_check
+
+- name: Remove the online store TTL
+  amazon.ai.sagemaker_feature_group: *clear_ttl
+  register: clear_ttl_real
+
+- name: Remove the online store TTL again
+  amazon.ai.sagemaker_feature_group: *clear_ttl
+  register: clear_ttl_rerun
+
+- name: Get the feature group after removing the TTL
+  amazon.ai.sagemaker_feature_group_info:
+    feature_group_name: "{{ feature_group_name }}"
+  register: info_after_clear_ttl
+
+- name: Assert the TTL was removed in place
+  ansible.builtin.assert:
+    that:
+      - clear_ttl_check is changed
+      - "clear_ttl_check.msg.startswith('Check mode: would have updated')"
+      - clear_ttl_real is changed
+      - clear_ttl_rerun is not changed
+      - info_after_clear_ttl.feature_groups[0].feature_group_arn == create_real.feature_group.feature_group_arn
+      - info_after_clear_ttl.feature_groups[0].online_store_config.ttl_duration is not defined
+
 # 7. Switch to provisioned throughput — check / real / rerun
 - name: Switch to provisioned throughput (check mode)
   amazon.ai.sagemaker_feature_group: &provisioned

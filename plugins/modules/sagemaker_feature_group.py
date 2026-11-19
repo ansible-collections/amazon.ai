@@ -113,7 +113,7 @@ options:
             ttl_duration:
                 description:
                     - The default time to live of records in the online store.
-                    - Can be changed after creation.
+                    - Can be changed after creation. To remove it, use O(online_store_config.remove_ttl_duration).
                 type: dict
                 suboptions:
                     unit:
@@ -125,6 +125,13 @@ options:
                         description: The time to live, at least 1.
                         type: int
                         required: true
+            remove_ttl_duration:
+                description:
+                    - Whether to remove the default time to live of records in the online store.
+                    - V(true) removes an existing O(online_store_config.ttl_duration); there is nothing to do when none is set.
+                    - V(false) or not set leaves the time to live as it is.
+                    - Cannot be combined with O(online_store_config.ttl_duration).
+                type: bool
     offline_store_config:
         description:
             - Configuration of the offline store in Amazon S3.
@@ -286,6 +293,23 @@ EXAMPLES = r"""
       ttl_duration:
         unit: Days
         value: 30
+
+- name: Remove the time to live from the online store
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: customers
+    record_identifier_feature_name: customer_id
+    event_time_feature_name: event_time
+    feature_definitions:
+      - feature_name: customer_id
+        feature_type: String
+      - feature_name: event_time
+        feature_type: Fractional
+      - feature_name: lifetime_value
+        feature_type: Fractional
+      - feature_name: segment
+        feature_type: String
+    online_store_config:
+      remove_ttl_duration: true
 
 - name: Switch to provisioned throughput
   amazon.ai.sagemaker_feature_group:
@@ -769,7 +793,9 @@ def main() -> None:
                         value=dict(type="int", required=True),
                     ),
                 ),
+                remove_ttl_duration=dict(type="bool"),
             ),
+            mutually_exclusive=[("ttl_duration", "remove_ttl_duration")],
         ),
         offline_store_config=dict(
             type="dict",

@@ -592,3 +592,31 @@ def test_feature_group_provisioned_throughput_on_existing_in_memory_group():
     }
     with pytest.raises(ValueError, match="InMemory"):
         feature_group_properties_to_update(existing, desired)
+
+
+def test_feature_group_remove_ttl_duration():
+    result = feature_group_properties_to_update(
+        EXISTING_FEATURE_GROUP, {"online_store_config": {"remove_ttl_duration": True}}
+    )
+    assert result == {"online_store_config": {"ttl_duration": {}}}
+
+
+@pytest.mark.parametrize("clear", [True, False, None])
+def test_feature_group_remove_ttl_duration_without_ttl_is_a_no_op(clear):
+    online = {
+        key: value for key, value in EXISTING_FEATURE_GROUP["online_store_config"].items() if key != "ttl_duration"
+    }
+    existing = dict(EXISTING_FEATURE_GROUP, online_store_config=online)
+    desired = {"online_store_config": {"remove_ttl_duration": clear}}
+    assert feature_group_properties_to_update(existing, desired) == {}
+
+
+def test_feature_group_remove_ttl_duration_false_keeps_the_ttl():
+    desired = {"online_store_config": {"remove_ttl_duration": False}}
+    assert feature_group_properties_to_update(EXISTING_FEATURE_GROUP, desired) == {}
+
+
+def test_feature_group_remove_ttl_duration_on_offline_only_group_is_a_no_op():
+    existing = {key: value for key, value in EXISTING_FEATURE_GROUP.items() if key != "online_store_config"}
+    desired = {"online_store_config": {"remove_ttl_duration": True}}
+    assert feature_group_properties_to_update(existing, desired) == {}
