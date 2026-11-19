@@ -4301,6 +4301,42 @@ def test_list_user_profiles_omits_unset_filters():
     paginator.paginate.assert_called_once_with()
 
 
+# -------------------------------------------
+# Feature group wait timeout
+# -------------------------------------------
+@pytest.mark.parametrize(
+    "existing, online_store_config, expected",
+    [
+        (None, None, None),
+        (None, {"storage_type": "InMemory"}, "InMemory"),
+        ({"OnlineStoreConfig": {"StorageType": "Standard"}}, {"storage_type": "InMemory"}, "Standard"),
+        ({"OnlineStoreConfig": {"StorageType": "InMemory"}}, None, "InMemory"),
+        ({"FeatureGroupName": "fg"}, {"storage_type": "InMemory"}, "InMemory"),
+    ],
+)
+def test_feature_group_storage_type(existing, online_store_config, expected):
+    from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_storage_type
+
+    module = MagicMock()
+    module.params = {"online_store_config": online_store_config}
+    assert feature_group_storage_type(module, existing) == expected
+
+
+@pytest.mark.parametrize(
+    "wait_timeout, storage_type, max_attempts",
+    [(None, None, 120), (None, "InMemory", 240), (100, "InMemory", 20)],
+)
+def test_wait_for_feature_group_status_timeout(wait_timeout, storage_type, max_attempts):
+    from ansible_collections.amazon.ai.plugins.module_utils import waiters
+
+    module = MagicMock()
+    module.params = {"wait": True, "wait_timeout": wait_timeout}
+    with patch.object(waiters, "get_waiter") as get_waiter:
+        waiters.wait_for_feature_group_status(
+            MagicMock(), module, "fg", "feature_group_created", storage_type=storage_type
+        )
+    config = get_waiter.return_value.wait.call_args.kwargs["WaiterConfig"]
+    assert config == {"Delay": 5, "MaxAttempts": max_attempts}
 def test_delete_feature_group_check_mode_exits_without_calling_the_api():
     from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
 
@@ -4325,7 +4361,7 @@ def test_delete_feature_group_deletes_and_waits_for_it_to_be_gone():
         deleted = sagemaker.delete_feature_group(client, module)
     assert deleted is True
     client.delete_feature_group.assert_called_once_with(FeatureGroupName="fg")
-    wait.assert_called_once_with(client, module, "fg", "feature_group_deleted")
+    assert wait.call_args.args[:4] == (client, module, "fg", "feature_group_deleted")
 
 
 def test_delete_feature_group_that_vanished_between_describe_and_delete_returns_false():

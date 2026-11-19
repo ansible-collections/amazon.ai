@@ -946,10 +946,10 @@ Parameters
                     </div>
                 </td>
                 <td>
-                        <b>Default:</b><br/><div style="color: blue">600</div>
                 </td>
                 <td>
                         <div>How long, in seconds, to wait for the feature group.</div>
+                        <div>When not set, the module waits 600 seconds, or 1200 seconds when the online store uses V(InMemory) storage, which can take 10 to 15 minutes to create or delete.</div>
                 </td>
             </tr>
     </table>

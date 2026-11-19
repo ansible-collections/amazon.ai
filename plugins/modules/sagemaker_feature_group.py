@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -215,9 +214,11 @@ options:
         type: bool
         default: true
     wait_timeout:
-        description: How long, in seconds, to wait for the feature group.
+        description:
+            - How long, in seconds, to wait for the feature group.
+            - When not set, the module waits 600 seconds, or 1200 seconds when the online store uses
+              V(InMemory) storage, which can take 10 to 15 minutes to create or delete.
         type: int
-        default: 600
 notes:
     - Required IAM actions include sagemaker:CreateFeatureGroup, sagemaker:DescribeFeatureGroup,
       sagemaker:UpdateFeatureGroup, sagemaker:DeleteFeatureGroup, sagemaker:ListFeatureGroups,
@@ -587,6 +588,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_feature_group
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_feature_group
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_desired_config
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_storage_type
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_feature_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_feature_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_feature_group
@@ -613,7 +615,9 @@ def _feature_group_status_check(client, module, existing: Optional[Dict[str, Any
         if state == "present":
             module.fail_json(msg=f"Feature group {name} is being deleted; wait for the deletion to finish first.")
         if can_wait:
-            wait_for_feature_group_status(client, module, name, "feature_group_deleted")
+            wait_for_feature_group_status(
+                client, module, name, "feature_group_deleted", storage_type=feature_group_storage_type(module, existing)
+            )
         module.exit_json(
             changed=False,
             msg=f"Feature group {name} is already being deleted.",
@@ -633,7 +637,9 @@ def _feature_group_status_check(client, module, existing: Optional[Dict[str, Any
                 feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
             )
         waiter_name = "feature_group_created" if status == "Creating" else "feature_group_updated"
-        wait_for_feature_group_status(client, module, name, waiter_name)
+        wait_for_feature_group_status(
+            client, module, name, waiter_name, storage_type=feature_group_storage_type(module, existing)
+        )
         return describe_feature_group(client, name)
 
     if state == "present" and status in ("CreateFailed", "DeleteFailed"):
@@ -683,7 +689,7 @@ def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
     except ValueError as e:
         module.fail_json(msg=f"Feature group {name}: {e}")
 
-    updated, update_msg = update_feature_group(client, module, properties_to_update)
+    updated, update_msg = update_feature_group(client, module, properties_to_update, existing)
     tags_changed = reconcile_feature_group_tags(client, module, existing["FeatureGroupArn"])
     if module.check_mode:
         changes = list(properties_to_update) + (["tags"] if tags_changed else [])
@@ -793,7 +799,7 @@ def main() -> None:
         tags=dict(type="dict", aliases=["resource_tags"]),
         purge_tags=dict(type="bool", default=True),
         wait=dict(type="bool", default=True),
-        wait_timeout=dict(type="int", default=600),
+        wait_timeout=dict(type="int"),
     )
     module = AnsibleAWSModule(
         argument_spec=argument_spec,

@@ -254,6 +254,29 @@ def rename_keys(data: Any, renames: Dict[str, str]) -> Any:
     return data
 
 
+# InMemory feature groups take 10-15 minutes to create or delete; every other storage type is much faster.
+FEATURE_GROUP_WAIT_TIMEOUT = 600
+FEATURE_GROUP_IN_MEMORY_WAIT_TIMEOUT = 1200
+
+
+def feature_group_wait_timeout(wait_timeout: Optional[int], storage_type: Optional[str]) -> int:
+    """
+    Resolve how long to wait for a feature group, in seconds.
+
+    Args:
+        wait_timeout: The user's wait_timeout; None when not set.
+        storage_type: The online store storage type of the feature group, if any.
+
+    Returns:
+        wait_timeout when set, otherwise 1200 for InMemory storage and 600 for everything else.
+    """
+    if wait_timeout is not None:
+        return wait_timeout
+    if storage_type == "InMemory":
+        return FEATURE_GROUP_IN_MEMORY_WAIT_TIMEOUT
+    return FEATURE_GROUP_WAIT_TIMEOUT
+
+
 def _is_subset(desired: Any, existing: Any) -> bool:
     """Return True when every value set in desired is present and equal in existing, recursing into dicts."""
     if isinstance(desired, dict):
