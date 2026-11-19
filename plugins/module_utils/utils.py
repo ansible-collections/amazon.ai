@@ -295,6 +295,40 @@ def feature_group_has_store(desired: Dict[str, Any]) -> bool:
     return desired.get("online_store_config", {}).get("enable_online_store") is True
 
 
+def feature_group_in_memory_violations(desired: Dict[str, Any]) -> List[str]:
+    """
+    List the options of a requested feature group that SageMaker does not support with InMemory storage.
+
+    An InMemory feature group is online-only, cannot use customer managed KMS keys and cannot use provisioned
+    throughput.
+
+    Args:
+        desired: The requested configuration in snake_case, as built by feature_group_desired_config().
+
+    Returns:
+        One message per unsupported option; empty when the storage type is not InMemory or nothing conflicts.
+    """
+    online_store_config = desired.get("online_store_config") or {}
+    if online_store_config.get("storage_type") != "InMemory":
+        return []
+    violations = []
+    if desired.get("offline_store_config"):
+        violations.append(
+            "offline_store_config is not supported with InMemory storage (an InMemory feature group has no offline store)"
+        )
+    if (online_store_config.get("security_config") or {}).get("kms_key_id"):
+        violations.append(
+            "online_store_config.security_config.kms_key_id is not supported with InMemory storage "
+            "(customer managed KMS keys cannot be used)"
+        )
+    if (desired.get("throughput_config") or {}).get("throughput_mode") == "Provisioned":
+        violations.append(
+            "throughput_config.throughput_mode=Provisioned is not supported with InMemory storage "
+            "(it is available only with Standard or Standard_V2 online storage, or without an online store); use OnDemand"
+        )
+    return violations
+
+
 def _is_subset(desired: Any, existing: Any) -> bool:
     """Return True when every value set in desired is present and equal in existing, recursing into dicts."""
     if isinstance(desired, dict):
@@ -408,6 +442,13 @@ def feature_group_properties_to_update(existing: Dict[str, Any], desired: Dict[s
         if online_store_config:
             properties_to_update["online_store_config"] = online_store_config
     if "throughput_config" in desired:
+        if (existing.get("online_store_config") or {}).get("storage_type") == "InMemory" and (
+            desired["throughput_config"].get("throughput_mode") == "Provisioned"
+        ):
+            raise ValueError(
+                "throughput_config.throughput_mode=Provisioned is not supported with InMemory storage "
+                "(it is available only with Standard or Standard_V2 online storage, or without an online store); use OnDemand."
+            )
         throughput_config = _throughput_config_update(existing.get("throughput_config"), desired["throughput_config"])
         if throughput_config:
             properties_to_update["throughput_config"] = throughput_config
