@@ -8,7 +8,7 @@ amazon.ai.sagemaker_feature_group
 **Manage Amazon SageMaker Feature Store feature groups**
 
 
-Version added: 2.0.0
+Version added: 2.1.0
 
 .. contents::
    :local:
@@ -1069,9 +1069,11 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td>on success when O(state=present), except in check mode</td>
+                <td>always</td>
                 <td>
                             <div>The feature group after the operation.</div>
+                            <div>In check mode it is the current feature group.</div>
+                            <div>An empty dict when the feature group does not exist, would be created in check mode, or was deleted.</div>
                     <br/>
                 </td>
             </tr>
