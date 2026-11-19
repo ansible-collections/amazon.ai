@@ -1,0 +1,30 @@
+test_id: "{{ tiny_prefix }}"
+endpoint_a_name: "test-sm-url-a-{{ test_id }}"
+endpoint_b_name: "test-sm-url-b-{{ test_id }}"
+missing_endpoint_name: "test-sm-url-missing-{{ test_id }}"
+endpoint_config_name: "test-sm-url-config-{{ test_id }}"
+model_name: "test-sm-url-model-{{ test_id }}"
+model_role_name: "ansible-test-sm-url-model-role-{{ test_id }}"
+denied_role_name: "ansible-test-sm-url-denied-role-{{ test_id }}"
+# AmazonSageMakerFullAccess only grants S3 read on buckets with "sagemaker" in the name.
+model_bucket_name: "test-sagemaker-url-model-bucket-{{ test_id }}"
+model_data_url: "s3://{{ model_bucket_name }}/model.tar.gz"
+
+runtime_url: "https://runtime.sagemaker.{{ aws_region }}.amazonaws.com"
+endpoint_a_url: "{{ runtime_url }}/endpoints/{{ endpoint_a_name }}/invocations"
+endpoint_b_url: "{{ runtime_url }}/endpoints/{{ endpoint_b_name }}/invocations"
+# Any region other than the one under test; the endpoints do not exist there.
+other_region: "{{ 'us-west-2' if aws_region != 'us-west-2' else 'us-east-2' }}"
+
+# SageMaker built-in XGBoost serving image. The account owning the image is
+# region-specific; only regions the integration test is expected to run in are
+# mapped here. Add the region's account (see the AWS "Docker Registry Paths and
+# Example Code" docs) to run the target elsewhere.
+xgboost_version: "1.7-1"
+sagemaker_xgboost_accounts:
+  us-east-1: "683313688378"
+  us-east-2: "257758044811"
+  us-west-2: "246618743249"
+  eu-west-1: "141502667606"
+  eu-central-1: "492215442770"
+model_image: "{{ sagemaker_xgboost_accounts[aws_region] }}.dkr.ecr.{{ aws_region }}.amazonaws.com/sagemaker-xgboost:{{ xgboost_version }}"
