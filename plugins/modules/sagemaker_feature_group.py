@@ -614,17 +614,10 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_feature_group
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_feature_group
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_feature_group
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_desired_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_storage_type
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_feature_group_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_feature_group_tags
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_feature_group
-from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
-from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_in_memory_violations
-from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import manage_feature_group
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_status_decision
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_feature_group_status
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -639,121 +632,24 @@ def _feature_group_status_check(client, module, existing: Optional[Dict[str, Any
     if not existing:
         return existing
     name = module.params["feature_group_name"]
-    state = module.params["state"]
-    status = existing["FeatureGroupStatus"]
-    update_status = (existing.get("LastUpdateStatus") or {}).get("Status")
-    can_wait = module.params["wait"] and not module.check_mode
-
-    if status == "Deleting":
-        if state == "present":
-            module.fail_json(msg=f"Feature group {name} is being deleted; wait for the deletion to finish first.")
-        if can_wait:
-            wait_for_feature_group_status(
-                client, module, name, "feature_group_deleted", storage_type=feature_group_storage_type(module, existing)
-            )
+    decision = feature_group_status_decision(
+        name, existing, module.params["state"], module.params["wait"], module.check_mode
+    )
+    if decision.action == "fail":
+        module.fail_json(msg=decision.message)
+    if decision.waiter:
+        wait_for_feature_group_status(
+            client, module, name, decision.waiter, storage_type=feature_group_storage_type(module, existing)
+        )
+    if decision.action in ("exit", "wait_and_exit"):
         module.exit_json(
             changed=False,
-            msg=f"Feature group {name} is already being deleted.",
+            msg=decision.message,
             feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
         )
-
-    if status == "Creating" or update_status == "InProgress":
-        transition = "being created" if status == "Creating" else "being updated"
-        if module.check_mode:
-            return existing
-        if not can_wait:
-            if state == "absent":
-                module.fail_json(msg=f"Feature group {name} cannot be deleted while it is {transition}.")
-            module.exit_json(
-                changed=False,
-                msg=f"Feature group {name} is {transition}.",
-                feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
-            )
-        waiter_name = "feature_group_created" if status == "Creating" else "feature_group_updated"
-        wait_for_feature_group_status(
-            client, module, name, waiter_name, storage_type=feature_group_storage_type(module, existing)
-        )
+    if decision.action == "wait":
         return describe_feature_group(client, name)
-
-    if state == "present" and status in ("CreateFailed", "DeleteFailed"):
-        module.fail_json(
-            msg=(
-                f"Feature group {name} is in state {status}: {existing.get('FailureReason', 'no reason reported')}. "
-                "Delete it with state=absent and recreate it."
-            )
-        )
     return existing
-
-
-def _exit_with_feature_group(client, module, changed: bool, msg: str, include_tags: bool) -> None:
-    feature_group = describe_feature_group(client, module.params["feature_group_name"])
-    result = dict(
-        changed=changed, msg=msg, feature_group=camel_dict_to_snake_dict(feature_group, ignore_list=["Tags", "tags"])
-    )
-    if include_tags:
-        result["tags"] = list_feature_group_tags(client, feature_group["FeatureGroupArn"])
-    module.exit_json(**result)
-
-
-def _absent(client, module, existing: Optional[Dict[str, Any]]) -> None:
-    name = module.params["feature_group_name"]
-    if not existing or not delete_feature_group(client, module, existing):
-        module.exit_json(changed=False, msg=f"Feature group {name} does not exist.", feature_group={})
-    module.exit_json(changed=True, msg=f"Feature group {name} deleted successfully.", feature_group={})
-
-
-def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
-    name = module.params["feature_group_name"]
-    desired = feature_group_desired_config(module)
-    if not existing:
-        if not feature_group_has_store(desired):
-            module.fail_json(
-                msg=(
-                    "A feature group needs at least one store: configure offline_store_config, or set "
-                    "online_store_config.enable_online_store to true (SageMaker defaults it to false)."
-                )
-            )
-        violations = feature_group_in_memory_violations(desired)
-        if violations:
-            module.fail_json(msg=f"Feature group {name}: {'; '.join(violations)}.")
-        create_feature_group(client, module)
-        _exit_with_feature_group(
-            client, module, changed=True, msg=f"Feature group {name} created successfully.", include_tags=True
-        )
-
-    try:
-        properties_to_update = feature_group_properties_to_update(
-            camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]), desired
-        )
-    except ValueError as e:
-        module.fail_json(msg=f"Feature group {name}: {e}")
-
-    updated, update_msg = update_feature_group(client, module, properties_to_update, existing)
-    tags_changed = reconcile_feature_group_tags(client, module, existing["FeatureGroupArn"])
-    if module.check_mode:
-        changes = list(properties_to_update) + (["tags"] if tags_changed else [])
-        if changes:
-            msg = f"Check mode: would have updated feature group {name} ({', '.join(changes)})."
-        else:
-            msg = f"Feature group {name} already matches the requested configuration."
-        module.exit_json(
-            changed=updated or tags_changed,
-            msg=msg,
-            feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
-        )
-    if updated:
-        msg = update_msg
-    elif tags_changed:
-        msg = f"Feature group {name} tags updated successfully."
-    else:
-        msg = f"Feature group {name} already matches the requested configuration."
-    _exit_with_feature_group(
-        client,
-        module,
-        changed=updated or tags_changed,
-        msg=msg,
-        include_tags=module.params.get("tags") is not None,
-    )
 
 
 def main() -> None:
@@ -862,9 +758,7 @@ def main() -> None:
 
         existing = describe_feature_group(client, module.params["feature_group_name"])
         existing = _feature_group_status_check(client, module, existing)
-        if module.params["state"] == "absent":
-            _absent(client, module, existing)
-        _present(client, module, existing)
+        module.exit_json(**manage_feature_group(client, module, existing))
     except AnsibleAWSError as e:
         module.fail_json_aws_error(e)
 

@@ -20,6 +20,9 @@ except ImportError:
 from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_to_snake_dict_keeping
 from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import deep_merge
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_in_memory_violations
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
 from ansible_collections.amazon.ai.plugins.module_utils.utils import rename_keys
 from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_to_camel_dict_keeping
@@ -3877,17 +3880,15 @@ def create_feature_group(client, module) -> None:
     """
     Create a SageMaker feature group and, when O(wait=true), wait until it is Created.
 
+    In check mode nothing is created.
+
     Args:
         client: The boto3 SageMaker client.
         module: The Ansible module instance.
     """
     feature_group_name = module.params["feature_group_name"]
     if module.check_mode:
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: would have created feature group {feature_group_name}.",
-            feature_group={},
-        )
+        return
     desired = feature_group_desired_config(module)
     # remove_ttl_duration is not an API parameter; a new feature group has no TTL to clear.
     desired.get("online_store_config", {}).pop("remove_ttl_duration", None)
@@ -3965,18 +3966,14 @@ def delete_feature_group(client, module, existing: Optional[Dict[str, Any]] = No
     Args:
         client: The boto3 SageMaker client.
         module: The Ansible module instance.
-        existing: The current feature group as returned by describe_feature_group(), reported in check mode.
+        existing: The current feature group as returned by describe_feature_group(); selects the default wait_timeout.
 
     Returns:
-        True if the feature group was deleted, False if it no longer existed.
+        True if the feature group was deleted (in check mode: would be), False if it no longer existed.
     """
     feature_group_name = module.params["feature_group_name"]
     if module.check_mode:
-        module.exit_json(
-            changed=True,
-            msg=f"Check mode: would have deleted feature group {feature_group_name}.",
-            feature_group=camel_dict_to_snake_dict(existing or {}, ignore_list=["Tags", "tags"]),
-        )
+        return True
     client.delete_feature_group(FeatureGroupName=feature_group_name)
     wait_for_feature_group_status(
         client,
@@ -4015,3 +4012,97 @@ def reconcile_feature_group_tags(client, module, feature_group_arn: str) -> bool
     if tags_to_remove:
         client.delete_tags(ResourceArn=feature_group_arn, TagKeys=tags_to_remove)
     return bool(tags_to_add or tags_to_remove)
+
+
+def _feature_group_result(client, module, changed: bool, msg: str, include_tags: bool) -> Dict[str, Any]:
+    feature_group = describe_feature_group(client, module.params["feature_group_name"])
+    result = dict(
+        changed=changed, msg=msg, feature_group=camel_dict_to_snake_dict(feature_group, ignore_list=["Tags", "tags"])
+    )
+    if include_tags:
+        result["tags"] = list_feature_group_tags(client, feature_group["FeatureGroupArn"])
+    return result
+
+
+def _manage_feature_group_absent(client, module, existing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    name = module.params["feature_group_name"]
+    if not existing or not delete_feature_group(client, module, existing):
+        return dict(changed=False, msg=f"Feature group {name} does not exist.", feature_group={})
+    if module.check_mode:
+        return dict(
+            changed=True,
+            msg=f"Check mode: would have deleted feature group {name}.",
+            feature_group=camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"]),
+        )
+    return dict(changed=True, msg=f"Feature group {name} deleted successfully.", feature_group={})
+
+
+def _manage_feature_group_create(client, module) -> Dict[str, Any]:
+    name = module.params["feature_group_name"]
+    desired = feature_group_desired_config(module)
+    if not feature_group_has_store(desired):
+        module.fail_json(
+            msg=(
+                "A feature group needs at least one store: configure offline_store_config, or set "
+                "online_store_config.enable_online_store to true (SageMaker defaults it to false)."
+            )
+        )
+    violations = feature_group_in_memory_violations(desired)
+    if violations:
+        module.fail_json(msg=f"Feature group {name}: {'; '.join(violations)}.")
+    create_feature_group(client, module)
+    if module.check_mode:
+        return dict(changed=True, msg=f"Check mode: would have created feature group {name}.", feature_group={})
+    return _feature_group_result(
+        client, module, changed=True, msg=f"Feature group {name} created successfully.", include_tags=True
+    )
+
+
+def _manage_feature_group_update(client, module, existing: Dict[str, Any]) -> Dict[str, Any]:
+    name = module.params["feature_group_name"]
+    existing_snake_case = camel_dict_to_snake_dict(existing, ignore_list=["Tags", "tags"])
+    try:
+        properties_to_update = feature_group_properties_to_update(
+            existing_snake_case, feature_group_desired_config(module)
+        )
+    except ValueError as e:
+        module.fail_json(msg=f"Feature group {name}: {e}")
+
+    updated, update_msg = update_feature_group(client, module, properties_to_update, existing)
+    tags_changed = reconcile_feature_group_tags(client, module, existing["FeatureGroupArn"])
+    changed = updated or tags_changed
+    if module.check_mode:
+        changes = list(properties_to_update) + (["tags"] if tags_changed else [])
+        if changes:
+            msg = f"Check mode: would have updated feature group {name} ({', '.join(changes)})."
+        else:
+            msg = f"Feature group {name} already matches the requested configuration."
+        return dict(changed=changed, msg=msg, feature_group=existing_snake_case)
+    if updated:
+        msg = update_msg
+    elif tags_changed:
+        msg = f"Feature group {name} tags updated successfully."
+    else:
+        msg = f"Feature group {name} already matches the requested configuration."
+    return _feature_group_result(
+        client, module, changed=changed, msg=msg, include_tags=module.params.get("tags") is not None
+    )
+
+
+def manage_feature_group(client, module, existing: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    Bring a SageMaker feature group to the requested state.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The current feature group as returned by describe_feature_group(), None when it does not exist.
+
+    Returns:
+        The keyword arguments for module.exit_json(): changed, msg, feature_group and, when known, tags.
+    """
+    if module.params["state"] == "absent":
+        return _manage_feature_group_absent(client, module, existing)
+    if not existing:
+        return _manage_feature_group_create(client, module)
+    return _manage_feature_group_update(client, module, existing)
