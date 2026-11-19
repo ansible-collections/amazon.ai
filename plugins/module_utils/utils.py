@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import NamedTuple
 from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
@@ -275,6 +276,73 @@ def feature_group_wait_timeout(wait_timeout: Optional[int], storage_type: Option
     if storage_type == "InMemory":
         return FEATURE_GROUP_IN_MEMORY_WAIT_TIMEOUT
     return FEATURE_GROUP_WAIT_TIMEOUT
+
+
+class FeatureGroupStatusDecision(NamedTuple):
+    """What to do about a feature group found in a transitional or failed state."""
+
+    action: str  # proceed, fail, exit, wait or wait_and_exit
+    message: Optional[str] = None  # fail and exit: the message to report
+    waiter: Optional[str] = None  # wait and wait_and_exit: the waiter to run
+
+
+def feature_group_status_decision(
+    name: str, existing: Dict[str, Any], state: str, wait: bool, check_mode: bool
+) -> FeatureGroupStatusDecision:
+    """
+    Decide what to do about the status of an existing feature group before acting on it.
+
+    Args:
+        name: The feature group name, used in messages.
+        existing: The describe_feature_group() response (PascalCase).
+        state: The requested state, present or absent.
+        wait: The value of the wait option.
+        check_mode: Whether the module runs in check mode, which never waits.
+
+    Returns:
+        proceed: carry on with the feature group as it is.
+        fail: stop with the message.
+        exit: report the message with changed=false.
+        wait: run the waiter, then describe the feature group again and carry on.
+        wait_and_exit: run the waiter, then report the message with changed=false.
+    """
+    status = existing["FeatureGroupStatus"]
+    update_status = (existing.get("LastUpdateStatus") or {}).get("Status")
+    can_wait = wait and not check_mode
+
+    if status == "Deleting":
+        if state == "present":
+            return FeatureGroupStatusDecision(
+                "fail", f"Feature group {name} is being deleted; wait for the deletion to finish first."
+            )
+        message = f"Feature group {name} is already being deleted."
+        if can_wait:
+            return FeatureGroupStatusDecision("wait_and_exit", message, "feature_group_deleted")
+        return FeatureGroupStatusDecision("exit", message)
+
+    if status == "Creating" or update_status == "InProgress":
+        if check_mode:
+            return FeatureGroupStatusDecision("proceed")
+        transition = "being created" if status == "Creating" else "being updated"
+        if can_wait:
+            return FeatureGroupStatusDecision(
+                "wait", waiter="feature_group_created" if status == "Creating" else "feature_group_updated"
+            )
+        if state == "absent":
+            return FeatureGroupStatusDecision(
+                "fail", f"Feature group {name} cannot be deleted while it is {transition}."
+            )
+        return FeatureGroupStatusDecision("exit", f"Feature group {name} is {transition}.")
+
+    if state == "present" and status in ("CreateFailed", "DeleteFailed"):
+        return FeatureGroupStatusDecision(
+            "fail",
+            (
+                f"Feature group {name} is in state {status}: {existing.get('FailureReason', 'no reason reported')}. "
+                "Delete it with state=absent and recreate it."
+            ),
+        )
+    return FeatureGroupStatusDecision("proceed")
 
 
 def feature_group_has_store(desired: Dict[str, Any]) -> bool:

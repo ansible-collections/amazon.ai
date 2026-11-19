@@ -4372,17 +4372,18 @@ def test_update_feature_group_sends_an_empty_ttl_duration_to_remove_the_ttl():
     client.update_feature_group.assert_called_once_with(FeatureGroupName="fg", OnlineStoreConfig={"TtlDuration": {}})
 
 
-def test_delete_feature_group_check_mode_exits_without_calling_the_api():
+def test_delete_feature_group_check_mode_does_not_call_the_api():
     from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
 
     module = MagicMock()
     module.check_mode = True
     module.params = {"feature_group_name": "fg"}
-    module.exit_json.side_effect = SystemExit
     client = MagicMock()
-    with pytest.raises(SystemExit):
-        sagemaker.delete_feature_group(client, module)
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
+    assert deleted is True
     client.delete_feature_group.assert_not_called()
+    wait.assert_not_called()
 
 
 def test_delete_feature_group_deletes_and_waits_for_it_to_be_gone():
@@ -4393,7 +4394,7 @@ def test_delete_feature_group_deletes_and_waits_for_it_to_be_gone():
     module.params = {"feature_group_name": "fg"}
     client = MagicMock()
     with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
-        deleted = sagemaker.delete_feature_group(client, module)
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
     assert deleted is True
     client.delete_feature_group.assert_called_once_with(FeatureGroupName="fg")
     assert wait.call_args.args[:4] == (client, module, "fg", "feature_group_deleted")
@@ -4410,6 +4411,6 @@ def test_delete_feature_group_that_vanished_between_describe_and_delete_returns_
         {"Error": {"Code": "ResourceNotFound", "Message": "gone"}}, "DeleteFeatureGroup"
     )
     with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
-        deleted = sagemaker.delete_feature_group(client, module)
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
     assert deleted is False
     wait.assert_not_called()
