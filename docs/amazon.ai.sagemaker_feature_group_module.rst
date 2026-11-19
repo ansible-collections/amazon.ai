@@ -516,7 +516,7 @@ Parameters
                 </td>
                 <td>
                         <div>Configuration of the online store.</div>
-                        <div>At least one of O(online_store_config) and O(offline_store_config) is required to create a feature group.</div>
+                        <div>A feature group needs at least one store. Set O(online_store_config.enable_online_store=true), or configure O(offline_store_config).</div>
                 </td>
             </tr>
                                 <tr>
@@ -537,6 +537,7 @@ Parameters
                 </td>
                 <td>
                         <div>Whether to enable the online store.</div>
+                        <div>SageMaker defaults this to V(false), so it must be V(true) to create a feature group with an online store and no offline store.</div>
                         <div>Cannot be changed after creation.</div>
                 </td>
             </tr>

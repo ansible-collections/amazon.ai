@@ -82,12 +82,14 @@ options:
     online_store_config:
         description:
             - Configuration of the online store.
-            - At least one of O(online_store_config) and O(offline_store_config) is required to create a feature group.
+            - A feature group needs at least one store. Set O(online_store_config.enable_online_store=true), or configure O(offline_store_config).
         type: dict
         suboptions:
             enable_online_store:
                 description:
                     - Whether to enable the online store.
+                    - SageMaker defaults this to V(false), so it must be V(true) to create a feature group with an online store
+                      and no offline store.
                     - Cannot be changed after creation.
                 type: bool
             security_config:
@@ -591,6 +593,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_feature_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_feature_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_feature_group
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_feature_group_status
 
@@ -673,9 +676,12 @@ def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
     name = module.params["feature_group_name"]
     desired = feature_group_desired_config(module)
     if not existing:
-        if "online_store_config" not in desired and "offline_store_config" not in desired:
+        if not feature_group_has_store(desired):
             module.fail_json(
-                msg="At least one of online_store_config or offline_store_config is required to create a feature group."
+                msg=(
+                    "A feature group needs at least one store: configure offline_store_config, or set "
+                    "online_store_config.enable_online_store to true (SageMaker defaults it to false)."
+                )
             )
         create_feature_group(client, module)
         _exit_with_feature_group(

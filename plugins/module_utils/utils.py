@@ -277,6 +277,24 @@ def feature_group_wait_timeout(wait_timeout: Optional[int], storage_type: Option
     return FEATURE_GROUP_WAIT_TIMEOUT
 
 
+def feature_group_has_store(desired: Dict[str, Any]) -> bool:
+    """
+    Tell whether a feature group configuration enables at least one store.
+
+    SageMaker defaults EnableOnlineStore to false and rejects a feature group with neither store enabled,
+    so an online_store_config only counts when it sets enable_online_store to true.
+
+    Args:
+        desired: The requested configuration in snake_case, as built by feature_group_desired_config().
+
+    Returns:
+        True when an offline store is configured or the online store is explicitly enabled.
+    """
+    if desired.get("offline_store_config"):
+        return True
+    return desired.get("online_store_config", {}).get("enable_online_store") is True
+
+
 def _is_subset(desired: Any, existing: Any) -> bool:
     """Return True when every value set in desired is present and equal in existing, recursing into dicts."""
     if isinstance(desired, dict):

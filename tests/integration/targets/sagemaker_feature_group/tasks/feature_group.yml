@@ -26,7 +26,25 @@
   ansible.builtin.assert:
     that:
       - no_store is failed
-      - "'At least one of online_store_config or offline_store_config' in no_store.msg"
+      - "'needs at least one store' in no_store.msg"
+
+# SageMaker defaults EnableOnlineStore to false, so an online config alone enables no store
+- name: Create a feature group whose online store is not enabled
+  amazon.ai.sagemaker_feature_group:
+    feature_group_name: "{{ no_store_feature_group_name }}"
+    record_identifier_feature_name: record_id
+    event_time_feature_name: event_time
+    feature_definitions: "{{ initial_features }}"
+    online_store_config:
+      storage_type: Standard
+  register: online_not_enabled
+  ignore_errors: true
+
+- name: Assert an online store that is not enabled fails
+  ansible.builtin.assert:
+    that:
+      - online_not_enabled is failed
+      - "'enable_online_store' in online_not_enabled.msg"
 
 # 3. Create (online Standard + offline, tags) — check mode / real / rerun
 - name: Create a feature group (check mode)
