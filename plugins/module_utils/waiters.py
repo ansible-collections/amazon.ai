@@ -2,6 +2,9 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from typing import Any
+from typing import Optional
+
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 
 try:
     import botocore.waiter as core_waiter
@@ -163,6 +166,51 @@ user_profile_data = {
 }
 
 
+# botocore ships no feature group waiters. DescribeFeatureGroup reports a missing group as ResourceNotFound
+# (no Exception suffix). Updates are tracked through LastUpdateStatus, which reads InProgress as soon as an
+# UpdateFeatureGroup call returns, so a Successful left over from an earlier update cannot satisfy the waiter.
+feature_group_data = {
+    "version": 2,
+    "waiters": {
+        "FeatureGroupCreated": {
+            "description": "Wait until a SageMaker feature group is created",
+            "delay": 5,
+            "maxAttempts": 120,
+            "operation": "DescribeFeatureGroup",
+            "acceptors": [
+                {"matcher": "path", "argument": "FeatureGroupStatus", "expected": "Created", "state": "success"},
+                {"matcher": "path", "argument": "FeatureGroupStatus", "expected": "CreateFailed", "state": "failure"},
+            ],
+        },
+        "FeatureGroupDeleted": {
+            "description": "Wait until a SageMaker feature group is deleted",
+            "delay": 5,
+            "maxAttempts": 120,
+            "operation": "DescribeFeatureGroup",
+            "acceptors": [
+                {"matcher": "error", "expected": "ResourceNotFound", "state": "success"},
+                {"matcher": "path", "argument": "FeatureGroupStatus", "expected": "DeleteFailed", "state": "failure"},
+            ],
+        },
+        "FeatureGroupUpdated": {
+            "description": "Wait until a SageMaker feature group update completes",
+            "delay": 5,
+            "maxAttempts": 120,
+            "operation": "DescribeFeatureGroup",
+            "acceptors": [
+                {
+                    "matcher": "path",
+                    "argument": "LastUpdateStatus.Status",
+                    "expected": "Successful",
+                    "state": "success",
+                },
+                {"matcher": "path", "argument": "LastUpdateStatus.Status", "expected": "Failed", "state": "failure"},
+            ],
+        },
+    },
+}
+
+
 def model_package_group_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=model_package_group_data).get_waiter(name)
 
@@ -177,6 +225,10 @@ def user_profile_model(name: str) -> Any:
 
 def space_model(name: str) -> Any:
     return core_waiter.WaiterModel(waiter_config=space_data).get_waiter(name)
+
+
+def feature_group_model(name: str) -> Any:
+    return core_waiter.WaiterModel(waiter_config=feature_group_data).get_waiter(name)
 
 
 waiters_by_name = {
@@ -227,6 +279,30 @@ waiters_by_name = {
         "space_deleted",
         space_model("SpaceDeleted"),
         core_waiter.NormalizedOperationMethod(sagemaker.describe_space),
+    ),
+    (
+        "SageMaker",
+        "feature_group_created",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "feature_group_created",
+        feature_group_model("FeatureGroupCreated"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_feature_group),
+    ),
+    (
+        "SageMaker",
+        "feature_group_deleted",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "feature_group_deleted",
+        feature_group_model("FeatureGroupDeleted"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_feature_group),
+    ),
+    (
+        "SageMaker",
+        "feature_group_updated",
+    ): lambda sagemaker: core_waiter.Waiter(
+        "feature_group_updated",
+        feature_group_model("FeatureGroupUpdated"),
+        core_waiter.NormalizedOperationMethod(sagemaker.describe_feature_group),
     ),
 }
 
@@ -297,3 +373,55 @@ def wait_for_image_version_deletion(client, module) -> None:
                 )
             )
         module.fail_json(msg=f"Error waiting for SageMaker image version {image_name}:{version} to be deleted: {e}")
+
+
+def wait_for_feature_group_status(
+    client,
+    module,
+    feature_group_name: str,
+    waiter_name: str,
+    force: bool = False,
+    storage_type: Optional[str] = None,
+) -> None:
+    """
+    Wait for a SageMaker feature group to be created, deleted or finish an update.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance (provides wait and wait_timeout).
+        feature_group_name: The name of the feature group.
+        waiter_name: One of feature_group_created, feature_group_deleted or feature_group_updated.
+        force: Wait even when O(wait=false), e.g. between consecutive UpdateFeatureGroup calls.
+        storage_type: The online store storage type of the feature group; selects the default wait_timeout.
+    """
+    if not (force or module.params.get("wait", True)):
+        return
+
+    delay = 5
+    wait_timeout = feature_group_wait_timeout(module.params.get("wait_timeout"), storage_type)
+    max_attempts = max(1, wait_timeout // delay)
+    waiter = get_waiter(client, waiter_name)
+    try:
+        waiter.wait(
+            FeatureGroupName=feature_group_name,
+            WaiterConfig={"Delay": delay, "MaxAttempts": max_attempts},
+        )
+    except WaiterError as e:
+        last_response = e.last_response or {}
+        status = last_response.get("FeatureGroupStatus")
+        update_status = last_response.get("LastUpdateStatus") or {}
+        if status in ("CreateFailed", "DeleteFailed"):
+            module.fail_json(
+                msg=(
+                    f"SageMaker feature group {feature_group_name} entered {status} state: "
+                    f"{last_response.get('FailureReason', 'no reason reported')}"
+                )
+            )
+        if waiter_name == "feature_group_updated" and update_status.get("Status") == "Failed":
+            module.fail_json(
+                msg=(
+                    f"Update of SageMaker feature group {feature_group_name} failed: "
+                    f"{update_status.get('FailureReason', 'no reason reported')}"
+                )
+            )
+        module.fail_json(msg=f"Error waiting for SageMaker feature group {feature_group_name} ({waiter_name}): {e}")
