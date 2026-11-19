@@ -12,6 +12,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_
 from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
@@ -515,3 +516,21 @@ def test_feature_group_create_only_property_changed(option, value):
 )
 def test_feature_group_wait_timeout(wait_timeout, storage_type, expected):
     assert feature_group_wait_timeout(wait_timeout, storage_type) == expected
+
+
+@pytest.mark.parametrize(
+    "desired, expected",
+    [
+        ({}, False),
+        ({"online_store_config": {"storage_type": "Standard"}}, False),
+        ({"online_store_config": {"enable_online_store": False}}, False),
+        ({"online_store_config": {"enable_online_store": True}}, True),
+        ({"offline_store_config": {"s3_storage_config": {"s3_uri": "s3://b/p"}}}, True),
+        (
+            {"online_store_config": {"storage_type": "Standard"}, "offline_store_config": {"s3_storage_config": {}}},
+            True,
+        ),
+    ],
+)
+def test_feature_group_has_store(desired, expected):
+    assert feature_group_has_store(desired) is expected
