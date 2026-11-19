@@ -21,6 +21,8 @@ Synopsis
 - Named lookups return full configuration, while listing returns summaries without additional detail requests.
 - Every returned element contains both RV(workflow_definitions[].name) and RV(workflow_definitions[].workflow_definition_name), and both RV(workflow_definitions[].arn) and RV(workflow_definitions[].workflow_definition_arn), regardless of lookup mode.
 - A missing workflow definition returns an empty list.
+- Nova Act requires botocore >= 1.42.1 to provide the service model.
+- The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 
 
 

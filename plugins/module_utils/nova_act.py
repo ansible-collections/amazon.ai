@@ -35,6 +35,11 @@ def validate_workflow_definition_name(module: AnsibleAWSModule, workflow_definit
         )
 
 
+def _validate_nova_act_botocore(module: AnsibleAWSModule) -> None:
+    if not module.botocore_at_least("1.42.1"):
+        module.fail_json(msg="Nova Act requires botocore >= 1.42.1 to provide the nova-act service model.")
+
+
 _KEY_ALIASES = (("name", "workflow_definition_name"), ("arn", "workflow_definition_arn"))
 
 
@@ -148,6 +153,8 @@ def delete_workflow_definition(
 
     try:
         response = client.delete_workflow_definition(workflowDefinitionName=name)
+    except is_boto3_error_code("ResourceNotFoundException"):
+        return False, {}, f"Workflow definition '{name}' does not exist."
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg=f"Failed to delete workflow definition '{name}'.")
     definition = {**existing, "status": response.get("status", existing.get("status"))}

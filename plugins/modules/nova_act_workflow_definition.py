@@ -13,6 +13,8 @@ author:
 description:
     - Create and delete Amazon Nova Act workflow definitions.
     - Workflow definition names and supplied configuration are immutable after creation.
+    - Nova Act requires botocore >= 1.42.1 to provide the service model.
+    - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 attributes:
     check_mode:
         description: Can run in check mode without changing the target.
@@ -81,6 +83,9 @@ seealso:
     - module: amazon.ai.nova_act_workflow_definition_info
 notes:
     - Requires C(nova-act:CreateWorkflowDefinition), C(nova-act:DeleteWorkflowDefinition), and C(nova-act:GetWorkflowDefinition).
+    - When O(export_config) is set, the calling identity needs an identity-based policy granting
+      C(s3:PutObject) to the destination bucket and prefix.
+    - The destination bucket must be in the same AWS account; cross-account buckets are unsupported.
 """
 
 EXAMPLES = r"""
@@ -190,6 +195,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.nova_act import _validate_nova_act_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import create_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import delete_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_workflow_definition
@@ -251,6 +257,7 @@ def main() -> None:
         wait_timeout=dict(type="int", default=600),
     )
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
+    _validate_nova_act_botocore(module)
     validate_workflow_definition_name(module, module.params["workflow_definition_name"])
     if module.params["state"] == "absent" and module.params["wait"] and module.params["wait_timeout"] < 1:
         module.fail_json(msg="wait_timeout must be greater than zero.")

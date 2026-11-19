@@ -19,6 +19,8 @@ Synopsis
 --------
 - Create and delete Amazon Nova Act workflow definitions.
 - Workflow definition names and supplied configuration are immutable after creation.
+- Nova Act requires botocore >= 1.42.1 to provide the service model.
+- The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 
 
 
@@ -395,6 +397,8 @@ Notes
 
 .. note::
    - Requires ``nova-act:CreateWorkflowDefinition``, ``nova-act:DeleteWorkflowDefinition``, and ``nova-act:GetWorkflowDefinition``.
+   - When O(export_config) is set, the calling identity needs an identity-based policy granting ``s3:PutObject`` to the destination bucket and prefix.
+   - The destination bucket must be in the same AWS account; cross-account buckets are unsupported.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 

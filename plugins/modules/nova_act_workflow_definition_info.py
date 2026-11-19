@@ -16,6 +16,8 @@ description:
     - Every returned element contains both RV(workflow_definitions[].name) and RV(workflow_definitions[].workflow_definition_name),
       and both RV(workflow_definitions[].arn) and RV(workflow_definitions[].workflow_definition_arn), regardless of lookup mode.
     - A missing workflow definition returns an empty list.
+    - Nova Act requires botocore >= 1.42.1 to provide the service model.
+    - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 attributes:
     check_mode:
         description: Performs the same read-only requests as in normal mode.
@@ -148,6 +150,7 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from ansible_collections.amazon.ai.plugins.module_utils.nova_act import _validate_nova_act_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import list_workflow_definitions
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate_workflow_definition_name
@@ -166,6 +169,7 @@ def main() -> None:
         mutually_exclusive=[["workflow_definition_name", "sort_order"]],
         supports_check_mode=True,
     )
+    _validate_nova_act_botocore(module)
     name = module.params["workflow_definition_name"]
     validate_workflow_definition_name(module, name)
 

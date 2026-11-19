@@ -16,6 +16,8 @@ from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_work
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import list_workflow_definitions
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate_workflow_definition_name
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import wait_for_workflow_definition_deleted
+from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition
+from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition_info
 from ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition import _workflow_definition_status_check
 from botocore.exceptions import ClientError
 
@@ -59,6 +61,34 @@ def _get_response(**extra):
     }
     response.update(extra)
     return response
+
+
+@pytest.mark.parametrize(
+    "module_main,module_path",
+    [
+        (
+            nova_act_workflow_definition.main,
+            "ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition",
+        ),
+        (
+            nova_act_workflow_definition_info.main,
+            "ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition_info",
+        ),
+    ],
+)
+def test_nova_act_modules_require_supported_botocore_before_client(module_main, module_path):
+    module = _module()
+    module.botocore_at_least.return_value = False
+
+    with patch(f"{module_path}.AnsibleAWSModule", return_value=module):
+        with pytest.raises(FailJson):
+            module_main()
+
+    module.botocore_at_least.assert_called_once_with("1.42.1")
+    module.fail_json.assert_called_once_with(
+        msg="Nova Act requires botocore >= 1.42.1 to provide the nova-act service model."
+    )
+    module.client.assert_not_called()
 
 
 @pytest.mark.parametrize("name", ["a", "Valid_name-1", "x" * 40, None])
@@ -253,3 +283,21 @@ def test_delete_fails_on_client_error():
     with pytest.raises(FailJson):
         delete_workflow_definition(client, module, existing)
     module.fail_json_aws.assert_called_once()
+
+
+def test_delete_returns_noop_when_workflow_definition_is_already_absent():
+    client = MagicMock()
+    client.delete_workflow_definition.side_effect = _client_error(
+        "ResourceNotFoundException", "DeleteWorkflowDefinition"
+    )
+    module = _module(state="absent")
+    existing = {"name": NAME}
+
+    with patch.object(nova_act, "wait_for_workflow_definition_deleted") as waiter:
+        changed, definition, msg = delete_workflow_definition(client, module, existing)
+
+    assert changed is False
+    assert definition == {}
+    assert msg == f"Workflow definition '{NAME}' does not exist."
+    waiter.assert_not_called()
+    module.fail_json_aws.assert_not_called()
