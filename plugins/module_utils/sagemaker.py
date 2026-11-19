@@ -3888,7 +3888,10 @@ def create_feature_group(client, module) -> None:
             msg=f"Check mode: would have created feature group {feature_group_name}.",
             feature_group={},
         )
-    params = snake_dict_to_camel_dict(feature_group_desired_config(module), capitalize_first=True)
+    desired = feature_group_desired_config(module)
+    # remove_ttl_duration is not an API parameter; a new feature group has no TTL to clear.
+    desired.get("online_store_config", {}).pop("remove_ttl_duration", None)
+    params = snake_dict_to_camel_dict(desired, capitalize_first=True)
     if module.params.get("tags"):
         params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
     client.create_feature_group(**params)

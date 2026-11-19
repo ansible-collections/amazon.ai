@@ -4337,6 +4337,41 @@ def test_wait_for_feature_group_status_timeout(wait_timeout, storage_type, max_a
         )
     config = get_waiter.return_value.wait.call_args.kwargs["WaiterConfig"]
     assert config == {"Delay": 5, "MaxAttempts": max_attempts}
+
+
+def test_create_feature_group_does_not_send_remove_ttl_duration():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {
+        "feature_group_name": "fg",
+        "record_identifier_feature_name": "id",
+        "event_time_feature_name": "ts",
+        "feature_definitions": [{"feature_name": "id", "feature_type": "String"}],
+        "online_store_config": {"enable_online_store": True, "ttl_duration": None, "remove_ttl_duration": True},
+        "tags": None,
+    }
+    client = MagicMock()
+    with patch.object(sagemaker, "wait_for_feature_group_status"):
+        sagemaker.create_feature_group(client, module)
+    params = client.create_feature_group.call_args.kwargs
+    assert params["OnlineStoreConfig"] == {"EnableOnlineStore": True}
+
+
+def test_update_feature_group_sends_an_empty_ttl_duration_to_remove_the_ttl():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    changed, msg = sagemaker.update_feature_group(client, module, {"online_store_config": {"ttl_duration": {}}})
+    assert changed is True
+    assert msg == "Feature group fg updated successfully."
+    client.update_feature_group.assert_called_once_with(FeatureGroupName="fg", OnlineStoreConfig={"TtlDuration": {}})
+
+
 def test_delete_feature_group_check_mode_exits_without_calling_the_api():
     from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
 

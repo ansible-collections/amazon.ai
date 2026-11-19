@@ -366,13 +366,15 @@ def _feature_additions(existing: List[Dict[str, Any]], desired: List[Dict[str, A
 def _online_store_config_update(existing: Optional[Dict[str, Any]], desired: Dict[str, Any]) -> Dict[str, Any]:
     """Return the online store fields to update; raise ValueError on a change the API cannot apply in place."""
     existing = existing or {}
+    remove_ttl_duration = desired.get("remove_ttl_duration")
+    desired = {key: value for key, value in desired.items() if key != "remove_ttl_duration"}
     for key in ("enable_online_store", "security_config"):
         if key in desired and not _is_subset(desired[key], existing.get(key)):
             raise ValueError(
                 f"online_store_config.{key} cannot be changed on an existing feature group; "
                 "delete and recreate the feature group instead."
             )
-    if not existing:
+    if desired and not existing:
         raise ValueError(
             "online_store_config cannot be added to a feature group created without an online store; "
             "delete and recreate the feature group instead."
@@ -387,6 +389,10 @@ def _online_store_config_update(existing: Optional[Dict[str, Any]], desired: Dic
         online_store_config["storage_type"] = desired["storage_type"]
     if "ttl_duration" in desired and desired["ttl_duration"] != existing.get("ttl_duration"):
         online_store_config["ttl_duration"] = desired["ttl_duration"]
+    if remove_ttl_duration and existing.get("ttl_duration"):
+        # Clearing the TTL means null Unit and Value (UpdateFeatureGroup docs, as cited in the PR review). botocore
+        # cannot send None, and an empty TtlDuration does the same (live probe); one null alone is rejected.
+        online_store_config["ttl_duration"] = {}
     return online_store_config
 
 

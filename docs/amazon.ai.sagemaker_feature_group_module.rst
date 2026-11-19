@@ -545,6 +545,29 @@ Parameters
                     <td class="elbow-placeholder"></td>
                 <td colspan="3">
                     <div class="ansibleOptionAnchor" id="parameter-"></div>
+                    <b>remove_ttl_duration</b>
+                    <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
+                    <div style="font-size: small">
+                        <span style="color: purple">boolean</span>
+                    </div>
+                </td>
+                <td>
+                        <ul style="margin: 0; padding: 0"><b>Choices:</b>
+                                    <li>no</li>
+                                    <li>yes</li>
+                        </ul>
+                </td>
+                <td>
+                        <div>Whether to remove the default time to live of records in the online store.</div>
+                        <div>V(true) removes an existing O(online_store_config.ttl_duration); there is nothing to do when none is set.</div>
+                        <div>V(false) or not set leaves the time to live as it is.</div>
+                        <div>Cannot be combined with O(online_store_config.ttl_duration).</div>
+                </td>
+            </tr>
+            <tr>
+                    <td class="elbow-placeholder"></td>
+                <td colspan="3">
+                    <div class="ansibleOptionAnchor" id="parameter-"></div>
                     <b>security_config</b>
                     <a class="ansibleOptionLink" href="#parameter-" title="Permalink to this option"></a>
                     <div style="font-size: small">
@@ -614,7 +637,7 @@ Parameters
                 </td>
                 <td>
                         <div>The default time to live of records in the online store.</div>
-                        <div>Can be changed after creation.</div>
+                        <div>Can be changed after creation. To remove it, use O(online_store_config.remove_ttl_duration).</div>
                 </td>
             </tr>
                                 <tr>
@@ -1025,6 +1048,23 @@ Examples
           ttl_duration:
             unit: Days
             value: 30
+
+    - name: Remove the time to live from the online store
+      amazon.ai.sagemaker_feature_group:
+        feature_group_name: customers
+        record_identifier_feature_name: customer_id
+        event_time_feature_name: event_time
+        feature_definitions:
+          - feature_name: customer_id
+            feature_type: String
+          - feature_name: event_time
+            feature_type: Fractional
+          - feature_name: lifetime_value
+            feature_type: Fractional
+          - feature_name: segment
+            feature_type: String
+        online_store_config:
+          remove_ttl_duration: true
 
     - name: Switch to provisioned throughput
       amazon.ai.sagemaker_feature_group:
