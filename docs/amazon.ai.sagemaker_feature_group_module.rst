@@ -595,6 +595,8 @@ Parameters
                 </td>
                 <td>
                         <div>The storage type of the online store.</div>
+                        <div>V(InMemory) is online-only, so it cannot be combined with O(offline_store_config), with a customer managed KMS key in O(online_store_config.security_config) or with O(throughput_config.throughput_mode=Provisioned).</div>
+                        <div>Creating or deleting an V(InMemory) feature group can take 10 to 15 minutes, see O(wait_timeout).</div>
                         <div>The only change allowed after creation is from V(Standard) to V(Standard_V2), and it cannot be reversed.</div>
                 </td>
             </tr>
@@ -854,7 +856,8 @@ Parameters
                 </td>
                 <td>
                         <div>The provisioned read capacity units.</div>
-                        <div>Required, and non-zero, when O(throughput_config.throughput_mode=Provisioned).</div>
+                        <div>Required when O(throughput_config.throughput_mode=Provisioned).</div>
+                        <div>Must be V(0) for a feature group without an online store, and non-zero when there is one.</div>
                 </td>
             </tr>
             <tr>
@@ -893,7 +896,7 @@ Parameters
                 </td>
                 <td>
                         <div>The throughput mode.</div>
-                        <div>V(Provisioned) needs an online store with V(Standard) storage.</div>
+                        <div>V(Provisioned) works for a feature group without an online store, and for an online store with V(Standard) or V(Standard_V2) storage. It is not supported with V(InMemory) storage.</div>
                 </td>
             </tr>
 

@@ -104,6 +104,9 @@ options:
             storage_type:
                 description:
                     - The storage type of the online store.
+                    - V(InMemory) is online-only, so it cannot be combined with O(offline_store_config), with a customer managed
+                      KMS key in O(online_store_config.security_config) or with O(throughput_config.throughput_mode=Provisioned).
+                    - Creating or deleting an V(InMemory) feature group can take 10 to 15 minutes, see O(wait_timeout).
                     - The only change allowed after creation is from V(Standard) to V(Standard_V2), and it cannot be reversed.
                 type: str
                 choices: [Standard, Standard_V2, InMemory]
@@ -176,14 +179,16 @@ options:
             throughput_mode:
                 description:
                     - The throughput mode.
-                    - V(Provisioned) needs an online store with V(Standard) storage.
+                    - V(Provisioned) works for a feature group without an online store, and for an online store with
+                      V(Standard) or V(Standard_V2) storage. It is not supported with V(InMemory) storage.
                 type: str
                 required: true
                 choices: [OnDemand, Provisioned]
             provisioned_read_capacity_units:
                 description:
                     - The provisioned read capacity units.
-                    - Required, and non-zero, when O(throughput_config.throughput_mode=Provisioned).
+                    - Required when O(throughput_config.throughput_mode=Provisioned).
+                    - Must be V(0) for a feature group without an online store, and non-zero when there is one.
                 type: int
             provisioned_write_capacity_units:
                 description:
@@ -594,6 +599,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_fe
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import reconcile_feature_group_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import update_feature_group
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_in_memory_violations
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_feature_group_status
 
@@ -683,6 +689,9 @@ def _present(client, module, existing: Optional[Dict[str, Any]]) -> None:
                     "online_store_config.enable_online_store to true (SageMaker defaults it to false)."
                 )
             )
+        violations = feature_group_in_memory_violations(desired)
+        if violations:
+            module.fail_json(msg=f"Feature group {name}: {'; '.join(violations)}.")
         create_feature_group(client, module)
         _exit_with_feature_group(
             client, module, changed=True, msg=f"Feature group {name} created successfully.", include_tags=True

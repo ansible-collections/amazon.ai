@@ -13,6 +13,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import config_bloc
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_has_store
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_in_memory_violations
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
@@ -534,3 +535,60 @@ def test_feature_group_wait_timeout(wait_timeout, storage_type, expected):
 )
 def test_feature_group_has_store(desired, expected):
     assert feature_group_has_store(desired) is expected
+
+
+IN_MEMORY = {"enable_online_store": True, "storage_type": "InMemory"}
+
+
+@pytest.mark.parametrize(
+    "desired, expected_options",
+    [
+        ({}, []),
+        ({"online_store_config": {"enable_online_store": True, "storage_type": "Standard"}}, []),
+        (
+            {
+                "online_store_config": {"storage_type": "Standard", "security_config": {"kms_key_id": "k"}},
+                "offline_store_config": {"s3_storage_config": {"s3_uri": "s3://b/p"}},
+                "throughput_config": {"throughput_mode": "Provisioned"},
+            },
+            [],
+        ),
+        ({"online_store_config": IN_MEMORY}, []),
+        ({"online_store_config": IN_MEMORY, "throughput_config": {"throughput_mode": "OnDemand"}}, []),
+        (
+            {"online_store_config": IN_MEMORY, "offline_store_config": {"s3_storage_config": {}}},
+            ["offline_store_config"],
+        ),
+        (
+            {"online_store_config": dict(IN_MEMORY, security_config={"kms_key_id": "k"})},
+            ["security_config.kms_key_id"],
+        ),
+        ({"online_store_config": IN_MEMORY, "throughput_config": {"throughput_mode": "Provisioned"}}, ["Provisioned"]),
+        (
+            {
+                "online_store_config": dict(IN_MEMORY, security_config={"kms_key_id": "k"}),
+                "offline_store_config": {"s3_storage_config": {}},
+                "throughput_config": {"throughput_mode": "Provisioned"},
+            },
+            ["offline_store_config", "security_config.kms_key_id", "Provisioned"],
+        ),
+    ],
+)
+def test_feature_group_in_memory_violations(desired, expected_options):
+    violations = feature_group_in_memory_violations(desired)
+    assert len(violations) == len(expected_options)
+    for violation, option in zip(violations, expected_options):
+        assert option in violation
+
+
+def test_feature_group_provisioned_throughput_on_existing_in_memory_group():
+    existing = dict(EXISTING_FEATURE_GROUP, online_store_config=dict(IN_MEMORY))
+    desired = {
+        "throughput_config": {
+            "throughput_mode": "Provisioned",
+            "provisioned_read_capacity_units": 1,
+            "provisioned_write_capacity_units": 1,
+        }
+    }
+    with pytest.raises(ValueError, match="InMemory"):
+        feature_group_properties_to_update(existing, desired)
