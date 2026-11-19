@@ -3799,6 +3799,21 @@ def feature_group_desired_config(module) -> Dict[str, Any]:
     return scrub_none_parameters({option: module.params.get(option) for option in FEATURE_GROUP_OPTIONS})
 
 
+def feature_group_storage_type(module, existing: Optional[Dict[str, Any]] = None) -> Optional[str]:
+    """
+    Find the online store storage type of a feature group.
+
+    Args:
+        module: The Ansible module instance.
+        existing: The current feature group as returned by describe_feature_group(); preferred when given.
+
+    Returns:
+        The storage type from the existing feature group, else from O(online_store_config), else None.
+    """
+    online_store_config = (existing or {}).get("OnlineStoreConfig") or module.params.get("online_store_config") or {}
+    return online_store_config.get("StorageType") or online_store_config.get("storage_type")
+
+
 @FeatureGroupErrorHandler.list_error_handler("describe feature group")
 @AWSRetry.jittered_backoff(retries=10)
 def describe_feature_group(client, feature_group_name: str) -> Optional[Dict[str, Any]]:
@@ -3877,11 +3892,15 @@ def create_feature_group(client, module) -> None:
     if module.params.get("tags"):
         params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
     client.create_feature_group(**params)
-    wait_for_feature_group_status(client, module, feature_group_name, "feature_group_created")
+    wait_for_feature_group_status(
+        client, module, feature_group_name, "feature_group_created", storage_type=feature_group_storage_type(module)
+    )
 
 
 @FeatureGroupErrorHandler.common_error_handler("update feature group")
-def update_feature_group(client, module, properties_to_update: Dict[str, Any]) -> Tuple[bool, str]:
+def update_feature_group(
+    client, module, properties_to_update: Dict[str, Any], existing: Optional[Dict[str, Any]] = None
+) -> Tuple[bool, str]:
     """
     Apply the changes found by feature_group_properties_to_update().
 
@@ -3894,6 +3913,7 @@ def update_feature_group(client, module, properties_to_update: Dict[str, Any]) -
         client: The boto3 SageMaker client.
         module: The Ansible module instance.
         properties_to_update: The snake_case changes to apply.
+        existing: The current feature group as returned by describe_feature_group(); selects the default wait_timeout.
 
     Returns:
         A tuple of (changed, message). In check mode nothing is changed and the message describes what would be.
@@ -3924,7 +3944,12 @@ def update_feature_group(client, module, properties_to_update: Dict[str, Any]) -
         if is_async:
             is_last = index == len(calls) - 1
             wait_for_feature_group_status(
-                client, module, feature_group_name, "feature_group_updated", force=not is_last
+                client,
+                module,
+                feature_group_name,
+                "feature_group_updated",
+                force=not is_last,
+                storage_type=feature_group_storage_type(module, existing),
             )
     return True, f"Feature group {feature_group_name} updated successfully."
 
@@ -3950,7 +3975,13 @@ def delete_feature_group(client, module, existing: Optional[Dict[str, Any]] = No
             feature_group=camel_dict_to_snake_dict(existing or {}, ignore_list=["Tags", "tags"]),
         )
     client.delete_feature_group(FeatureGroupName=feature_group_name)
-    wait_for_feature_group_status(client, module, feature_group_name, "feature_group_deleted")
+    wait_for_feature_group_status(
+        client,
+        module,
+        feature_group_name,
+        "feature_group_deleted",
+        storage_type=feature_group_storage_type(module, existing),
+    )
     return True
 
 

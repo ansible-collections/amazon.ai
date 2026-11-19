@@ -13,6 +13,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import config_bloc
 from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
 from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_properties_to_update
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_to_camel_dict_keeping
@@ -500,3 +501,17 @@ def test_feature_group_create_only_property_changed(option, value):
     desired = _desired(**{option: value})
     with pytest.raises(ValueError, match=option):
         feature_group_properties_to_update(EXISTING_FEATURE_GROUP, desired)
+
+
+@pytest.mark.parametrize(
+    "wait_timeout, storage_type, expected",
+    [
+        (None, None, 600),
+        (None, "Standard", 600),
+        (None, "InMemory", 1200),
+        (300, "InMemory", 300),
+        (300, None, 300),
+    ],
+)
+def test_feature_group_wait_timeout(wait_timeout, storage_type, expected):
+    assert feature_group_wait_timeout(wait_timeout, storage_type) == expected

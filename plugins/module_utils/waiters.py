@@ -2,6 +2,9 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 from typing import Any
+from typing import Optional
+
+from ansible_collections.amazon.ai.plugins.module_utils.utils import feature_group_wait_timeout
 
 try:
     import botocore.waiter as core_waiter
@@ -373,7 +376,12 @@ def wait_for_image_version_deletion(client, module) -> None:
 
 
 def wait_for_feature_group_status(
-    client, module, feature_group_name: str, waiter_name: str, force: bool = False
+    client,
+    module,
+    feature_group_name: str,
+    waiter_name: str,
+    force: bool = False,
+    storage_type: Optional[str] = None,
 ) -> None:
     """
     Wait for a SageMaker feature group to be created, deleted or finish an update.
@@ -384,12 +392,14 @@ def wait_for_feature_group_status(
         feature_group_name: The name of the feature group.
         waiter_name: One of feature_group_created, feature_group_deleted or feature_group_updated.
         force: Wait even when O(wait=false), e.g. between consecutive UpdateFeatureGroup calls.
+        storage_type: The online store storage type of the feature group; selects the default wait_timeout.
     """
     if not (force or module.params.get("wait", True)):
         return
 
     delay = 5
-    max_attempts = max(1, module.params["wait_timeout"] // delay)
+    wait_timeout = feature_group_wait_timeout(module.params.get("wait_timeout"), storage_type)
+    max_attempts = max(1, wait_timeout // delay)
     waiter = get_waiter(client, waiter_name)
     try:
         waiter.wait(
