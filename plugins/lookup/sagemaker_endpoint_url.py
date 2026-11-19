@@ -3,9 +3,10 @@
 
 DOCUMENTATION = r"""
 name: sagemaker_endpoint_url
+short_description: Look up the invocation URL of a SageMaker endpoint
+version_added: "2.1.0"
 author:
   - Domen Dobnikar (@domendobnikar)
-short_description: Look up the invocation URL of a SageMaker endpoint
 description:
   - Returns the HTTPS URL used to invoke a deployed Amazon SageMaker real-time endpoint, one URL for each endpoint name given.
   - The endpoint is described first, so a name that does not exist is reported according to O(on_missing).
