@@ -161,3 +161,24 @@ def delete_workflow_definition(
     if module.params["wait"]:
         wait_for_workflow_definition_deleted(client, module, name)
     return True, definition, f"Workflow definition '{name}' deleted successfully."
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def _list_models(client, client_compatibility_version: int) -> Dict[str, Any]:
+    return client.list_models(clientCompatibilityVersion=client_compatibility_version)
+
+
+def list_models(
+    client,
+    module: AnsibleAWSModule,
+    client_compatibility_version: int,
+) -> Dict[str, Any]:
+    try:
+        response = _list_models(client, client_compatibility_version)
+    except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
+        module.fail_json_aws(e, msg="Failed to list Nova Act models.")
+    response.pop("ResponseMetadata", None)
+    result = camel_dict_to_snake_dict(response)
+    # modelSummaries is renamed to the friendlier "models" key; everything else converts implicitly.
+    result["models"] = result.pop("model_summaries", [])
+    return result

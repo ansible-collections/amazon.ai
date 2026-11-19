@@ -18,6 +18,7 @@ action_groups:
     - devopsguru_insight_info
     - devopsguru_resource_collection
     - devopsguru_resource_collection_info
+    - nova_act_model_info
     - nova_act_workflow_definition
     - nova_act_workflow_definition_info
     - sagemaker_app_image_config
