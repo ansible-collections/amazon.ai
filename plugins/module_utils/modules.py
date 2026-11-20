@@ -10,9 +10,9 @@ from ansible_collections.amazon.aws.plugins.module_utils.common import set_colle
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule as AmazonAWSModule
 
 
-class AnsibleAWSModule(AmazonAWSModule):
+class AnsibleAWSAIModule(AmazonAWSModule):
     def __init__(self, **kwargs):
-        super(AnsibleAWSModule, self).__init__(**kwargs)
+        super(AnsibleAWSAIModule, self).__init__(**kwargs)
         set_collection_info(
             collection_name=AMAZON_AI_COLLECTION_NAME,
             collection_version=AMAZON_AI_COLLECTION_VERSION,

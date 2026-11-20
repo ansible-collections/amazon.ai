@@ -186,7 +186,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_notebook_instance
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_notebook_instances
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags

@@ -286,7 +286,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import NotebookInstanceStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_notebook_instance
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_notebook_instance

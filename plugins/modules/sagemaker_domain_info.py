@@ -257,7 +257,7 @@ try:
 except ImportError:
     pass
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_domain
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_domain_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_domains

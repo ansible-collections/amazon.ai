@@ -148,7 +148,7 @@ try:
 except ImportError:
     pass
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_training_job
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_training_jobs

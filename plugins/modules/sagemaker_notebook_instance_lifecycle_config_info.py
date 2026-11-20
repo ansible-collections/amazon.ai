@@ -163,7 +163,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import decode_lifecycle_script
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_notebook_instance_lifecycle_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_notebook_instance_lifecycle_configs

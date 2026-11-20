@@ -182,7 +182,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import app_image_config_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_app_image_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_app_image_configs

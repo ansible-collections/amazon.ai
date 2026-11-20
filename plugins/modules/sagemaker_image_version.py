@@ -257,7 +257,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_image_version
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_image_version
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_image

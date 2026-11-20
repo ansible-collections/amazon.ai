@@ -179,7 +179,7 @@ except ImportError:
 from typing import Any
 from typing import Dict
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import find_image_versions
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict

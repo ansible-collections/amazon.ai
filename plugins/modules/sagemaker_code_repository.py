@@ -154,7 +154,7 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_code_repository
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
 from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url

@@ -162,7 +162,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_model_package
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import get_model_package_tag_arn
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_model_packages
