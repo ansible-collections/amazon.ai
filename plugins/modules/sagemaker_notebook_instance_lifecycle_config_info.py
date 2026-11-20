@@ -163,6 +163,7 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import decode_lifecycle_script
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_notebook_instance_lifecycle_config
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_notebook_instance_lifecycle_configs
@@ -172,7 +173,6 @@ from ansible.module_utils.common.dict_transformations import camel_dict_to_snake
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
