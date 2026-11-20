@@ -1,0 +1,312 @@
+---
+- name: Amazon Nova Act workflow definition integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Check mode create workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        description: "{{ workflow_definition_description }}"
+      check_mode: true
+      register: definition_create_check
+
+    - name: Assert create check mode
+      ansible.builtin.assert:
+        that:
+          - definition_create_check.changed
+          - "definition_create_check.msg is search('^Check mode: would have')"
+
+    - name: Look up workflow definition after check mode
+      amazon.ai.nova_act_workflow_definition_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: definition_missing
+
+    - name: Assert check mode did not create a workflow definition
+      ansible.builtin.assert:
+        that:
+          - not definition_missing.changed
+          - definition_missing.workflow_definitions == []
+
+    - name: Attempt creation with an invalid workflow definition name
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "invalid workflow name"
+      register: invalid_definition_name
+      ignore_errors: true
+
+    - name: Assert invalid workflow definition name is rejected
+      ansible.builtin.assert:
+        that:
+          - invalid_definition_name is failed
+          - "'workflow_definition_name must be 1-40 characters' in invalid_definition_name.msg"
+
+    - name: Create workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        description: "{{ workflow_definition_description }}"
+      register: definition_create
+
+    - name: Assert created workflow definition
+      ansible.builtin.assert:
+        that:
+          - definition_create.changed
+          - "'created successfully' in definition_create.msg"
+          - definition_create.workflow_definition.name == workflow_definition_name
+          - definition_create.workflow_definition.description == workflow_definition_description
+          - definition_create.workflow_definition.status == 'ACTIVE'
+          - definition_create.workflow_definition.arn is string
+          - definition_create.workflow_definition.workflow_definition_name == workflow_definition_name
+          - definition_create.workflow_definition.workflow_definition_arn == definition_create.workflow_definition.arn
+
+    - name: Re-run workflow definition create
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        description: "{{ workflow_definition_description }}"
+      register: definition_create_rerun
+
+    - name: Assert workflow definition create is idempotent
+      ansible.builtin.assert:
+        that:
+          - not definition_create_rerun.changed
+          - "'no changes are needed' in definition_create_rerun.msg"
+          - definition_create_rerun.workflow_definition.arn == definition_create.workflow_definition.arn
+          - definition_create_rerun.workflow_definition.status == 'ACTIVE'
+
+    - name: Get workflow definition details
+      amazon.ai.nova_act_workflow_definition_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: definition_info
+
+    - name: Assert workflow definition details
+      ansible.builtin.assert:
+        that:
+          - not definition_info.changed
+          - definition_info.workflow_definitions | length == 1
+          - definition_info.workflow_definitions[0].name == workflow_definition_name
+          - definition_info.workflow_definitions[0].arn == definition_create.workflow_definition.arn
+          - definition_info.workflow_definitions[0].workflow_definition_name == workflow_definition_name
+          - definition_info.workflow_definitions[0].workflow_definition_arn == definition_create.workflow_definition.arn
+          - definition_info.workflow_definitions[0].description == workflow_definition_description
+          - definition_info.workflow_definitions[0].status == 'ACTIVE'
+          - definition_info.msg is string
+
+    - name: Get workflow definition details in check mode using name alias
+      amazon.ai.nova_act_workflow_definition_info:
+        name: "{{ workflow_definition_name }}"
+      check_mode: true
+      register: definition_info_check
+
+    - name: Assert info check mode returns the same definition
+      ansible.builtin.assert:
+        that:
+          - not definition_info_check.changed
+          - definition_info_check.workflow_definitions == definition_info.workflow_definitions
+
+    - name: List workflow definition summaries
+      amazon.ai.nova_act_workflow_definition_info:
+      register: definitions_info
+
+    - name: Assert listing includes the created workflow definition
+      ansible.builtin.assert:
+        that:
+          - not definitions_info.changed
+          - >-
+            definitions_info.workflow_definitions
+            | selectattr('workflow_definition_name', 'equalto', workflow_definition_name)
+            | map(attribute='workflow_definition_arn') | list == [definition_create.workflow_definition.arn]
+          - >-
+            definitions_info.workflow_definitions
+            | selectattr('workflow_definition_name', 'equalto', workflow_definition_name)
+            | map(attribute='status') | list == ['ACTIVE']
+          - >-
+            definitions_info.workflow_definitions
+            | selectattr('name', 'equalto', workflow_definition_name)
+            | map(attribute='arn') | list == [definition_create.workflow_definition.arn]
+
+    - name: List workflow definition summaries in descending service order
+      amazon.ai.nova_act_workflow_definition_info:
+        sort_order: "Descending"
+      register: definitions_sorted
+
+    - name: Assert sorted listing includes the created workflow definition
+      ansible.builtin.assert:
+        that:
+          - not definitions_sorted.changed
+          - >-
+            definitions_sorted.workflow_definitions
+            | selectattr('workflow_definition_name', 'equalto', workflow_definition_name)
+            | map(attribute='workflow_definition_arn') | list == [definition_create.workflow_definition.arn]
+
+    - name: Reject name and sort order together
+      amazon.ai.nova_act_workflow_definition_info:
+        name: "{{ workflow_definition_name }}"
+        sort_order: "Ascending"
+      register: definition_info_invalid
+      ignore_errors: true
+
+    - name: Assert name and sort order are mutually exclusive
+      ansible.builtin.assert:
+        that:
+          - definition_info_invalid is failed
+          - "'mutually exclusive' in definition_info_invalid.msg"
+
+    - name: Attempt to change workflow definition description
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        description: "A different description"
+      register: definition_mismatch
+      ignore_errors: true
+
+    - name: Assert create-only description is rejected
+      ansible.builtin.assert:
+        that:
+          - definition_mismatch is failed
+          - "'create-only' in definition_mismatch.msg"
+
+    - name: Create S3 bucket for workflow exports
+      amazon.aws.s3_bucket:
+        name: "{{ export_bucket_name }}"
+        state: present
+
+    - name: Create workflow definition with export configuration
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+        export_config:
+          s3_bucket_name: "{{ export_bucket_name }}"
+      register: export_definition_create
+
+    - name: Assert workflow definition with export configuration was created
+      ansible.builtin.assert:
+        that:
+          - export_definition_create.changed
+          - export_definition_create.workflow_definition.export_config.s3_bucket_name == export_bucket_name
+
+    - name: Re-run workflow definition create with export configuration
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+        export_config:
+          s3_bucket_name: "{{ export_bucket_name }}"
+      register: export_definition_rerun
+
+    - name: Assert export configuration without a key prefix is idempotent
+      ansible.builtin.assert:
+        that:
+          - not export_definition_rerun.changed
+          - "'no changes are needed' in export_definition_rerun.msg"
+          - export_definition_rerun.workflow_definition.arn == export_definition_create.workflow_definition.arn
+
+    - name: Get workflow definition with export configuration
+      amazon.ai.nova_act_workflow_definition_info:
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+      register: export_definition_info
+
+    - name: Assert export configuration is returned by the info module
+      ansible.builtin.assert:
+        that:
+          - export_definition_info.workflow_definitions | length == 1
+          - export_definition_info.workflow_definitions[0].export_config.s3_bucket_name == export_bucket_name
+
+    - name: Attempt to change create-only export configuration
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+        export_config:
+          s3_bucket_name: "{{ export_bucket_name }}"
+          s3_key_prefix: "exports/"
+      register: export_definition_mismatch
+      ignore_errors: true
+
+    - name: Assert create-only export configuration is rejected
+      ansible.builtin.assert:
+        that:
+          - export_definition_mismatch is failed
+          - "'create-only' in export_definition_mismatch.msg"
+
+    - name: Delete workflow definition with export configuration
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+      register: export_definition_delete
+
+    - name: Assert workflow definition with export configuration was deleted
+      ansible.builtin.assert:
+        that:
+          - export_definition_delete.changed
+          - export_definition_delete.workflow_definition.arn == export_definition_create.workflow_definition.arn
+
+    - name: Check mode delete workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      check_mode: true
+      register: definition_delete_check
+
+    - name: Assert delete check mode
+      ansible.builtin.assert:
+        that:
+          - definition_delete_check.changed
+          - "definition_delete_check.msg is search('^Check mode: would have')"
+
+    - name: Delete workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: definition_delete
+
+    - name: Assert workflow definition was deleted
+      ansible.builtin.assert:
+        that:
+          - definition_delete.changed
+          - "'deleted successfully' in definition_delete.msg"
+          - definition_delete.workflow_definition.name == workflow_definition_name
+          - definition_delete.workflow_definition.arn == definition_create.workflow_definition.arn
+          - definition_delete.workflow_definition.status in ['ACTIVE', 'DELETING']
+
+    - name: Re-run workflow definition deletion
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: definition_delete_rerun
+
+    - name: Assert workflow definition deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not definition_delete_rerun.changed
+          - "'does not exist' in definition_delete_rerun.msg"
+
+    - name: Look up deleted workflow definition
+      amazon.ai.nova_act_workflow_definition_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: definition_deleted_info
+
+    - name: Assert deleted workflow definition is absent
+      ansible.builtin.assert:
+        that:
+          - not definition_deleted_info.changed
+          - definition_deleted_info.workflow_definitions == []
+  always:
+    - name: Delete Nova Act workflow definition with export configuration
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ export_workflow_definition_name }}"
+      ignore_errors: true
+
+    - name: Delete S3 bucket for workflow exports
+      amazon.aws.s3_bucket:
+        name: "{{ export_bucket_name }}"
+        state: absent
+        force: true
+      ignore_errors: true
+
+    - name: Delete Nova Act workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      ignore_errors: true
