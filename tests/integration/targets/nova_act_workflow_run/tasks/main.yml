@@ -1,0 +1,305 @@
+---
+- name: Amazon Nova Act workflow run integration tests
+  module_defaults:
+    group/amazon.ai.aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+    group/aws:
+      access_key: "{{ aws_access_key }}"
+      secret_key: "{{ aws_secret_key }}"
+      session_token: "{{ security_token | default(omit) }}"
+      region: "{{ aws_region }}"
+  block:
+    - name: Create workflow definition for workflow run tests
+      amazon.ai.nova_act_workflow_definition:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        description: "{{ workflow_definition_description }}"
+      register: definition_create
+
+    - name: Assert workflow definition was created
+      ansible.builtin.assert:
+        that:
+          - definition_create.changed
+          - definition_create.workflow_definition.status == 'ACTIVE'
+
+    - name: Attempt to create a workflow run without model_id
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        client_info:
+          compatibility_version: 1
+      register: run_missing_model_id
+      ignore_errors: true
+
+    - name: Assert creating a workflow run without model_id fails
+      ansible.builtin.assert:
+        that:
+          - run_missing_model_id is failed
+          - "'model_id is required' in run_missing_model_id.msg"
+
+    - name: Attempt to create a workflow run without client_info
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        model_id: "{{ nova_act_model_id }}"
+      register: run_missing_client_info
+      ignore_errors: true
+
+    - name: Assert creating a workflow run without client_info fails
+      ansible.builtin.assert:
+        that:
+          - run_missing_client_info is failed
+          - "'client_info is required' in run_missing_client_info.msg"
+
+    - name: Attempt to look up a malformed workflow run ID
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "not-a-uuid"
+      register: run_malformed_id
+      ignore_errors: true
+
+    - name: Assert a malformed workflow run ID fails
+      ansible.builtin.assert:
+        that:
+          - run_malformed_id is failed
+          - "'must be a UUID' in run_malformed_id.msg"
+
+    - name: Attempt to create a workflow run with a non-positive wait_timeout
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        model_id: "{{ nova_act_model_id }}"
+        client_info:
+          compatibility_version: 1
+        wait_timeout: 0
+      register: run_zero_timeout
+      ignore_errors: true
+
+    - name: Assert a non-positive wait_timeout fails
+      ansible.builtin.assert:
+        that:
+          - run_zero_timeout is failed
+          - "'wait_timeout must be greater than zero' in run_zero_timeout.msg"
+
+    - name: Attempt to look up a workflow run under a missing workflow definition
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ missing_workflow_definition_name }}"
+        workflow_run_id: "00000000-0000-0000-0000-000000000000"
+      register: run_missing_definition
+      ignore_errors: true
+
+    - name: Assert looking up a workflow run under a missing workflow definition fails
+      ansible.builtin.assert:
+        that:
+          - run_missing_definition is failed
+          - "'Workflow definition' in run_missing_definition.msg"
+          - "'does not exist' in run_missing_definition.msg"
+
+    - name: Get workflow run details under a missing workflow definition
+      amazon.ai.nova_act_workflow_run_info:
+        workflow_definition_name: "{{ missing_workflow_definition_name }}"
+        workflow_run_id: "00000000-0000-0000-0000-000000000000"
+      register: run_info_missing_definition
+      ignore_errors: true
+
+    - name: Assert getting workflow run details under a missing workflow definition fails
+      ansible.builtin.assert:
+        that:
+          - run_info_missing_definition is failed
+          - "'Workflow definition' in run_info_missing_definition.msg"
+
+    - name: Delete a workflow run under a missing workflow definition
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ missing_workflow_definition_name }}"
+        workflow_run_id: "00000000-0000-0000-0000-000000000000"
+      register: run_delete_missing_definition
+
+    - name: Assert deleting a workflow run under a missing workflow definition is a no-op
+      ansible.builtin.assert:
+        that:
+          - not run_delete_missing_definition.changed
+          - "'workflow definition' in run_delete_missing_definition.msg"
+          - run_delete_missing_definition.workflow_run == {}
+
+    - name: Check mode create workflow run
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        model_id: "{{ nova_act_model_id }}"
+        client_info:
+          compatibility_version: 1
+      check_mode: true
+      register: run_create_check
+
+    - name: Assert create check mode
+      ansible.builtin.assert:
+        that:
+          - run_create_check.changed
+          - "run_create_check.msg is search('^Check mode: would have')"
+          - run_create_check.workflow_run == {}
+
+    - name: Create workflow run
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        model_id: "{{ nova_act_model_id }}"
+        client_info:
+          compatibility_version: 1
+        wait: true
+      register: run_create
+
+    - name: Assert workflow run was created and succeeded
+      ansible.builtin.assert:
+        that:
+          - run_create.changed
+          - "'created successfully' in run_create.msg"
+          - run_create.workflow_run.workflow_run_id is string
+          - run_create.workflow_run.status == 'SUCCEEDED'
+
+    - name: Re-run workflow run lookup by ID
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      register: run_lookup_rerun
+
+    - name: Assert workflow run lookup by ID is idempotent
+      ansible.builtin.assert:
+        that:
+          - not run_lookup_rerun.changed
+          - "'no changes are needed' in run_lookup_rerun.msg"
+          - run_lookup_rerun.workflow_run.workflow_run_id == run_create.workflow_run.workflow_run_id
+
+    - name: Attempt to look up a workflow run ID that does not exist
+      amazon.ai.nova_act_workflow_run:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "00000000-0000-0000-0000-000000000000"
+      register: run_lookup_missing
+      ignore_errors: true
+
+    - name: Assert looking up a missing workflow run ID fails
+      ansible.builtin.assert:
+        that:
+          - run_lookup_missing is failed
+          - "'does not exist' in run_lookup_missing.msg"
+
+    - name: List workflow run summaries
+      amazon.ai.nova_act_workflow_run_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      register: runs_info
+
+    - name: Assert listing includes the created workflow run
+      ansible.builtin.assert:
+        that:
+          - not runs_info.changed
+          - >-
+            runs_info.workflow_runs
+            | selectattr('workflow_run_id', 'equalto', run_create.workflow_run.workflow_run_id)
+            | list | length == 1
+
+    - name: Get workflow run details by ID
+      amazon.ai.nova_act_workflow_run_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      register: run_info
+
+    - name: Assert workflow run details are the full GetWorkflowRun shape
+      ansible.builtin.assert:
+        that:
+          - not run_info.changed
+          - run_info.workflow_runs | length == 1
+          - run_info.workflow_runs[0].workflow_run_id == run_create.workflow_run.workflow_run_id
+          - run_info.workflow_runs[0].model_id == nova_act_model_id
+
+    - name: Get workflow run details using the name alias for a missing ID
+      amazon.ai.nova_act_workflow_run_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        name: "00000000-0000-0000-0000-000000000000"
+      register: run_info_missing
+
+    - name: Assert a missing workflow run ID returns an empty list, not a failure
+      ansible.builtin.assert:
+        that:
+          - not run_info_missing.changed
+          - run_info_missing.workflow_runs == []
+
+    - name: Check mode delete workflow run
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      check_mode: true
+      register: run_delete_check
+
+    - name: Assert delete check mode
+      ansible.builtin.assert:
+        that:
+          - run_delete_check.changed
+          - "run_delete_check.msg is search('^Check mode: would have')"
+          - run_delete_check.workflow_run.workflow_run_id == run_create.workflow_run.workflow_run_id
+
+    - name: Delete workflow run
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+        wait: true
+      register: run_delete
+
+    - name: Assert workflow run was deleted
+      ansible.builtin.assert:
+        that:
+          - run_delete.changed
+          - "'deleted successfully' in run_delete.msg"
+          - run_delete.workflow_run.workflow_run_id == run_create.workflow_run.workflow_run_id
+
+    - name: Confirm deleted workflow run is no longer returned
+      amazon.ai.nova_act_workflow_run_info:
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      register: run_info_deleted
+
+    - name: Assert deleted workflow run is absent
+      ansible.builtin.assert:
+        that:
+          - not run_info_deleted.changed
+          - run_info_deleted.workflow_runs == []
+
+    - name: Check mode re-run workflow run deletion
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      check_mode: true
+      register: run_delete_rerun_check
+
+    - name: Assert check mode workflow run deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not run_delete_rerun_check.changed
+          - "'does not exist' in run_delete_rerun_check.msg"
+          - run_delete_rerun_check.workflow_run == {}
+
+    - name: Re-run workflow run deletion
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      register: run_delete_rerun
+
+    - name: Assert workflow run deletion is idempotent
+      ansible.builtin.assert:
+        that:
+          - not run_delete_rerun.changed
+          - "'does not exist' in run_delete_rerun.msg"
+  always:
+    - name: Delete Nova Act workflow run, if still present
+      amazon.ai.nova_act_workflow_run:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+        workflow_run_id: "{{ run_create.workflow_run.workflow_run_id }}"
+      ignore_errors: true
+      when: run_create is defined and run_create.workflow_run is defined and run_create.workflow_run.workflow_run_id is defined
+
+    - name: Delete Nova Act workflow definition
+      amazon.ai.nova_act_workflow_definition:
+        state: absent
+        workflow_definition_name: "{{ workflow_definition_name }}"
+      ignore_errors: true

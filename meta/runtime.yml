@@ -20,6 +20,8 @@ action_groups:
     - devopsguru_resource_collection_info
     - nova_act_workflow_definition
     - nova_act_workflow_definition_info
+    - nova_act_workflow_run
+    - nova_act_workflow_run_info
     - sagemaker_app_image_config
     - sagemaker_app_image_config_info
     - sagemaker_code_repository

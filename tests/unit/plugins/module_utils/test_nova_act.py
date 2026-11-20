@@ -11,18 +11,24 @@ from unittest.mock import patch
 import pytest
 from ansible_collections.amazon.ai.plugins.module_utils import nova_act
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import create_workflow_definition
+from ansible_collections.amazon.ai.plugins.module_utils.nova_act import create_workflow_run
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import delete_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import list_workflow_definitions
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate_workflow_definition_name
+from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate_workflow_run_id
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import wait_for_workflow_definition_deleted
 from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition
 from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition_info
+from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_run
+from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_run_info
 from ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition import _workflow_definition_status_check
+from ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_run import _workflow_run_status_check
 from botocore.exceptions import ClientError
 
 NAME = "sample-workflow"
 ARN = f"arn:aws:nova-act:us-east-1:123456789012:workflow-definition/{NAME}"
+RUN_ID = "11111111-2222-3333-4444-555555555555"
 
 
 class FailJson(Exception):
@@ -103,6 +109,26 @@ def test_validate_workflow_definition_name_rejects_invalid(name):
     module = _module()
     with pytest.raises(FailJson):
         validate_workflow_definition_name(module, name)
+
+
+@pytest.mark.parametrize(
+    "workflow_run_id",
+    ["11111111-2222-3333-4444-555555555555", "00000000-0000-0000-0000-000000000000", None],
+)
+def test_validate_workflow_run_id_accepts_valid(workflow_run_id):
+    module = _module()
+    validate_workflow_run_id(module, workflow_run_id)
+    module.fail_json.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "workflow_run_id",
+    ["", "not-a-uuid", "11111111222233334444555555555555", "11111111-2222-3333-4444-55555555555"],
+)
+def test_validate_workflow_run_id_rejects_invalid(workflow_run_id):
+    module = _module()
+    with pytest.raises(FailJson):
+        validate_workflow_run_id(module, workflow_run_id)
 
 
 def test_get_workflow_definition_converts_strips_metadata_and_adds_aliases():
@@ -301,3 +327,113 @@ def test_delete_returns_noop_when_workflow_definition_is_already_absent():
     assert msg == f"Workflow definition '{NAME}' does not exist."
     waiter.assert_not_called()
     module.fail_json_aws.assert_not_called()
+
+
+def _run_module(**params):
+    run_params = {
+        "workflow_run_id": RUN_ID,
+        "model_id": "sample-model",
+        "client_info": {"compatibility_version": 1, "sdk_version": None},
+        "log_group_name": None,
+        "sort_order": None,
+    }
+    run_params.update(params)
+    return _module(**run_params)
+
+
+def _run_response(status):
+    return {"workflowRunId": RUN_ID, "status": status, "ResponseMetadata": {"HTTPStatusCode": 200}}
+
+
+@pytest.mark.parametrize("status", ["FAILED", "TIMED_OUT"])
+def test_create_workflow_run_failed_outcome_reports_changed(status):
+    client = MagicMock()
+    client.create_workflow_run.return_value = {"workflowRunId": RUN_ID, "status": "RUNNING"}
+    client.get_workflow_run.return_value = _run_response(status)
+    module = _run_module(workflow_run_id=None)
+
+    with pytest.raises(FailJson):
+        create_workflow_run(client, module)
+
+    kwargs = module.fail_json.call_args.kwargs
+    assert kwargs["changed"] is True
+    assert kwargs["workflow_run"]["status"] == status
+
+
+@pytest.mark.parametrize("status", ["FAILED", "TIMED_OUT"])
+def test_run_status_check_fails_present_when_failed(status):
+    module = _run_module()
+    existing = {"workflow_run_id": RUN_ID, "status": status}
+
+    with pytest.raises(FailJson):
+        _workflow_run_status_check(MagicMock(), module, existing)
+
+    assert module.fail_json.call_args.kwargs["changed"] is False
+
+
+def test_run_status_check_present_running_waits_for_terminal_status():
+    client = MagicMock()
+    client.get_workflow_run.side_effect = [_run_response("RUNNING"), _run_response("SUCCEEDED")]
+    existing = {"workflow_run_id": RUN_ID, "status": "RUNNING"}
+
+    with patch.object(nova_act.time, "sleep"):
+        result = _workflow_run_status_check(client, _run_module(), existing)
+
+    assert result["status"] == "SUCCEEDED"
+
+
+@pytest.mark.parametrize(
+    "module,status",
+    [
+        (_run_module(wait=False), "RUNNING"),
+        (_run_module(check_mode=True), "RUNNING"),
+        (_run_module(state="absent"), "RUNNING"),
+        (_run_module(state="absent"), "FAILED"),
+    ],
+)
+def test_run_status_check_passes_through_without_waiting(module, status):
+    client = MagicMock()
+    existing = {"workflow_run_id": RUN_ID, "status": status}
+
+    assert _workflow_run_status_check(client, module, existing) is existing
+    client.get_workflow_run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "module_main,module_path",
+    [
+        (nova_act_workflow_run.main, "ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_run"),
+        (nova_act_workflow_run_info.main, "ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_run_info"),
+    ],
+)
+def test_run_modules_fail_when_parent_workflow_definition_is_missing(module_main, module_path):
+    module = _run_module()
+    client = module.client.return_value
+    client.get_workflow_run.side_effect = _client_error("ResourceNotFoundException", "GetWorkflowRun")
+    client.get_workflow_definition.side_effect = _client_error("ResourceNotFoundException", "GetWorkflowDefinition")
+
+    with patch(f"{module_path}.AnsibleAWSModule", return_value=module):
+        with pytest.raises(FailJson):
+            module_main()
+
+    assert module.fail_json.call_args.kwargs["msg"] == f"Workflow definition '{NAME}' does not exist."
+
+
+def test_run_module_absent_is_noop_when_parent_workflow_definition_is_missing():
+    module = _run_module(state="absent")
+    module.exit_json.side_effect = SystemExit
+    client = module.client.return_value
+    client.get_workflow_run.side_effect = _client_error("ResourceNotFoundException", "GetWorkflowRun")
+    client.get_workflow_definition.side_effect = _client_error("ResourceNotFoundException", "GetWorkflowDefinition")
+
+    with patch(
+        "ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_run.AnsibleAWSModule", return_value=module
+    ):
+        with pytest.raises(SystemExit):
+            nova_act_workflow_run.main()
+
+    kwargs = module.exit_json.call_args.kwargs
+    assert kwargs["changed"] is False
+    assert kwargs["workflow_run"] == {}
+    assert f"workflow definition '{NAME}' does not exist" in kwargs["msg"]
+    client.delete_workflow_run.assert_not_called()
