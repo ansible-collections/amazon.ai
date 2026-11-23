@@ -127,6 +127,7 @@ try:
 except ImportError:
     pass
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_endpoints
 
@@ -134,7 +135,6 @@ from ansible.module_utils.common.dict_transformations import camel_dict_to_snake
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 from ansible_collections.amazon.aws.plugins.module_utils.transformation import scrub_none_parameters
 
