@@ -201,6 +201,7 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_pipeline
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import delete_pipeline
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_pipeline
@@ -214,7 +215,6 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import parse_json
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 

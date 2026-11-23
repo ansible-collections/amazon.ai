@@ -115,9 +115,9 @@ from typing import List
 
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_model_details
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_models_with_filters
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
