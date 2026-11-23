@@ -22,7 +22,7 @@ repos:
   #
   # Until then you can point `rev` at a commit on the fork carrying the branch.
   - repo: https://github.com/ansible-network/github_actions
-    rev: REPLACE_WITH_MERGE_COMMIT_SHA  # noqa
+    rev: 38b45197e14346c2e1b9d4bca048d0ff8c29a9b2 # main as of 2026-11-23
     hooks:
       # Was the `user-agent` job: keeps AMAZON_AI_COLLECTION_VERSION in
       # plugins/module_utils/common.py in sync with galaxy.yml.
