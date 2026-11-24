@@ -71,10 +71,9 @@ from typing import List
 from typing import Optional
 
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_endpoint
-
-from ansible_collections.amazon.aws.plugins.plugin_utils.lookup import AWSLookupBase
-from ansible_collections.amazon.aws.plugins.plugin_utils.lookup import LookupErrorHandler
-from ansible_collections.amazon.aws.plugins.plugin_utils.lookup import LookupResourceNotFoundError
+from ansible_collections.amazon.ai.plugins.plugin_utils.lookup import AWSLookupBase
+from ansible_collections.amazon.ai.plugins.plugin_utils.lookup import LookupErrorHandler
+from ansible_collections.amazon.ai.plugins.plugin_utils.lookup import LookupResourceNotFoundError
 
 
 class LookupModule(AWSLookupBase):
