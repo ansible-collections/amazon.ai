@@ -46,18 +46,15 @@ options:
     guardrail_identifier:
         description:
             - The unique identifier of the guardrail to use.
-            - This option requires boto3 >= 1.35.8.
         type: str
     guardrail_version:
         description:
             - The version number for the guardrail. Can also be 'DRAFT'.
             - O(guardrail_version) is required when O(guardrail_identifier) is specified.
-            - This option requires boto3 >= 1.35.8.
         type: str
     performance_config_latency:
         description:
             - Model performance settings for the request, optimizing for latency.
-            - This option requires boto3 >= 1.35.8.
         type: str
         choices: ['standard', 'optimized']
         default: 'standard'
