@@ -476,9 +476,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import (
-    validate_agentcore_botocore_option,
-)
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -595,10 +593,7 @@ def main() -> None:
     validate_agentcore_botocore(module)
     if module.params["state"] == "present":
         validate_agentcore_botocore_option(module, "tags", "1.40.35")
-        if (
-            module.params.get("authorizer_discovery_url")
-            and module.params.get("authorizer_allowed_scopes") is not None
-        ):
+        if module.params.get("authorizer_discovery_url") and module.params.get("authorizer_allowed_scopes") is not None:
             validate_agentcore_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
         validate_agentcore_botocore_option(module, "session_storage", "1.42.75")
         validate_agentcore_botocore_option(module, "s3_files_access_point", "1.43.90")
