@@ -1,0 +1,5 @@
+bugfixes:
+  - >-
+    sagemaker_notebook_instance - Require botocore >= 1.40.25 when the ip_address_type option is supplied,
+    since the SageMaker CreateNotebookInstance and UpdateNotebookInstance service models include this option
+    starting with that version (https://github.com/ansible-collections/amazon.ai/pull/113).

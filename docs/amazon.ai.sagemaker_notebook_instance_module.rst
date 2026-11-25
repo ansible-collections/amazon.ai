@@ -220,6 +220,7 @@ Parameters
                         <div>Specify dualstack for both IPv4 and IPv6 connectivity.</div>
                         <div>When you specify dualstack, the subnet must support IPv6 CIDR blocks.</div>
                         <div>Required when O(state=present).</div>
+                        <div>Requires botocore &gt;= 1.40.25.</div>
                 </td>
             </tr>
             <tr>

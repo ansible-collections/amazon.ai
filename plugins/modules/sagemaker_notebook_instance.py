@@ -97,6 +97,7 @@ options:
             - Specify dualstack for both IPv4 and IPv6 connectivity.
             - When you specify dualstack, the subnet must support IPv6 CIDR blocks.
             - Required when O(state=present).
+            - Requires botocore >= 1.40.25.
         type: str
         choices: [ipv4, dualstack]
     tags:
@@ -454,6 +455,10 @@ def main() -> None:
         ],
     )
     name = module.params["notebook_instance_name"]
+
+    if module.params["state"] == "present" and module.params.get("ip_address_type") is not None:
+        if not module.botocore_at_least("1.40.25"):
+            module.fail_json(msg="The ip_address_type option requires botocore >= 1.40.25.")
 
     try:
         try:
