@@ -1,9 +1,18 @@
 ---
+- name: Set up Botocore for cleanup when it has not been set up yet
+  ansible.builtin.include_role:
+    name: setup_botocore_pip
+  vars:
+    botocore_version: "1.40.61"
+  when: botocore_virtualenv_interpreter is not defined
+
 - name: Clean up the invalid-role training job
   amazon.ai.sagemaker_training_job:
     state: absent
     training_job_name: "{{ invalid_role_training_job_name }}"
     wait_timeout: 3600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   ignore_errors: true
 
 - name: Clean up the primary training job
@@ -11,6 +20,8 @@
     state: absent
     training_job_name: "{{ training_job_name }}"
     wait_timeout: 3600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   ignore_errors: true
 
 - name: Clean up the stoppable training job
@@ -18,6 +29,8 @@
     state: absent
     training_job_name: "{{ stoppable_training_job_name }}"
     wait_timeout: 3600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   ignore_errors: true
 
 - name: Remove the temporary execution role

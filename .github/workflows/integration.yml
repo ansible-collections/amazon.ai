@@ -83,4 +83,4 @@ jobs:
             git+https://github.com/ansible-collections/amazon.aws.git,main
             git+https://github.com/ansible-collections/community.aws.git,main
             community.general
-          pre-test-cmd: python -m pip install -r tests/integration/requirements.txt
+          pre-test-cmd: python -m pip install -r tests/integration/requirements.txt -c tests/integration/constraints.txt
