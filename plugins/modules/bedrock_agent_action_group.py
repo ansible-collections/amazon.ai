@@ -160,17 +160,17 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
-    create_action_group,
-    delete_action_group,
-    find_action_group,
-    find_agent,
-    get_agent_action_group,
-    prepare_agent,
-    update_action_group,
-)
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_action_group
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import prepare_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import update_action_group
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
+
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 

@@ -3,12 +3,14 @@
 
 
 import json
-from datetime import date, datetime
+from datetime import date
+from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
 from typing import Union
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import urlparse
+from urllib.parse import urlunparse
 
 
 def encode_body(body: Union[dict, list, str]) -> bytes:

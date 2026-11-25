@@ -182,15 +182,15 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
-    create_alias,
-    delete_alias,
-    find_agent,
-    find_alias,
-    get_agent_alias,
-)
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_alias
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_alias
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
+
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 

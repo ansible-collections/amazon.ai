@@ -3,16 +3,15 @@
 
 
 import json
-from datetime import date, datetime
+from datetime import date
+from datetime import datetime
 from typing import Union
 
 import pytest
-from ansible_collections.amazon.ai.plugins.module_utils.utils import (
-    convert_time_ranges,
-    encode_body,
-    merge_data,
-    normalize_url,
-)
+from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
+from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
+from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
+from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 
 
 # -----------------------

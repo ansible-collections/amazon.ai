@@ -338,10 +338,16 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict, snake_dict_to_camel_dict
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import describe_insight, fetch_data, get_insight_type
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import describe_insight
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import fetch_data
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_insight_type
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
-from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges, merge_data
+from ansible_collections.amazon.ai.plugins.module_utils.utils import convert_time_ranges
+from ansible_collections.amazon.ai.plugins.module_utils.utils import merge_data
+
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
+from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
+
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
