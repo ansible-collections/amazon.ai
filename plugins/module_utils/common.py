@@ -5,4 +5,4 @@
 
 AMAZON_AI_COLLECTION_NAME = "amazon.ai"
 # Updated from galaxy.yml by the update-variables workflow.
-AMAZON_AI_COLLECTION_VERSION = "3.0.0-dev0"
+AMAZON_AI_COLLECTION_VERSION = "1.1.0"
