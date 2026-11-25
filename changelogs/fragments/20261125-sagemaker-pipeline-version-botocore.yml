@@ -1,0 +1,5 @@
+bugfixes:
+  - >-
+    sagemaker_pipeline_info - Require botocore >= 1.39.5 when pipeline_version_id is supplied, because the
+    SageMaker DescribePipeline model gained the PipelineVersionId request parameter in that release
+    (https://github.com/ansible-collections/amazon.ai/pull/113).

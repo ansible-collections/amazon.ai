@@ -31,6 +31,7 @@ options:
         description:
             - The historical pipeline version to describe.
             - Requires O(pipeline_name).
+            - Requires botocore >= 1.39.5.
         type: int
     pipeline_name_prefix:
         description:
@@ -149,6 +150,8 @@ def main() -> None:
         mutually_exclusive=[["pipeline_name", "pipeline_name_prefix"]],
         required_by={"pipeline_version_id": ["pipeline_name"]},
     )
+    if module.params.get("pipeline_version_id") is not None and not module.botocore_at_least("1.39.5"):
+        module.fail_json(msg="The pipeline_version_id option requires botocore >= 1.39.5.")
     if module.params.get("pipeline_version_id") is not None and module.params["pipeline_version_id"] < 1:
         module.fail_json(msg="pipeline_version_id must be greater than or equal to 1.")
     if module.params.get("max_items") is not None and module.params["max_items"] < 1:
