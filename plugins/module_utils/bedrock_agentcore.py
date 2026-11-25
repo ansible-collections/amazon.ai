@@ -41,28 +41,6 @@ class AgentRuntimeEndpointStatus(str, Enum):
 AGENTCORE_MINIMUM_BOTOCORE_VERSION = "1.39.7"
 
 
-def validate_agentcore_botocore(
-    module: AnsibleAWSModule,
-    minimum_version: str = AGENTCORE_MINIMUM_BOTOCORE_VERSION,
-) -> None:
-    if not module.botocore_at_least(minimum_version):
-        module.fail_json(
-            msg=(
-                f"Bedrock AgentCore requires botocore >= {minimum_version} "
-                "to support the service model features used by this module."
-            )
-        )
-
-
-def validate_agentcore_botocore_option(
-    module: AnsibleAWSModule,
-    option: str,
-    minimum_version: str,
-) -> None:
-    if module.params.get(option) is not None and not module.botocore_at_least(minimum_version):
-        module.fail_json(msg=f"The {option} option requires botocore >= {minimum_version}.")
-
-
 @AWSRetry.jittered_backoff(retries=10)
 def list_agent_runtimes(client) -> List[Dict[str, Any]]:
     """

@@ -469,14 +469,15 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AGENTCORE_MINIMUM_BOTOCORE_VERSION
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeStatus
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import create_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import delete_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_id
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore_option
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_version
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -590,16 +591,21 @@ def main() -> None:
             msg="Exactly one of container_configuration or code_configuration is required when state=present."
         )
 
-    validate_agentcore_botocore(module)
+    validate_botocore_version(
+        module,
+        AGENTCORE_MINIMUM_BOTOCORE_VERSION,
+        f"Bedrock AgentCore requires botocore >= {AGENTCORE_MINIMUM_BOTOCORE_VERSION} "
+        "to support the service model features used by this module.",
+    )
     if module.params["state"] == "present":
-        validate_agentcore_botocore_option(module, "tags", "1.40.35")
+        validate_botocore_option(module, "tags", "1.40.35")
         if module.params.get("authorizer_discovery_url") and module.params.get("authorizer_allowed_scopes") is not None:
-            validate_agentcore_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
-        validate_agentcore_botocore_option(module, "session_storage", "1.42.75")
-        validate_agentcore_botocore_option(module, "s3_files_access_point", "1.43.90")
-        validate_agentcore_botocore_option(module, "efs_access_point", "1.43.90")
-        validate_agentcore_botocore_option(module, "capacity_provider_volume", "1.43.90")
-        validate_agentcore_botocore_option(module, "capacity_provider_arn", "1.43.90")
+            validate_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
+        validate_botocore_option(module, "session_storage", "1.42.75")
+        validate_botocore_option(module, "s3_files_access_point", "1.43.90")
+        validate_botocore_option(module, "efs_access_point", "1.43.90")
+        validate_botocore_option(module, "capacity_provider_volume", "1.43.90")
+        validate_botocore_option(module, "capacity_provider_arn", "1.43.90")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

@@ -381,6 +381,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import DomainStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_domain
@@ -527,9 +528,8 @@ def main() -> None:
         ],
         required_together=[("vpc_id", "subnet_ids")],
     )
-    if module.params["state"] == "present" and module.params.get("home_efs_file_system_creation") is not None:
-        if not module.botocore_at_least("1.43.13"):
-            module.fail_json(msg="The home_efs_file_system_creation option requires botocore >= 1.43.13.")
+    if module.params["state"] == "present":
+        validate_botocore_option(module, "home_efs_file_system_creation", "1.43.13")
 
     if (
         module.params["state"] == "present"

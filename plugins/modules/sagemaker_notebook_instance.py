@@ -287,6 +287,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import NotebookInstanceStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_notebook_instance
@@ -456,9 +457,8 @@ def main() -> None:
     )
     name = module.params["notebook_instance_name"]
 
-    if module.params["state"] == "present" and module.params.get("ip_address_type") is not None:
-        if not module.botocore_at_least("1.40.25"):
-            module.fail_json(msg="The ip_address_type option requires botocore >= 1.40.25.")
+    if module.params["state"] == "present":
+        validate_botocore_option(module, "ip_address_type", "1.40.25")
 
     try:
         try:
