@@ -12,6 +12,10 @@ author:
     - Domen Dobnikar (@domendobnikar)
 description:
     - Gets details for a single Bedrock AgentCore runtime endpoint or lists all endpoints for a given runtime.
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     agent_runtime_name:
         description:
@@ -28,7 +32,6 @@ options:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3_agentcore
 """
 
 EXAMPLES = r"""

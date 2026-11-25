@@ -13,6 +13,10 @@ author:
 description:
     - Creates, updates, and deletes Amazon Bedrock AgentCore runtimes.
     - AgentCore runtime tags are applied only when a runtime is created.
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     state:
         description:
@@ -234,7 +238,6 @@ notes:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3_agentcore
 """
 
 EXAMPLES = r"""

@@ -13,6 +13,10 @@ author:
 description:
     - Creates, updates, and deletes Amazon Bedrock AgentCore runtime endpoints.
     - A runtime endpoint is a named, addressable alias pointing at a specific runtime version.
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     state:
         description:
@@ -70,7 +74,6 @@ notes:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3_agentcore
 """
 
 EXAMPLES = r"""
