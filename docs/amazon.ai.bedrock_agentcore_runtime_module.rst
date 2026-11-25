@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.42.75
-- botocore >= 1.42.75
+- boto3 >= 1.39.7
+- botocore >= 1.39.7
 
 
 Parameters
@@ -142,6 +142,7 @@ Parameters
                 </td>
                 <td>
                         <div>Scope values accepted by the custom JWT authorizer.</div>
+                        <div>Requires botocore &gt;= 1.42.73 when O(authorizer_discovery_url) is supplied.</div>
                 </td>
             </tr>
             <tr>
@@ -773,6 +774,7 @@ Parameters
                         <div>Configuration for session storage.</div>
                         <div>Persistent storage that is preserved across AgentCore Runtime session.</div>
                         <div>Cannot be set if O(s3_files_access_point), O(efs_access_point) or O(capacity_provider_volume) is specified.</div>
+                        <div>Requires botocore &gt;= 1.42.75.</div>
                 </td>
             </tr>
                                 <tr>
@@ -846,6 +848,7 @@ Parameters
                 <td>
                         <div>Tags attached to the runtime when it is created.</div>
                         <div>Tags cannot be modified after creation by this module.</div>
+                        <div>Requires botocore &gt;= 1.40.35 when supplied.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: resource_tags</div>
                 </td>
             </tr>

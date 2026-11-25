@@ -59,8 +59,20 @@ def validate_agentcore_botocore_option(
     option: str,
     minimum_version: str,
 ) -> None:
-    if module.params.get(option) and not module.botocore_at_least(minimum_version):
+    if module.params.get(option) is not None and not module.botocore_at_least(minimum_version):
         module.fail_json(msg=f"The {option} option requires botocore >= {minimum_version}.")
+
+
+def validate_agentcore_runtime_option_versions(module: AnsibleAWSModule) -> None:
+    validate_agentcore_botocore_option(module, "tags", "1.40.35")
+
+    if module.params.get("authorizer_discovery_url") and module.params.get("authorizer_allowed_scopes") is not None:
+        validate_agentcore_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
+
+    validate_agentcore_botocore_option(module, "session_storage", "1.42.75")
+
+    for option in ("s3_files_access_point", "efs_access_point", "capacity_provider_volume", "capacity_provider_arn"):
+        validate_agentcore_botocore_option(module, option, "1.43.90")
 
 
 @AWSRetry.jittered_backoff(retries=10)

@@ -15,8 +15,8 @@ description:
     - AgentCore runtime tags are applied only when a runtime is created.
 requirements:
     - python >= 3.9
-    - boto3 >= 1.42.75
-    - botocore >= 1.42.75
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     state:
         description:
@@ -140,6 +140,7 @@ options:
     authorizer_allowed_scopes:
         description:
             - Scope values accepted by the custom JWT authorizer.
+            - Requires botocore >= 1.42.73 when O(authorizer_discovery_url) is supplied.
         type: list
         elements: str
     capacity_provider_arn:
@@ -154,6 +155,7 @@ options:
             - Configuration for session storage.
             - Persistent storage that is preserved across AgentCore Runtime session.
             - Cannot be set if O(s3_files_access_point), O(efs_access_point) or O(capacity_provider_volume) is specified.
+            - Requires botocore >= 1.42.75.
         type: dict
         suboptions:
             mount_path:
@@ -220,6 +222,7 @@ options:
         description:
             - Tags attached to the runtime when it is created.
             - Tags cannot be modified after creation by this module.
+            - Requires botocore >= 1.40.35 when supplied.
         type: dict
         aliases: ["resource_tags"]
     wait:
@@ -473,7 +476,9 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore_option
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import (
+    validate_agentcore_runtime_option_versions,
+)
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -587,14 +592,9 @@ def main() -> None:
             msg="Exactly one of container_configuration or code_configuration is required when state=present."
         )
 
-    validate_agentcore_botocore(module, minimum_version="1.42.75")
-    for option in (
-        "capacity_provider_arn",
-        "s3_files_access_point",
-        "efs_access_point",
-        "capacity_provider_volume",
-    ):
-        validate_agentcore_botocore_option(module, option, "1.43.90")
+    validate_agentcore_botocore(module)
+    if module.params["state"] == "present":
+        validate_agentcore_runtime_option_versions(module)
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

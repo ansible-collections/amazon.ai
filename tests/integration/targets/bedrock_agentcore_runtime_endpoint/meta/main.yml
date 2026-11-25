@@ -2,4 +2,4 @@
 dependencies:
   - role: setup_botocore_pip
     vars:
-      botocore_version: "1.42.75"
+      botocore_version: "1.39.7"

@@ -26,8 +26,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.42.75
-- botocore >= 1.42.75
+- boto3 >= 1.39.7
+- botocore >= 1.39.7
 
 
 Parameters

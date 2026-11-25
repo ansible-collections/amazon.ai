@@ -14,8 +14,8 @@ description:
     - Gets details for a single Bedrock AgentCore runtime or lists all runtimes.
 requirements:
     - python >= 3.9
-    - boto3 >= 1.42.75
-    - botocore >= 1.42.75
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     agent_runtime_name:
         description:
@@ -261,7 +261,7 @@ def main():
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
-    validate_agentcore_botocore(module, minimum_version="1.42.75")
+    validate_agentcore_botocore(module)
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

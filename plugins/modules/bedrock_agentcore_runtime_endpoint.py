@@ -308,7 +308,8 @@ def main() -> None:
         supports_check_mode=True,
     )
     validate_agentcore_botocore(module)
-    validate_agentcore_botocore_option(module, "tags", "1.40.35")
+    if module.params["state"] == "present":
+        validate_agentcore_botocore_option(module, "tags", "1.40.35")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

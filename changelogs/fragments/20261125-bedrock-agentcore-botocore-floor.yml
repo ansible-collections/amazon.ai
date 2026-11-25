@@ -1,15 +1,17 @@
 bugfixes:
   - >-
-    bedrock_agentcore_runtime - Require botocore >= 1.42.75 for the runtime service model fields used by the
-    module, and fail clearly when capacity_provider_arn or capacity-provider filesystem options are supplied
-    with botocore < 1.43.90
+    bedrock_agentcore_runtime - Require botocore >= 1.39.7 for the AgentCore service model, and check the
+    botocore version when options requiring newer service model fields are supplied: tags (>= 1.40.35),
+    authorizer_allowed_scopes (>= 1.42.73), session_storage (>= 1.42.75), and capacity_provider_arn,
+    s3_files_access_point, efs_access_point, and capacity_provider_volume (>= 1.43.90)
     (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
-    bedrock_agentcore_runtime_info - Require botocore >= 1.42.75 to return the full runtime model supported by
-    the module (https://github.com/ansible-collections/amazon.ai/pull/113).
+    bedrock_agentcore_runtime_info - Require botocore >= 1.39.7 for the AgentCore service model
+    (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
-    bedrock_agentcore_runtime_endpoint - Require botocore >= 1.39.7 for the service model and check that tags
-    are only used with botocore >= 1.40.35 (https://github.com/ansible-collections/amazon.ai/pull/113).
+    bedrock_agentcore_runtime_endpoint - Require botocore >= 1.39.7 for the AgentCore service model and check
+    that tags are only used with botocore >= 1.40.35
+    (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
     bedrock_agentcore_runtime_endpoint_info - Require botocore >= 1.39.7 for the service model
     (https://github.com/ansible-collections/amazon.ai/pull/113).
