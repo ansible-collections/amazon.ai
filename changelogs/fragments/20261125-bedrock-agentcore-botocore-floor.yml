@@ -1,13 +1,13 @@
 bugfixes:
   - >-
     bedrock_agentcore_runtime - Fail with a clear message when botocore is older than 1.39.7, which is
-    required for the bedrock-agentcore-control service model.
+    required for the bedrock-agentcore-control service model (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
     bedrock_agentcore_runtime_info - Fail with a clear message when botocore is older than 1.39.7, which is
-    required for the bedrock-agentcore-control service model.
+    required for the bedrock-agentcore-control service model (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
     bedrock_agentcore_runtime_endpoint - Fail with a clear message when botocore is older than 1.39.7, which
-    is required for the bedrock-agentcore-control service model.
+    is required for the bedrock-agentcore-control service model (https://github.com/ansible-collections/amazon.ai/pull/113).
   - >-
     bedrock_agentcore_runtime_endpoint_info - Fail with a clear message when botocore is older than 1.39.7,
-    which is required for the bedrock-agentcore-control service model.
+    which is required for the bedrock-agentcore-control service model (https://github.com/ansible-collections/amazon.ai/pull/113).
