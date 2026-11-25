@@ -1,5 +1,5 @@
 bugfixes:
   - >-
-    sagemaker_domain - Require botocore >= 1.43.13 when home_efs_file_system_creation is supplied, because
+    sagemaker_domain - Require botocore >= 1.43.13 when ``home_efs_file_system_creation`` is supplied, because
     the SageMaker CreateDomain model gained the HomeEfsFileSystemCreation request parameter in that release
     (https://github.com/ansible-collections/amazon.ai/pull/113).
