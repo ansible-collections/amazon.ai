@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -178,24 +177,22 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from typing import Any
-from typing import Dict
+from typing import Any, Dict
 
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import ensure_notification_channel
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_resource_collection
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import remove_notification_channel
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_resource_collection
-from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_tags
-
-from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
-
+from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict, snake_dict_to_camel_dict
+from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import (
+    ensure_notification_channel,
+    get_resource_collection,
+    remove_notification_channel,
+    update_resource_collection,
+    update_tags,
+)
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, Any]:
+def process_resource_collection(client, module: AnsibleAWSModule) -> dict[str, Any]:
     """
     Processes adding or removing CloudFormation stacks and tags in a DevOps Guru resource collection.
 
@@ -216,7 +213,7 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
             - "msg" (str): Informational message about the operation.
     """
     state = module.params.get("state")
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
 
     resource_collection = get_resource_collection(client, module)
 
@@ -224,7 +221,7 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, A
     existing_tags = resource_collection.get("Tags", [])
     stack_names = module.params.get("cloudformation_stack_names")
     tags = module.params.get("tags")
-    result: Dict[str, Any] = {"changed": False}
+    result: dict[str, Any] = {"changed": False}
 
     # If no resource collection exists at all, treat as initial creation
     if not existing_cloud_stacks and not existing_tags and (stack_names or tags):

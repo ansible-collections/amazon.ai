@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -106,14 +105,11 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 import uuid
-from typing import Any
-from typing import Dict
-from typing import Optional
+from typing import Any, Dict, Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
@@ -141,7 +137,7 @@ def main():
         collection_name="amazon.ai",
     )
 
-    session_id: Optional[str] = module.params["session_id"]
+    session_id: str | None = module.params["session_id"]
     if session_id is None:
         session_id = str(uuid.uuid4())
 
@@ -150,14 +146,14 @@ def main():
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS Bedrock Agent Runtime.")
 
-    result: Dict[str, Any] = dict(changed=True, session_id=session_id, raw_api_response=[], response_text="")
+    result: dict[str, Any] = dict(changed=True, session_id=session_id, raw_api_response=[], response_text="")
     completion: str = ""
 
     try:
         if module.check_mode:
             module.exit_json(msg="Check mode: Would have invoked the agent.", **camel_dict_to_snake_dict(result))
         else:
-            params: Dict[str, Any] = {
+            params: dict[str, Any] = {
                 "agentId": module.params["agent_id"],
                 "agentAliasId": module.params["agent_alias_id"],
                 "sessionId": session_id,
@@ -168,12 +164,12 @@ def main():
             if module.params.get("session_state"):
                 params["sessionState"] = module.params["session_state"]
 
-            response: Dict[str, Any] = client.invoke_agent(aws_retry=True, **params)
+            response: dict[str, Any] = client.invoke_agent(aws_retry=True, **params)
             for event in response.get("completion", []):
                 result["raw_api_response"].append(event)
 
                 # Extract the completion text from the chunk event
-                chunk: Optional[Dict[str, Any]] = event.get("chunk")
+                chunk: dict[str, Any] | None = event.get("chunk")
                 if chunk and chunk.get("bytes"):
                     completion += chunk["bytes"].decode()
 

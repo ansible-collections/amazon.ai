@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -263,21 +262,18 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import update_agent
+from typing import Any, Dict, List, Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
+    create_agent,
+    delete_agent,
+    find_agent,
+    get_agent,
+    update_agent,
+)
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
@@ -347,9 +343,9 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     changed: bool = False
-    result: Dict[str, Any] = dict(agent={})
-    agents: List[Dict[str, Any]] = find_agent(client, module)
-    existing_agent: Optional[Dict[str, Any]] = agents[0] if agents else None
+    result: dict[str, Any] = dict(agent={})
+    agents: list[dict[str, Any]] = find_agent(client, module)
+    existing_agent: dict[str, Any] | None = agents[0] if agents else None
 
     try:
         if state == "present":

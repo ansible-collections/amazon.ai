@@ -1,10 +1,7 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
@@ -15,14 +12,14 @@ except ImportError:
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def list_tags(client, resource_arn: str) -> Dict[str, str]:
+def list_tags(client, resource_arn: str) -> dict[str, str]:
     paginator = client.get_paginator("list_tags")
     tags = paginator.paginate(ResourceArn=resource_arn).build_full_result()["Tags"]
     return {t["Key"]: t["Value"] for t in tags}
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def describe_code_repository(client, repository_name: str) -> Optional[Dict[str, Any]]:
+def describe_code_repository(client, repository_name: str) -> dict[str, Any] | None:
     """
     Retrieve details for a specific SageMaker Code Repository.
 
@@ -45,7 +42,7 @@ def describe_code_repository(client, repository_name: str) -> Optional[Dict[str,
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def list_code_repositories(client, **params: Any) -> List[Dict[str, Any]]:
+def list_code_repositories(client, **params: Any) -> list[dict[str, Any]]:
     """
     Retrieve a list of SageMaker Code Repositories using pagination.
 

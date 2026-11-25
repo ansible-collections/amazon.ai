@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -131,8 +130,7 @@ raw_response:
 
 
 import json
-from typing import Any
-from typing import Dict
+from typing import Any, Dict
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -141,14 +139,13 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.utils import encode_body
-
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def build_optional_params(module: AnsibleAWSModule) -> Dict[str, Any]:
+def build_optional_params(module: AnsibleAWSModule) -> dict[str, Any]:
     """
     Build optional API parameters from module inputs.
 
@@ -158,7 +155,7 @@ def build_optional_params(module: AnsibleAWSModule) -> Dict[str, Any]:
     Returns:
         Dictionary of optional parameters.
     """
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     if module.params["trace"] != "DISABLED":
         params["trace"] = module.params["trace"]
 

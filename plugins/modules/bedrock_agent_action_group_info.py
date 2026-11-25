@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -110,19 +109,16 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import list_agent_action_groups
+from typing import Any, Dict, List, Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
+    find_agent,
+    get_agent_action_group,
+    list_agent_action_groups,
+)
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
@@ -150,46 +146,46 @@ def main():
     )
 
     agent_name: str = module.params["agent_name"]
-    agent_version: Optional[str] = module.params["agent_version"]
-    action_group_name: Optional[str] = module.params.get("action_group_name")
+    agent_version: str | None = module.params["agent_version"]
+    action_group_name: str | None = module.params.get("action_group_name")
 
     try:
         client = module.client("bedrock-agent", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result: List[Dict[str, Any]] = []
-    action_groups_details: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
+    action_groups_details: list[dict[str, Any]] = []
 
     try:
         # Find the agent ID from the provided name
-        agents_list: List[Dict[str, Any]] = find_agent(client, module)
-        agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
+        agents_list: list[dict[str, Any]] = find_agent(client, module)
+        agent: dict[str, Any] | None = agents_list[0] if agents_list else None
         if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
         agent_id: str = agent.get("agentId")
 
         if action_group_name:
             # Find a specific action group by name
-            action_groups_summaries: List[Dict[str, Any]] = list_agent_action_groups(
+            action_groups_summaries: list[dict[str, Any]] = list_agent_action_groups(
                 client, agentId=agent_id, agentVersion=agent_version
             )
-            found_id: Optional[str] = None
+            found_id: str | None = None
             for summary in action_groups_summaries:
                 if summary.get("actionGroupName") == action_group_name:
                     found_id = summary.get("actionGroupId")
                     break
 
             if found_id:
-                details: Dict[str, Any] = get_agent_action_group(client, agent_id, agent_version, found_id)
+                details: dict[str, Any] = get_agent_action_group(client, agent_id, agent_version, found_id)
                 result.append(details)
         else:
             # List all action groups and get full details for each
-            action_groups_summaries: List[Dict[str, Any]] = list_agent_action_groups(
+            action_groups_summaries: list[dict[str, Any]] = list_agent_action_groups(
                 client, agentId=agent_id, agentVersion=agent_version
             )
             for summary in action_groups_summaries:
-                details: Dict[str, Any] = get_agent_action_group(
+                details: dict[str, Any] = get_agent_action_group(
                     client, agent_id, agent_version, summary.get("actionGroupId")
                 )
                 action_groups_details.append(details)

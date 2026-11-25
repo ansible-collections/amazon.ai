@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -157,22 +156,20 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 from ast import List
-from typing import Any
-from typing import Dict
-from typing import Optional
-
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import create_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import delete_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import find_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_agent_action_group
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import prepare_agent
-from ansible_collections.amazon.ai.plugins.module_utils.bedrock import update_action_group
+from typing import Any, Dict, Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
+    create_action_group,
+    delete_action_group,
+    find_action_group,
+    find_agent,
+    get_agent_action_group,
+    prepare_agent,
+    update_action_group,
+)
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
@@ -214,22 +211,22 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     # Get the agent ID from the provided name
-    agents_list: List[Dict[str, Any]] = find_agent(client, module)
-    agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
+    agents_list: List[dict[str, Any]] = find_agent(client, module)
+    agent: dict[str, Any] | None = agents_list[0] if agents_list else None
     if not agent:
         module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
     agent_id: str = agent.get("agentId")
 
     state: str = module.params["state"]
     action_group_name: str = module.params["action_group_name"]
-    agent_version: Optional[str] = module.params["agent_version"]
+    agent_version: str | None = module.params["agent_version"]
 
     changed: bool = False
-    action_group_info: Optional[Dict[str, Any]] = None
-    result: Dict[str, Any] = {"action_group": {}}
+    action_group_info: dict[str, Any] | None = None
+    result: dict[str, Any] = {"action_group": {}}
 
     try:
-        found_action_group: Optional[Dict[str, Any]] = find_action_group(
+        found_action_group: dict[str, Any] | None = find_action_group(
             client, agent_id, action_group_name, agent_version
         )
 

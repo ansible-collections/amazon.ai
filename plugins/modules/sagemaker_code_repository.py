@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -150,35 +149,29 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from typing import Any
-from typing import Dict
-from typing import Optional
-from typing import Tuple
-
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_code_repository
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_tags
-from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
+from typing import Any, Dict, Optional, Tuple
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_code_repository, list_tags
+from ansible_collections.amazon.ai.plugins.module_utils.utils import normalize_url
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def create_code_repository(client, module: AnsibleAWSModule) -> Tuple[bool, str]:
+def create_code_repository(client, module: AnsibleAWSModule) -> tuple[bool, str]:
     repository_name = module.params["name"]
 
     if module.check_mode:
         return True, f"Check mode: would have created code repository {repository_name}."
 
-    git_config: Dict[str, Any] = {"RepositoryUrl": module.params["git_config"]["repository_url"]}
+    git_config: dict[str, Any] = {"RepositoryUrl": module.params["git_config"]["repository_url"]}
     if module.params["git_config"].get("branch"):
         git_config["Branch"] = module.params["git_config"]["branch"]
     if module.params["git_config"].get("secret_arn"):
         git_config["SecretArn"] = module.params["git_config"]["secret_arn"]
 
-    params: Dict[str, Any] = {
+    params: dict[str, Any] = {
         "CodeRepositoryName": repository_name,
         "GitConfig": git_config,
     }
@@ -190,7 +183,7 @@ def create_code_repository(client, module: AnsibleAWSModule) -> Tuple[bool, str]
     return True, f"Code repository {repository_name} created successfully."
 
 
-def update_code_repository(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> Tuple[bool, str]:
+def update_code_repository(client, module: AnsibleAWSModule, existing: dict[str, Any]) -> tuple[bool, str]:
     repository_name = module.params["name"]
     existing_git_config = existing["GitConfig"]
     new_git_config = module.params["git_config"]
@@ -218,7 +211,7 @@ def update_code_repository(client, module: AnsibleAWSModule, existing: Dict[str,
     return True, f"Code repository {repository_name} updated successfully."
 
 
-def delete_code_repository(client, module: AnsibleAWSModule, existing: Dict[str, Any]) -> Tuple[bool, str]:
+def delete_code_repository(client, module: AnsibleAWSModule, existing: dict[str, Any]) -> tuple[bool, str]:
     repository_name = existing["CodeRepositoryName"]
 
     if module.check_mode:
@@ -257,8 +250,8 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     changed: bool = False
-    result: Dict[str, Any] = dict(code_repository={})
-    existing: Optional[Dict[str, Any]] = describe_code_repository(client, module.params["name"])
+    result: dict[str, Any] = dict(code_repository={})
+    existing: dict[str, Any] | None = describe_code_repository(client, module.params["name"])
 
     try:
         if state == "present":

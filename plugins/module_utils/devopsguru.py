@@ -1,25 +1,19 @@
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-from typing import Tuple
-from typing import Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
-
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
 def update_tags(
-    current_tags: List[Dict[str, Any]],
-    new_tags: List[Dict[str, Any]],
+    current_tags: list[dict[str, Any]],
+    new_tags: list[dict[str, Any]],
     state: str = "present",
-) -> Tuple[bool, List[Dict[str, Any]]]:
+) -> tuple[bool, list[dict[str, Any]]]:
     """
     Updates a list of tags by adding, updating, or removing tags based on the state.
     Args:
@@ -79,7 +73,7 @@ def update_tags(
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def get_resource_collection(client, module) -> Dict[str, Any]:
+def get_resource_collection(client, module) -> dict[str, Any]:
     """
     Retrieves an AWS resource collection using CloudFormation stack names or tags.
     Args:
@@ -120,7 +114,7 @@ def update_resource_collection(client, module: AnsibleAWSModule, **params) -> st
         return "Resource collection updated successfully."
 
 
-def add_notification_channel(client, module: AnsibleAWSModule, config: Dict[str, Any]) -> Tuple[Optional[str], str]:
+def add_notification_channel(client, module: AnsibleAWSModule, config: dict[str, Any]) -> tuple[str | None, str]:
     """
     Adds a notification channel to a service or simulates it in check mode.
     Args:
@@ -133,12 +127,12 @@ def add_notification_channel(client, module: AnsibleAWSModule, config: Dict[str,
     if module.check_mode:
         return None, "Check mode: would have added notification channel."
     else:
-        response = client.add_notification_channel(**{"Config": config})
+        response = client.add_notification_channel(Config=config)
         return response.get("Id"), "Notification channel added successfully."
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def get_resource_collection_specified_type(client, resource_collection_type: str) -> Dict[str, Any]:
+def get_resource_collection_specified_type(client, resource_collection_type: str) -> dict[str, Any]:
     """
     Retrieves a resource collection of a specified type.
     Args:
@@ -157,7 +151,7 @@ def get_resource_collection_specified_type(client, resource_collection_type: str
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def fetch_data(client, api_call: str, **params: Dict[str, Any]) -> Dict[str, Any]:
+def fetch_data(client, api_call: str, **params: dict[str, Any]) -> dict[str, Any]:
     """
     Generic function to fetch data from AWS using paginators.
     Args:
@@ -171,7 +165,7 @@ def fetch_data(client, api_call: str, **params: Dict[str, Any]) -> Dict[str, Any
     return paginator.paginate(**params).build_full_result()
 
 
-def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[str, Any]:
+def describe_insight(client, insight_id: str, account_id: str = None) -> dict[str, Any]:
     """
     Retrieves the details of a specific DevOpsGuru Insight.
     Args:
@@ -181,14 +175,14 @@ def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[st
     Returns:
         dict: Insight details returned from the AWS API.
     """
-    params: Dict[str, Any] = {"Id": insight_id}
+    params: dict[str, Any] = {"Id": insight_id}
     if account_id:
         params["AccountId"] = account_id
 
     return client.describe_insight(**params)
 
 
-def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
+def get_insight_type(data: dict[str, Any]) -> str | None:
     """
     Determines the type of insight from the provided data dictionary.
     Args:
@@ -211,7 +205,7 @@ def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
 
 
 @AWSRetry.jittered_backoff(retries=10)
-def list_notification_channels(client) -> List[Dict[str, Any]]:
+def list_notification_channels(client) -> list[dict[str, Any]]:
     """
     Retrieve a list of DevOpsGuru Notification Channels using pagination.
     Args:
@@ -223,7 +217,7 @@ def list_notification_channels(client) -> List[Dict[str, Any]]:
     return paginator.paginate().build_full_result()["Channels"]
 
 
-def remove_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool, Optional[str], str]:
+def remove_notification_channel(client, module: AnsibleAWSModule) -> tuple[bool, str | None, str]:
     notification_channel_id = module.params.get("notification_channel_id")
     existing_channels = list_notification_channels(client)
 
@@ -241,7 +235,7 @@ def remove_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool,
         return False, None, msg
 
 
-def ensure_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool, Optional[str], str]:
+def ensure_notification_channel(client, module: AnsibleAWSModule) -> tuple[bool, str | None, str]:
     """
     Ensures the notification channel exists and matches the desired config (idempotent).
     Returns:
@@ -254,7 +248,7 @@ def ensure_notification_channel(client, module: AnsibleAWSModule) -> Tuple[bool,
     # Normalize both sides for comparison
     desired = snake_dict_to_camel_dict(desired_config, capitalize_first=True)
 
-    def normalize_channel(channel: Dict[str, Any]) -> Dict[str, Any]:
+    def normalize_channel(channel: dict[str, Any]) -> dict[str, Any]:
         """Simplify channel for equality checks."""
         config = channel.get("Config", {})
         return {

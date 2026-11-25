@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -106,27 +105,24 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any
-from typing import Dict
-from typing import List
-from typing import Optional
-
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import describe_code_repository
-from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import list_code_repositories
+from typing import Any, Dict, List, Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
-
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
+from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import (
+    describe_code_repository,
+    list_code_repositories,
+)
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def find_code_repositories(client, repository_name: Optional[str] = None, **kwargs) -> List[Dict[str, Any]]:
+def find_code_repositories(client, repository_name: str | None = None, **kwargs) -> list[dict[str, Any]]:
     if repository_name:
         repo = describe_code_repository(client, repository_name)
         return [repo] if repo else []
 
-    params: Dict[str, Any] = {}
+    params: dict[str, Any] = {}
     name_contains = kwargs.get("name_contains")
     if name_contains:
         params["NameContains"] = name_contains
@@ -163,7 +159,7 @@ def main():
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result: List[Dict[str, Any]] = []
+    result: list[dict[str, Any]] = []
 
     try:
         result = find_code_repositories(
