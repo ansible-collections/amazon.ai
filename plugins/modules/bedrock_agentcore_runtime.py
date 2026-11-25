@@ -477,7 +477,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import (
-    validate_agentcore_runtime_option_versions,
+    validate_agentcore_botocore_option,
 )
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
@@ -594,7 +594,17 @@ def main() -> None:
 
     validate_agentcore_botocore(module)
     if module.params["state"] == "present":
-        validate_agentcore_runtime_option_versions(module)
+        validate_agentcore_botocore_option(module, "tags", "1.40.35")
+        if (
+            module.params.get("authorizer_discovery_url")
+            and module.params.get("authorizer_allowed_scopes") is not None
+        ):
+            validate_agentcore_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
+        validate_agentcore_botocore_option(module, "session_storage", "1.42.75")
+        validate_agentcore_botocore_option(module, "s3_files_access_point", "1.43.90")
+        validate_agentcore_botocore_option(module, "efs_access_point", "1.43.90")
+        validate_agentcore_botocore_option(module, "capacity_provider_volume", "1.43.90")
+        validate_agentcore_botocore_option(module, "capacity_provider_arn", "1.43.90")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())
