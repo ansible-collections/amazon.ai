@@ -38,6 +38,19 @@ class AgentRuntimeEndpointStatus(str, Enum):
     DELETED = "DELETED"
 
 
+AGENTCORE_MINIMUM_BOTOCORE_VERSION = "1.39.7"
+
+
+def validate_agentcore_botocore(module: AnsibleAWSModule) -> None:
+    if not module.botocore_at_least(AGENTCORE_MINIMUM_BOTOCORE_VERSION):
+        module.fail_json(
+            msg=(
+                "Bedrock AgentCore requires botocore >= "
+                f"{AGENTCORE_MINIMUM_BOTOCORE_VERSION} to provide the bedrock-agentcore-control service model."
+            )
+        )
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def list_agent_runtimes(client) -> List[Dict[str, Any]]:
     """

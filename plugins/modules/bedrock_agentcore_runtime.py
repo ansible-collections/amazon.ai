@@ -234,7 +234,7 @@ notes:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3
+    - amazon.ai.boto3_agentcore
 """
 
 EXAMPLES = r"""
@@ -465,6 +465,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_id
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -577,6 +578,8 @@ def main() -> None:
         module.fail_json(
             msg="Exactly one of container_configuration or code_configuration is required when state=present."
         )
+
+    validate_agentcore_botocore(module)
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())
