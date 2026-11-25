@@ -1,5 +1,4 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # Copyright: Contributors to the Ansible project
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
@@ -186,12 +185,12 @@ from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import get_re
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import remove_notification_channel
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_resource_collection
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import update_tags
+from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
-from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
