@@ -177,7 +177,10 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
@@ -235,17 +238,17 @@ def main():
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
     changed: bool = False
-    result: dict[str, Any] = {"agent_alias": {}}
+    result: Dict[str, Any] = {"agent_alias": {}}
 
     try:
         # Get the agent ID from the provided name
-        agents_list: list[dict[str, Any]] = find_agent(client, module)
-        agent: dict[str, Any] | None = agents_list[0] if agents_list else None
+        agents_list: List[Dict[str, Any]] = find_agent(client, module)
+        agent: Optional[Dict[str, Any]] = agents_list[0] if agents_list else None
         if not agent:
             module.fail_json(msg=f"Agent with name '{agent_name}' not found.")
         agent_id: str = agent.get("agentId")
 
-        found_alias: dict[str, Any] | None = find_alias(client, agent_id, alias_name)
+        found_alias: Optional[Dict[str, Any]] = find_alias(client, agent_id, alias_name)
 
         if state == "present":
             if found_alias is None:

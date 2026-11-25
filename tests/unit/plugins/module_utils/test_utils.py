@@ -26,7 +26,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import (
         ("hello", b"hello"),
     ],
 )
-def test_encode_body_valid(input_value: dict | list | str, expected_bytes: bytes):
+def test_encode_body_valid(input_value: Union[dict, list, str], expected_bytes: bytes):
     assert encode_body(input_value) == expected_bytes
 
 

@@ -177,7 +177,8 @@ except ImportError:
     pass  # Handled by AnsibleAWSModule
 
 
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict, snake_dict_to_camel_dict
 from ansible_collections.amazon.ai.plugins.module_utils.devopsguru import (
@@ -192,7 +193,7 @@ from ansible_collections.amazon.aws.plugins.module_utils.exceptions import Ansib
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def process_resource_collection(client, module: AnsibleAWSModule) -> dict[str, Any]:
+def process_resource_collection(client, module: AnsibleAWSModule) -> Dict[str, Any]:
     """
     Processes adding or removing CloudFormation stacks and tags in a DevOps Guru resource collection.
 
@@ -213,7 +214,7 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> dict[str, A
             - "msg" (str): Informational message about the operation.
     """
     state = module.params.get("state")
-    params: dict[str, Any] = {}
+    params: Dict[str, Any] = {}
 
     resource_collection = get_resource_collection(client, module)
 
@@ -221,7 +222,7 @@ def process_resource_collection(client, module: AnsibleAWSModule) -> dict[str, A
     existing_tags = resource_collection.get("Tags", [])
     stack_names = module.params.get("cloudformation_stack_names")
     tags = module.params.get("tags")
-    result: dict[str, Any] = {"changed": False}
+    result: Dict[str, Any] = {"changed": False}
 
     # If no resource collection exists at all, treat as initial creation
     if not existing_cloud_stacks and not existing_tags and (stack_names or tags):

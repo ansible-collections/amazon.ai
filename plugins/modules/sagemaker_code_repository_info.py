@@ -105,7 +105,10 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
@@ -117,12 +120,12 @@ from ansible_collections.amazon.aws.plugins.module_utils.exceptions import Ansib
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def find_code_repositories(client, repository_name: str | None = None, **kwargs) -> list[dict[str, Any]]:
+def find_code_repositories(client, repository_name: Optional[str] = None, **kwargs) -> List[Dict[str, Any]]:
     if repository_name:
         repo = describe_code_repository(client, repository_name)
         return [repo] if repo else []
 
-    params: dict[str, Any] = {}
+    params: Dict[str, Any] = {}
     name_contains = kwargs.get("name_contains")
     if name_contains:
         params["NameContains"] = name_contains
@@ -159,7 +162,7 @@ def main():
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result: list[dict[str, Any]] = []
+    result: List[Dict[str, Any]] = []
 
     try:
         result = find_code_repositories(

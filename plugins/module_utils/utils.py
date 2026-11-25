@@ -4,11 +4,14 @@
 
 import json
 from datetime import date, datetime
-from typing import Any, Dict, List, Union
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Union
 from urllib.parse import urlparse, urlunparse
 
 
-def encode_body(body: dict | list | str) -> bytes:
+def encode_body(body: Union[dict, list, str]) -> bytes:
     """
     Convert the body into bytes for invoke_model.
 
@@ -26,7 +29,7 @@ def encode_body(body: dict | list | str) -> bytes:
         raise TypeError("body must be a dict, list, or string")
 
 
-def merge_data(target: dict[str, Any] | list[dict[str, Any]], source: dict[str, Any]) -> None:
+def merge_data(target: Union[Dict[str, Any], List[Dict[str, Any]]], source: Dict[str, Any]) -> None:
     """Merges data into a dictionary or list of dictionaries."""
     if isinstance(target, dict):
         target.update(source)
@@ -47,7 +50,7 @@ def normalize_url(url: str) -> str:
     )
 
 
-def convert_time_ranges(status_filter: dict[str, Any]) -> dict[str, Any]:
+def convert_time_ranges(status_filter: Dict[str, Any]) -> Dict[str, Any]:
     """
     Convert FromTime/ToTime fields in nested AWS DevOps Guru time range filters into datetime objects.
     Supports both CamelCase-style (`StartTimeRange`, `EndTimeRange`) and snake_case-style

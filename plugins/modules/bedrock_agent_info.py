@@ -158,7 +158,10 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any, Dict, List, Optional
+from typing import Any
+from typing import Dict
+from typing import List
+from typing import Optional
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import (
@@ -171,7 +174,7 @@ from ansible_collections.amazon.aws.plugins.module_utils.exceptions import Ansib
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def _add_related_info(client, module: AnsibleAWSModule, agent_info: dict[str, Any]) -> dict[str, Any]:
+def _add_related_info(client, module: AnsibleAWSModule, agent_info: Dict[str, Any]) -> Dict[str, Any]:
     """
     Helper function to add action groups and aliases to an agent's info.
 
@@ -183,9 +186,9 @@ def _add_related_info(client, module: AnsibleAWSModule, agent_info: dict[str, An
     Returns:
         The updated agent_info dictionary.
     """
-    list_action_groups: bool | None = module.params.get("list_action_groups")
-    list_aliases: bool | None = module.params.get("list_aliases")
-    agent_version: str | None = module.params.get("agent_version")
+    list_action_groups: Optional[bool] = module.params.get("list_action_groups")
+    list_aliases: Optional[bool] = module.params.get("list_aliases")
+    agent_version: Optional[str] = module.params.get("agent_version")
 
     agent_id: str = agent_info.get("agentId")
 
@@ -223,17 +226,17 @@ def main():
         collection_name="amazon.ai",
     )
 
-    agent_name: str | None = module.params.get("agent_name")
+    agent_name: Optional[str] = module.params.get("agent_name")
 
     try:
         client = module.client("bedrock-agent", retry_decorator=AWSRetry.jittered_backoff())
     except (botocore.exceptions.ClientError, botocore.exceptions.BotoCoreError) as e:
         module.fail_json_aws(e, msg="Failed to connect to AWS.")
 
-    result: list[dict[str, Any]] = []
+    result: List[Dict[str, Any]] = []
 
     try:
-        agents: list[dict[str, Any]] = find_agent(client, module)
+        agents: List[Dict[str, Any]] = find_agent(client, module)
         # Filter by agent_name if provided
         if agent_name:
             filtered_agents = [a for a in agents if a.get("agentName") == agent_name]

@@ -130,7 +130,8 @@ raw_response:
 
 
 import json
-from typing import Any, Dict
+from typing import Any
+from typing import Dict
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
 
@@ -145,7 +146,7 @@ from ansible_collections.amazon.aws.plugins.module_utils.exceptions import Ansib
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
 
 
-def build_optional_params(module: AnsibleAWSModule) -> dict[str, Any]:
+def build_optional_params(module: AnsibleAWSModule) -> Dict[str, Any]:
     """
     Build optional API parameters from module inputs.
 
@@ -155,7 +156,7 @@ def build_optional_params(module: AnsibleAWSModule) -> dict[str, Any]:
     Returns:
         Dictionary of optional parameters.
     """
-    params: dict[str, Any] = {}
+    params: Dict[str, Any] = {}
     if module.params["trace"] != "DISABLED":
         params["trace"] = module.params["trace"]
 

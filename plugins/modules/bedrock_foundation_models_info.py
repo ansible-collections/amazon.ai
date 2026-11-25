@@ -109,7 +109,9 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from typing import Any, Dict, List
+from typing import Any
+from typing import Dict
+from typing import List
 
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock import get_model_details, list_models_with_filters
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
@@ -133,7 +135,7 @@ def main():
         supports_check_mode=True,
     )
 
-    result: list[dict[str, Any]] = []
+    result: List[Dict[str, Any]] = []
 
     try:
         client = module.client("bedrock", retry_decorator=AWSRetry.jittered_backoff())
