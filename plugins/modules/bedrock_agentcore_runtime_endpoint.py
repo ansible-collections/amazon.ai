@@ -52,6 +52,7 @@ options:
         description:
             - Tags to attach to the endpoint.
             - Tags are applied only when an endpoint is created.
+            - Requires botocore >= 1.40.35 when supplied.
         type: dict
         aliases: ["resource_tags"]
     wait:
@@ -172,6 +173,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_quick_summary_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import wait_for_agent_runtime_endpoint_status
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
@@ -306,6 +308,7 @@ def main() -> None:
         supports_check_mode=True,
     )
     validate_agentcore_botocore(module)
+    validate_agentcore_botocore_option(module, "tags", "1.40.35")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

@@ -15,8 +15,8 @@ description:
     - AgentCore runtime tags are applied only when a runtime is created.
 requirements:
     - python >= 3.9
-    - boto3 >= 1.39.7
-    - botocore >= 1.39.7
+    - boto3 >= 1.42.75
+    - botocore >= 1.42.75
 options:
     state:
         description:
@@ -147,6 +147,7 @@ options:
             - The ARN of the capacity provider for the runtime.
             - Run the AgentCore Runtime on the Instances compute type.
             - Provisions Amazon Web Services managed compute in your account.
+            - Requires botocore >= 1.43.90 when supplied.
         type: str
     session_storage:
         description:
@@ -165,6 +166,7 @@ options:
         description:
             - Configuration for an Amazon S3 Files access point to mount into the AgentCore Runtime.
             - Cannot be set if O(session_storage), O(efs_access_point) or O(capacity_provider_volume) is specified.
+            - Requires botocore >= 1.43.90.
         type: dict
         suboptions:
             access_point_arn:
@@ -182,6 +184,7 @@ options:
         description:
             - Configuration for an Amazon EFS access point to mount into the AgentCore Runtime.
             - Cannot be set if O(session_storage), O(s3_files_access_point) or O(capacity_provider_volume) is specified.
+            - Requires botocore >= 1.43.90.
         type: dict
         suboptions:
             access_point_arn:
@@ -199,6 +202,7 @@ options:
         description:
             - Configuration for a capacity provider volume to mount into the AgentCore Runtime.
             - Cannot be set if O(session_storage), O(s3_files_access_point), or O(efs_access_point) is specified.
+            - Requires botocore >= 1.43.90.
         type: dict
         suboptions:
             volume_name:
@@ -469,6 +473,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import validate_agentcore_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible_collections.amazon.aws.plugins.module_utils.exceptions import AnsibleAWSError
@@ -582,7 +587,14 @@ def main() -> None:
             msg="Exactly one of container_configuration or code_configuration is required when state=present."
         )
 
-    validate_agentcore_botocore(module)
+    validate_agentcore_botocore(module, minimum_version="1.42.75")
+    for option in (
+        "capacity_provider_arn",
+        "s3_files_access_point",
+        "efs_access_point",
+        "capacity_provider_volume",
+    ):
+        validate_agentcore_botocore_option(module, option, "1.43.90")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())
