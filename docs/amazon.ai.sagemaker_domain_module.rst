@@ -259,6 +259,7 @@ Parameters
                 <td>
                         <div>Whether to create a home Amazon EFS file system for the Domain.</div>
                         <div>AWS does not support changing V(Enabled) to V(Disabled).</div>
+                        <div>Requires botocore &gt;= 1.43.13.</div>
                 </td>
             </tr>
             <tr>

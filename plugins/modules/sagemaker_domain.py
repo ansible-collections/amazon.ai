@@ -70,6 +70,7 @@ options:
         description:
             - Whether to create a home Amazon EFS file system for the Domain.
             - AWS does not support changing V(Enabled) to V(Disabled).
+            - Requires botocore >= 1.43.13.
         type: str
         choices: [Enabled, Disabled]
     kms_key_id:
@@ -526,6 +527,10 @@ def main() -> None:
         ],
         required_together=[("vpc_id", "subnet_ids")],
     )
+    if module.params["state"] == "present" and module.params.get("home_efs_file_system_creation") is not None:
+        if not module.botocore_at_least("1.43.13"):
+            module.fail_json(msg="The home_efs_file_system_creation option requires botocore >= 1.43.13.")
+
     if (
         module.params["state"] == "present"
         and module.params["app_network_access_type"] == "VpcOnly"
