@@ -19,7 +19,6 @@ Synopsis
 --------
 - Create and delete Amazon Nova Act workflow definitions.
 - Workflow definition names and supplied configuration are immutable after creation.
-- Nova Act requires botocore >= 1.42.1 to provide the service model.
 - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 
 
@@ -29,8 +28,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.38.0
-- botocore >= 1.38.0
+- boto3 >= 1.42.1
+- botocore >= 1.42.1
 
 
 Parameters
@@ -146,6 +145,7 @@ Parameters
                 <td>
                         <div>A description for the workflow definition.</div>
                         <div>This value is create-only.</div>
+                        <div>An empty string means no description.</div>
                 </td>
             </tr>
             <tr>
@@ -477,8 +477,8 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                 <td>always</td>
                 <td>
                             <div>The workflow definition returned by GetWorkflowDefinition.</div>
-                            <div>When O(state=absent) and the workflow definition existed, its last known state with RV(workflow_definition.status) taken from the delete response.</div>
-                            <div>An empty dict when O(state=absent) and the workflow definition did not exist, or in check mode when creating.</div>
+                            <div>If a newly created workflow definition is not yet readable, only the fields known from the create request and response are returned, and a warning is issued.</div>
+                            <div>An empty dict when O(state=absent), or in check mode when creating.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
                         <div style="font-size: smaller; color: blue; word-wrap: break-word; word-break: break-all;">{&#x27;name&#x27;: &#x27;sample-workflow&#x27;, &#x27;workflow_definition_name&#x27;: &#x27;sample-workflow&#x27;, &#x27;arn&#x27;: &#x27;arn:aws:nova-act:us-east-1:123456789012:workflow-definition/sample-workflow&#x27;, &#x27;workflow_definition_arn&#x27;: &#x27;arn:aws:nova-act:us-east-1:123456789012:workflow-definition/sample-workflow&#x27;, &#x27;created_at&#x27;: &#x27;2026-10-29T10:00:00+00:00&#x27;, &#x27;description&#x27;: &#x27;A sample Nova Act workflow&#x27;, &#x27;status&#x27;: &#x27;ACTIVE&#x27;}</div>

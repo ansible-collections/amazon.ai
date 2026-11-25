@@ -11,12 +11,11 @@ version_added: "2.1.0"
 author:
     - Jan Likar (@janlikar)
 description:
-    - Retrieve a single Amazon Nova Act workflow definition or list all workflow definition summaries.
-    - Named lookups return full configuration, while listing returns summaries without additional detail requests.
+    - Retrieve a single Amazon Nova Act workflow definition or list all workflow definitions.
+    - Named lookups and listings return the same full workflow definition details.
     - Every returned element contains both RV(workflow_definitions[].name) and RV(workflow_definitions[].workflow_definition_name),
       and both RV(workflow_definitions[].arn) and RV(workflow_definitions[].workflow_definition_arn), regardless of lookup mode.
     - A missing workflow definition returns an empty list.
-    - Nova Act requires botocore >= 1.42.1 to provide the service model.
     - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 attributes:
     check_mode:
@@ -30,7 +29,7 @@ options:
         description:
             - The name of the workflow definition to retrieve.
             - Must be 1 to 40 characters and contain only letters, numbers, underscores, or hyphens.
-            - When omitted, lists all workflow definition summaries across all pages.
+            - When omitted, lists all workflow definitions across all pages.
             - Mutually exclusive with O(sort_order).
         type: str
         aliases: ['name']
@@ -43,12 +42,15 @@ options:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.42.1
+    - botocore >= 1.42.1
 seealso:
     - module: amazon.ai.nova_act_workflow_definition
 notes:
-    - Named lookups require C(nova-act:GetWorkflowDefinition).
-    - Listing requires C(nova-act:ListWorkflowDefinitions).
+    - Requires C(nova-act:GetWorkflowDefinition).
+    - Listing additionally requires C(nova-act:ListWorkflowDefinitions), and makes one C(GetWorkflowDefinition) request per workflow definition.
 """
 
 EXAMPLES = r"""
@@ -56,10 +58,10 @@ EXAMPLES = r"""
   amazon.ai.nova_act_workflow_definition_info:
     workflow_definition_name: "sample-workflow"
 
-- name: List all Nova Act workflow definition summaries
+- name: List all Nova Act workflow definitions
   amazon.ai.nova_act_workflow_definition_info:
 
-- name: List summaries in descending service order
+- name: List workflow definitions in descending service order
   amazon.ai.nova_act_workflow_definition_info:
     sort_order: "Descending"
   register: workflow_definitions_info
@@ -72,7 +74,7 @@ EXAMPLES = r"""
 RETURN = r"""
 workflow_definitions:
     description:
-        - Workflow definitions or summaries returned by AWS.
+        - Workflow definitions returned by GetWorkflowDefinition.
         - An empty list is returned when no definitions match.
     returned: always
     type: list
@@ -117,12 +119,12 @@ workflow_definitions:
             sample: "ACTIVE"
         description:
             description: The description of the workflow definition.
-            returned: on named lookup when returned by AWS
+            returned: when the workflow definition has a description
             type: str
             sample: "A sample Nova Act workflow"
         export_config:
             description: The S3 export configuration for the workflow definition.
-            returned: on named lookup when returned by AWS
+            returned: when the workflow definition has an export configuration
             type: dict
             sample:
                 s3_bucket_name: "example-bucket"
@@ -150,7 +152,6 @@ try:
 except ImportError:
     pass  # Handled by AnsibleAWSModule
 
-from ansible_collections.amazon.ai.plugins.module_utils.nova_act import _validate_nova_act_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import list_workflow_definitions
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate_workflow_definition_name
@@ -169,7 +170,8 @@ def main() -> None:
         mutually_exclusive=[["workflow_definition_name", "sort_order"]],
         supports_check_mode=True,
     )
-    _validate_nova_act_botocore(module)
+    module.require_boto3_at_least("1.42.1", reason="to use the Nova Act API")
+    module.require_botocore_at_least("1.42.1", reason="to use the Nova Act API")
     name = module.params["workflow_definition_name"]
     validate_workflow_definition_name(module, name)
 

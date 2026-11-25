@@ -17,11 +17,10 @@ Version added: 2.1.0
 
 Synopsis
 --------
-- Retrieve a single Amazon Nova Act workflow definition or list all workflow definition summaries.
-- Named lookups return full configuration, while listing returns summaries without additional detail requests.
+- Retrieve a single Amazon Nova Act workflow definition or list all workflow definitions.
+- Named lookups and listings return the same full workflow definition details.
 - Every returned element contains both RV(workflow_definitions[].name) and RV(workflow_definitions[].workflow_definition_name), and both RV(workflow_definitions[].arn) and RV(workflow_definitions[].workflow_definition_arn), regardless of lookup mode.
 - A missing workflow definition returns an empty list.
-- Nova Act requires botocore >= 1.42.1 to provide the service model.
 - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 
 
@@ -31,8 +30,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.38.0
-- botocore >= 1.38.0
+- boto3 >= 1.42.1
+- botocore >= 1.42.1
 
 
 Parameters
@@ -266,7 +265,7 @@ Parameters
                 <td>
                         <div>The name of the workflow definition to retrieve.</div>
                         <div>Must be 1 to 40 characters and contain only letters, numbers, underscores, or hyphens.</div>
-                        <div>When omitted, lists all workflow definition summaries across all pages.</div>
+                        <div>When omitted, lists all workflow definitions across all pages.</div>
                         <div>Mutually exclusive with O(sort_order).</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: name</div>
                 </td>
@@ -279,8 +278,8 @@ Notes
 -----
 
 .. note::
-   - Named lookups require ``nova-act:GetWorkflowDefinition``.
-   - Listing requires ``nova-act:ListWorkflowDefinitions``.
+   - Requires ``nova-act:GetWorkflowDefinition``.
+   - Listing additionally requires ``nova-act:ListWorkflowDefinitions``, and makes one ``GetWorkflowDefinition`` request per workflow definition.
    - **Caution:** For modules, environment variables and configuration files are read from the Ansible 'host' context and not the 'controller' context. As such, files may need to be explicitly copied to the 'host'.  For lookup and connection plugins, environment variables and configuration files are read from the Ansible 'controller' context and not the 'host' context.
    - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials and other settings, such as the region, from its configuration files in the Ansible 'host' context (typically ``~/.aws/credentials``). See https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html for more information.
 
@@ -303,10 +302,10 @@ Examples
       amazon.ai.nova_act_workflow_definition_info:
         workflow_definition_name: "sample-workflow"
 
-    - name: List all Nova Act workflow definition summaries
+    - name: List all Nova Act workflow definitions
       amazon.ai.nova_act_workflow_definition_info:
 
-    - name: List summaries in descending service order
+    - name: List workflow definitions in descending service order
       amazon.ai.nova_act_workflow_definition_info:
         sort_order: "Descending"
       register: workflow_definitions_info
@@ -358,7 +357,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                 </td>
                 <td>always</td>
                 <td>
-                            <div>Workflow definitions or summaries returned by AWS.</div>
+                            <div>Workflow definitions returned by GetWorkflowDefinition.</div>
                             <div>An empty list is returned when no definitions match.</div>
                     <br/>
                         <div style="font-size: smaller"><b>Sample:</b></div>
@@ -411,7 +410,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">string</span>
                     </div>
                 </td>
-                <td>on named lookup when returned by AWS</td>
+                <td>when the workflow definition has a description</td>
                 <td>
                             <div>The description of the workflow definition.</div>
                     <br/>
@@ -429,7 +428,7 @@ Common return values are documented `here <https://docs.ansible.com/projects/ans
                       <span style="color: purple">dictionary</span>
                     </div>
                 </td>
-                <td>on named lookup when returned by AWS</td>
+                <td>when the workflow definition has an export configuration</td>
                 <td>
                             <div>The S3 export configuration for the workflow definition.</div>
                     <br/>

@@ -110,7 +110,7 @@
           - not definition_info_check.changed
           - definition_info_check.workflow_definitions == definition_info.workflow_definitions
 
-    - name: List workflow definition summaries
+    - name: List workflow definitions
       amazon.ai.nova_act_workflow_definition_info:
       register: definitions_info
 
@@ -130,8 +130,12 @@
             definitions_info.workflow_definitions
             | selectattr('name', 'equalto', workflow_definition_name)
             | map(attribute='arn') | list == [definition_create.workflow_definition.arn]
+          - >-
+            definitions_info.workflow_definitions
+            | selectattr('name', 'equalto', workflow_definition_name)
+            | map(attribute='description') | list == [workflow_definition_description]
 
-    - name: List workflow definition summaries in descending service order
+    - name: List workflow definitions in descending service order
       amazon.ai.nova_act_workflow_definition_info:
         sort_order: "Descending"
       register: definitions_sorted
@@ -239,7 +243,7 @@
       ansible.builtin.assert:
         that:
           - export_definition_delete.changed
-          - export_definition_delete.workflow_definition.arn == export_definition_create.workflow_definition.arn
+          - export_definition_delete.workflow_definition == {}
 
     - name: Check mode delete workflow definition
       amazon.ai.nova_act_workflow_definition:
@@ -253,6 +257,7 @@
         that:
           - definition_delete_check.changed
           - "definition_delete_check.msg is search('^Check mode: would have')"
+          - definition_delete_check.workflow_definition == {}
 
     - name: Delete workflow definition
       amazon.ai.nova_act_workflow_definition:
@@ -265,9 +270,7 @@
         that:
           - definition_delete.changed
           - "'deleted successfully' in definition_delete.msg"
-          - definition_delete.workflow_definition.name == workflow_definition_name
-          - definition_delete.workflow_definition.arn == definition_create.workflow_definition.arn
-          - definition_delete.workflow_definition.status in ['ACTIVE', 'DELETING']
+          - definition_delete.workflow_definition == {}
 
     - name: Re-run workflow definition deletion
       amazon.ai.nova_act_workflow_definition:

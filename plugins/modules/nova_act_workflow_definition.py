@@ -13,7 +13,6 @@ author:
 description:
     - Create and delete Amazon Nova Act workflow definitions.
     - Workflow definition names and supplied configuration are immutable after creation.
-    - Nova Act requires botocore >= 1.42.1 to provide the service model.
     - The Nova Act service is currently available only in the US East (N. Virginia) Region (V(us-east-1)).
 attributes:
     check_mode:
@@ -40,6 +39,7 @@ options:
         description:
             - A description for the workflow definition.
             - This value is create-only.
+            - An empty string means no description.
         type: str
     export_config:
         description:
@@ -78,7 +78,10 @@ options:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.42.1
+    - botocore >= 1.42.1
 seealso:
     - module: amazon.ai.nova_act_workflow_definition_info
 notes:
@@ -111,8 +114,9 @@ RETURN = r"""
 workflow_definition:
     description:
         - The workflow definition returned by GetWorkflowDefinition.
-        - When O(state=absent) and the workflow definition existed, its last known state with RV(workflow_definition.status) taken from the delete response.
-        - An empty dict when O(state=absent) and the workflow definition did not exist, or in check mode when creating.
+        - If a newly created workflow definition is not yet readable, only the fields known from the
+          create request and response are returned, and a warning is issued.
+        - An empty dict when O(state=absent), or in check mode when creating.
     returned: always
     type: dict
     sample:
@@ -195,7 +199,6 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
-from ansible_collections.amazon.ai.plugins.module_utils.nova_act import _validate_nova_act_botocore
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import create_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import delete_workflow_definition
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import get_workflow_definition
@@ -228,7 +231,7 @@ def _workflow_definition_status_check(
 
 def _definition_needs_replacement(module: AnsibleAWSModule, existing: Dict[str, Any]) -> bool:
     description = module.params.get("description")
-    if description is not None and description != existing.get("description"):
+    if description is not None and (description or None) != existing.get("description"):
         return True
 
     export_config = module.params.get("export_config")
@@ -257,7 +260,8 @@ def main() -> None:
         wait_timeout=dict(type="int", default=600),
     )
     module = AnsibleAWSModule(argument_spec=argument_spec, supports_check_mode=True)
-    _validate_nova_act_botocore(module)
+    module.require_boto3_at_least("1.42.1", reason="to use the Nova Act API")
+    module.require_botocore_at_least("1.42.1", reason="to use the Nova Act API")
     validate_workflow_definition_name(module, module.params["workflow_definition_name"])
     if module.params["state"] == "absent" and module.params["wait"] and module.params["wait_timeout"] < 1:
         module.fail_json(msg="wait_timeout must be greater than zero.")
@@ -286,16 +290,18 @@ def main() -> None:
                 changed = False
                 definition = existing
                 msg = f"Workflow definition '{name}' already exists and no changes are needed."
-        elif existing is None:
-            changed = False
-            definition = {}
-            msg = f"Workflow definition '{name}' does not exist."
-        elif existing.get("status") == "DELETING":
-            changed = False
-            definition = existing
-            msg = f"Workflow definition '{name}' is already being deleted."
-        else:
-            changed, definition, msg = delete_workflow_definition(client, module, existing)
+
+        elif module.params["state"] == "absent":
+            if existing is None:
+                changed = False
+                definition = {}
+                msg = f"Workflow definition '{name}' does not exist."
+            elif existing.get("status") == "DELETING":
+                changed = False
+                definition = {}
+                msg = f"Workflow definition '{name}' is already being deleted."
+            else:
+                changed, definition, msg = delete_workflow_definition(client, module)
 
         module.exit_json(changed=changed, msg=msg, workflow_definition=definition)
     except AnsibleAWSError as e:

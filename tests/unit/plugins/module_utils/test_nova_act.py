@@ -18,6 +18,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.nova_act import validate
 from ansible_collections.amazon.ai.plugins.module_utils.nova_act import wait_for_workflow_definition_deleted
 from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition
 from ansible_collections.amazon.ai.plugins.modules import nova_act_workflow_definition_info
+from ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition import _definition_needs_replacement
 from ansible_collections.amazon.ai.plugins.modules.nova_act_workflow_definition import _workflow_definition_status_check
 from botocore.exceptions import ClientError
 
@@ -76,18 +77,16 @@ def _get_response(**extra):
         ),
     ],
 )
-def test_nova_act_modules_require_supported_botocore_before_client(module_main, module_path):
+def test_nova_act_modules_require_supported_sdk_before_client(module_main, module_path):
     module = _module()
-    module.botocore_at_least.return_value = False
+    module.require_botocore_at_least.side_effect = FailJson
 
     with patch(f"{module_path}.AnsibleAWSModule", return_value=module):
         with pytest.raises(FailJson):
             module_main()
 
-    module.botocore_at_least.assert_called_once_with("1.42.1")
-    module.fail_json.assert_called_once_with(
-        msg="Nova Act requires botocore >= 1.42.1 to provide the nova-act service model."
-    )
+    module.require_boto3_at_least.assert_called_once_with("1.42.1", reason="to use the Nova Act API")
+    module.require_botocore_at_least.assert_called_once_with("1.42.1", reason="to use the Nova Act API")
     module.client.assert_not_called()
 
 
@@ -139,20 +138,25 @@ def test_get_workflow_definition_fails_on_other_errors():
     module.fail_json_aws.assert_called_once()
 
 
-def test_list_workflow_definitions_adds_aliases_and_passes_sort_order():
+def test_list_workflow_definitions_returns_full_definitions_and_passes_sort_order():
     client = MagicMock()
     paginator = client.get_paginator.return_value
     paginator.paginate.return_value.build_full_result.return_value = {
         "workflowDefinitionSummaries": [
             {"workflowDefinitionName": NAME, "workflowDefinitionArn": ARN, "status": "ACTIVE"},
+            {"workflowDefinitionName": "vanished", "workflowDefinitionArn": "arn:vanished", "status": "ACTIVE"},
         ]
     }
+    client.get_workflow_definition.side_effect = [
+        _get_response(description="desc"),
+        _client_error("ResourceNotFoundException", "GetWorkflowDefinition"),
+    ]
 
     result = list_workflow_definitions(client, _module(), sort_order="Descending")
 
-    assert result == [
-        {"name": NAME, "workflow_definition_name": NAME, "arn": ARN, "workflow_definition_arn": ARN, "status": "ACTIVE"}
-    ]
+    assert [definition["name"] for definition in result] == [NAME]
+    assert result[0]["description"] == "desc"
+    assert result[0]["workflow_definition_arn"] == ARN
     paginator.paginate.assert_called_once_with(sortOrder="Descending")
 
 
@@ -239,6 +243,66 @@ def test_create_converts_params_and_returns_definition():
     assert "created successfully" in msg
 
 
+def test_create_omits_empty_description():
+    client = MagicMock()
+    client.create_workflow_definition.return_value = {"status": "ACTIVE"}
+    client.get_workflow_definition.return_value = _get_response()
+
+    create_workflow_definition(client, _module(description=""))
+
+    client.create_workflow_definition.assert_called_once_with(name=NAME)
+
+
+@pytest.mark.parametrize(
+    "description,existing,expected",
+    [
+        ("", {}, False),
+        ("", {"description": "desc"}, True),
+        ("desc", {"description": "desc"}, False),
+        ("other", {"description": "desc"}, True),
+    ],
+)
+def test_definition_needs_replacement_treats_empty_description_as_unset(description, existing, expected):
+    assert _definition_needs_replacement(_module(description=description), existing) is expected
+
+
+def test_create_polls_until_definition_is_readable():
+    client = MagicMock()
+    client.create_workflow_definition.return_value = {"status": "ACTIVE"}
+    client.get_workflow_definition.side_effect = [
+        _client_error("ResourceNotFoundException", "GetWorkflowDefinition"),
+        _get_response(),
+    ]
+
+    with patch.object(nova_act.time, "sleep") as sleep:
+        changed, definition, _msg = create_workflow_definition(client, _module())
+
+    assert changed is True
+    assert definition["arn"] == ARN
+    sleep.assert_called_once()
+
+
+def test_create_falls_back_to_create_response_when_not_readable():
+    client = MagicMock()
+    client.create_workflow_definition.return_value = {"status": "ACTIVE"}
+    client.get_workflow_definition.side_effect = _client_error("ResourceNotFoundException", "GetWorkflowDefinition")
+    module = _module(description="desc", export_config={"s3_bucket_name": "bucket", "s3_key_prefix": None})
+
+    with patch.object(nova_act, "_CREATE_READ_TIMEOUT", 0):
+        changed, definition, _msg = create_workflow_definition(client, module)
+
+    assert changed is True
+    assert definition == {
+        "status": "ACTIVE",
+        "name": NAME,
+        "workflow_definition_name": NAME,
+        "description": "desc",
+        "export_config": {"s3_bucket_name": "bucket"},
+    }
+    module.warn.assert_called_once()
+    module.fail_json.assert_not_called()
+
+
 def test_create_fails_on_client_error():
     client = MagicMock()
     client.create_workflow_definition.side_effect = _client_error("ConflictException", "CreateWorkflowDefinition")
@@ -251,25 +315,23 @@ def test_create_fails_on_client_error():
 
 def test_delete_check_mode_does_not_call_api():
     client = MagicMock()
-    existing = {"name": NAME, "status": "ACTIVE"}
 
-    changed, definition, msg = delete_workflow_definition(client, _module(check_mode=True, state="absent"), existing)
+    changed, definition, msg = delete_workflow_definition(client, _module(check_mode=True, state="absent"))
 
-    assert (changed, definition) == (True, existing)
+    assert (changed, definition) == (True, {})
     assert msg.startswith("Check mode: would have ")
     client.delete_workflow_definition.assert_not_called()
 
 
-def test_delete_without_wait_returns_status_from_response():
+def test_delete_without_wait_returns_empty_dict():
     client = MagicMock()
     client.delete_workflow_definition.return_value = {"status": "DELETING"}
-    existing = {"name": NAME, "arn": ARN, "status": "ACTIVE"}
 
     with patch.object(nova_act, "wait_for_workflow_definition_deleted") as waiter:
-        changed, definition, _msg = delete_workflow_definition(client, _module(state="absent", wait=False), existing)
+        changed, definition, _msg = delete_workflow_definition(client, _module(state="absent", wait=False))
 
     assert changed is True
-    assert definition == {"name": NAME, "arn": ARN, "status": "DELETING"}
+    assert definition == {}
     waiter.assert_not_called()
     client.delete_workflow_definition.assert_called_once_with(workflowDefinitionName=NAME)
 
@@ -278,10 +340,9 @@ def test_delete_fails_on_client_error():
     client = MagicMock()
     client.delete_workflow_definition.side_effect = _client_error("ConflictException", "DeleteWorkflowDefinition")
     module = _module(state="absent")
-    existing = {"name": NAME}
 
     with pytest.raises(FailJson):
-        delete_workflow_definition(client, module, existing)
+        delete_workflow_definition(client, module)
     module.fail_json_aws.assert_called_once()
 
 
@@ -291,10 +352,9 @@ def test_delete_returns_noop_when_workflow_definition_is_already_absent():
         "ResourceNotFoundException", "DeleteWorkflowDefinition"
     )
     module = _module(state="absent")
-    existing = {"name": NAME}
 
     with patch.object(nova_act, "wait_for_workflow_definition_deleted") as waiter:
-        changed, definition, msg = delete_workflow_definition(client, module, existing)
+        changed, definition, msg = delete_workflow_definition(client, module)
 
     assert changed is False
     assert definition == {}
