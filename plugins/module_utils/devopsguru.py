@@ -9,6 +9,7 @@ from typing import Tuple
 from typing import Union
 
 from ansible.module_utils.common.dict_transformations import snake_dict_to_camel_dict
+
 from ansible_collections.amazon.aws.plugins.module_utils.botocore import is_boto3_error_code
 from ansible_collections.amazon.aws.plugins.module_utils.modules import AnsibleAWSModule
 from ansible_collections.amazon.aws.plugins.module_utils.retries import AWSRetry
@@ -132,7 +133,7 @@ def add_notification_channel(client, module: AnsibleAWSModule, config: Dict[str,
     if module.check_mode:
         return None, "Check mode: would have added notification channel."
     else:
-        response = client.add_notification_channel(Config=config)
+        response = client.add_notification_channel(**{"Config": config})
         return response.get("Id"), "Notification channel added successfully."
 
 
@@ -187,13 +188,13 @@ def describe_insight(client, insight_id: str, account_id: str = None) -> Dict[st
     return client.describe_insight(**params)
 
 
-def get_insight_type(data: Dict[str, Any]) -> Optional[str]:
+def get_insight_type(data: Dict[str, Any]) -> Union[str, None]:
     """
     Determines the type of insight from the provided data dictionary.
     Args:
         data (dict): Data dictionary potentially containing insight keys.
     Returns:
-        Optional[str]: The key indicating the insight type ('ProactiveInsight', 'ReactiveInsight', etc.)
+        str | None: The key indicating the insight type ('ProactiveInsight', 'ReactiveInsight', etc.)
                     or None if no recognized key is present.
     """
     possible_keys = [
