@@ -1,0 +1,6 @@
+workflow_definition_name: "nova-act-{{ tiny_prefix }}"
+missing_workflow_definition_name: "nova-act-{{ tiny_prefix }}-missing"
+workflow_definition_description: "Ansible integration test workflow definition for workflow runs"
+# A Nova Act-enabled model ID available to the test account/region. Confirm this value against a
+# real AWS account before removing `disabled` from this target's aliases file.
+nova_act_model_id: "UNVERIFIED-nova-act-model-id"
