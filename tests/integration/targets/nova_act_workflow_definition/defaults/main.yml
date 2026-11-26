@@ -1,0 +1,4 @@
+workflow_definition_name: "nova-act-{{ tiny_prefix }}"
+workflow_definition_description: "Ansible integration test workflow definition"
+export_workflow_definition_name: "nova-act-{{ tiny_prefix }}-export"
+export_bucket_name: "nova-act-export-{{ tiny_prefix }}"
