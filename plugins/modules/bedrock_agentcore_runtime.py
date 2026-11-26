@@ -598,14 +598,18 @@ def main() -> None:
         "to support the service model features used by this module.",
     )
     if module.params["state"] == "present":
-        validate_botocore_option(module, "tags", "1.40.35")
+        boto_constraints = [
+            ("tags", "1.40.35"),
+            ("session_storage", "1.42.75"),
+            ("s3_files_access_point", "1.43.90"),
+            ("efs_access_point", "1.43.90"),
+            ("capacity_provider_volume", "1.43.90"),
+            ("capacity_provider_arn", "1.43.90"),
+        ]
+        for option, minimum_version in boto_constraints:
+            validate_botocore_option(module, option, minimum_version)
         if module.params.get("authorizer_discovery_url") and module.params.get("authorizer_allowed_scopes") is not None:
             validate_botocore_option(module, "authorizer_allowed_scopes", "1.42.73")
-        validate_botocore_option(module, "session_storage", "1.42.75")
-        validate_botocore_option(module, "s3_files_access_point", "1.43.90")
-        validate_botocore_option(module, "efs_access_point", "1.43.90")
-        validate_botocore_option(module, "capacity_provider_volume", "1.43.90")
-        validate_botocore_option(module, "capacity_provider_arn", "1.43.90")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

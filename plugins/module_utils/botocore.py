@@ -13,7 +13,11 @@ def validate_botocore_version(module: AnsibleAWSModule, minimum_version: str, me
 
 
 def validate_botocore_option(module: AnsibleAWSModule, option: str, minimum_version: str) -> None:
-    """Validate a Botocore minimum only when the named module option is supplied."""
+    """Validate a Botocore minimum when the option has a non-None effective value.
+
+    Ansible's validated ``module.params`` includes argument-spec defaults, so a non-None default also
+    triggers this check. Callers should gate this helper when an option is not sent to the AWS request.
+    """
     if module.params.get(option) is not None:
         validate_botocore_version(
             module,
