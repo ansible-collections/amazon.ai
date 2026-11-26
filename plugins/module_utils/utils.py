@@ -9,6 +9,7 @@ from datetime import datetime
 from typing import Any
 from typing import Dict
 from typing import List
+from typing import NamedTuple
 from typing import Optional
 from typing import Union
 from urllib.parse import urlparse
@@ -252,3 +253,277 @@ def rename_keys(data: Any, renames: Dict[str, str]) -> Any:
     if isinstance(data, list):
         return [rename_keys(item, renames) for item in data]
     return data
+
+
+# InMemory feature groups take 10-15 minutes to create or delete; every other storage type is much faster.
+FEATURE_GROUP_WAIT_TIMEOUT = 600
+FEATURE_GROUP_IN_MEMORY_WAIT_TIMEOUT = 1200
+
+
+def feature_group_wait_timeout(wait_timeout: Optional[int], storage_type: Optional[str]) -> int:
+    """
+    Resolve how long to wait for a feature group, in seconds.
+
+    Args:
+        wait_timeout: The user's wait_timeout; None when not set.
+        storage_type: The online store storage type of the feature group, if any.
+
+    Returns:
+        wait_timeout when set, otherwise 1200 for InMemory storage and 600 for everything else.
+    """
+    if wait_timeout is not None:
+        return wait_timeout
+    if storage_type == "InMemory":
+        return FEATURE_GROUP_IN_MEMORY_WAIT_TIMEOUT
+    return FEATURE_GROUP_WAIT_TIMEOUT
+
+
+class FeatureGroupStatusDecision(NamedTuple):
+    """What to do about a feature group found in a transitional or failed state."""
+
+    action: str  # proceed, fail, exit, wait or wait_and_exit
+    message: Optional[str] = None  # fail and exit: the message to report
+    waiter: Optional[str] = None  # wait and wait_and_exit: the waiter to run
+
+
+def feature_group_status_decision(
+    name: str, existing: Dict[str, Any], state: str, wait: bool, check_mode: bool
+) -> FeatureGroupStatusDecision:
+    """
+    Decide what to do about the status of an existing feature group before acting on it.
+
+    Args:
+        name: The feature group name, used in messages.
+        existing: The describe_feature_group() response (PascalCase).
+        state: The requested state, present or absent.
+        wait: The value of the wait option.
+        check_mode: Whether the module runs in check mode, which never waits.
+
+    Returns:
+        proceed: carry on with the feature group as it is.
+        fail: stop with the message.
+        exit: report the message with changed=false.
+        wait: run the waiter, then describe the feature group again and carry on.
+        wait_and_exit: run the waiter, then report the message with changed=false.
+    """
+    status = existing["FeatureGroupStatus"]
+    update_status = (existing.get("LastUpdateStatus") or {}).get("Status")
+    can_wait = wait and not check_mode
+
+    if status == "Deleting":
+        if state == "present":
+            return FeatureGroupStatusDecision(
+                "fail", f"Feature group {name} is being deleted; wait for the deletion to finish first."
+            )
+        message = f"Feature group {name} is already being deleted."
+        if can_wait:
+            return FeatureGroupStatusDecision("wait_and_exit", message, "feature_group_deleted")
+        return FeatureGroupStatusDecision("exit", message)
+
+    if status == "Creating" or update_status == "InProgress":
+        if check_mode:
+            return FeatureGroupStatusDecision("proceed")
+        transition = "being created" if status == "Creating" else "being updated"
+        if can_wait:
+            return FeatureGroupStatusDecision(
+                "wait", waiter="feature_group_created" if status == "Creating" else "feature_group_updated"
+            )
+        if state == "absent":
+            return FeatureGroupStatusDecision(
+                "fail", f"Feature group {name} cannot be deleted while it is {transition}."
+            )
+        return FeatureGroupStatusDecision("exit", f"Feature group {name} is {transition}.")
+
+    if state == "present" and status in ("CreateFailed", "DeleteFailed"):
+        return FeatureGroupStatusDecision(
+            "fail",
+            (
+                f"Feature group {name} is in state {status}: {existing.get('FailureReason', 'no reason reported')}. "
+                "Delete it with state=absent and recreate it."
+            ),
+        )
+    return FeatureGroupStatusDecision("proceed")
+
+
+def feature_group_has_store(desired: Dict[str, Any]) -> bool:
+    """
+    Tell whether a feature group configuration enables at least one store.
+
+    SageMaker defaults EnableOnlineStore to false and rejects a feature group with neither store enabled,
+    so an online_store_config only counts when it sets enable_online_store to true.
+
+    Args:
+        desired: The requested configuration in snake_case, as built by feature_group_desired_config().
+
+    Returns:
+        True when an offline store is configured or the online store is explicitly enabled.
+    """
+    if desired.get("offline_store_config"):
+        return True
+    return desired.get("online_store_config", {}).get("enable_online_store") is True
+
+
+def feature_group_in_memory_violations(desired: Dict[str, Any]) -> List[str]:
+    """
+    List the options of a requested feature group that SageMaker does not support with InMemory storage.
+
+    An InMemory feature group is online-only, cannot use customer managed KMS keys and cannot use provisioned
+    throughput.
+
+    Args:
+        desired: The requested configuration in snake_case, as built by feature_group_desired_config().
+
+    Returns:
+        One message per unsupported option; empty when the storage type is not InMemory or nothing conflicts.
+    """
+    online_store_config = desired.get("online_store_config") or {}
+    if online_store_config.get("storage_type") != "InMemory":
+        return []
+    violations = []
+    if desired.get("offline_store_config"):
+        violations.append(
+            "offline_store_config is not supported with InMemory storage (an InMemory feature group has no offline store)"
+        )
+    if (online_store_config.get("security_config") or {}).get("kms_key_id"):
+        violations.append(
+            "online_store_config.security_config.kms_key_id is not supported with InMemory storage "
+            "(customer managed KMS keys cannot be used)"
+        )
+    if (desired.get("throughput_config") or {}).get("throughput_mode") == "Provisioned":
+        violations.append(
+            "throughput_config.throughput_mode=Provisioned is not supported with InMemory storage "
+            "(it is available only with Standard or Standard_V2 online storage, or without an online store); use OnDemand"
+        )
+    return violations
+
+
+def _is_subset(desired: Any, existing: Any) -> bool:
+    """Return True when every value set in desired is present and equal in existing, recursing into dicts."""
+    if isinstance(desired, dict):
+        if not isinstance(existing, dict):
+            return False
+        return all(_is_subset(value, existing.get(key)) for key, value in desired.items())
+    return desired == existing
+
+
+def _feature_additions(existing: List[Dict[str, Any]], desired: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Return the desired features missing from existing; raise ValueError on a changed or removed feature."""
+    existing_by_name = {feature["feature_name"]: feature for feature in existing}
+    desired_names = {feature["feature_name"] for feature in desired}
+    removed = [name for name in existing_by_name if name not in desired_names]
+    if removed:
+        raise ValueError(
+            f"feature_definitions: features cannot be removed from a feature group ({', '.join(removed)}); "
+            "delete and recreate the feature group instead."
+        )
+    feature_additions = []
+    for feature in desired:
+        current = existing_by_name.get(feature["feature_name"])
+        if current is None:
+            feature_additions.append(feature)
+            continue
+        for key in ("feature_type", "collection_type", "collection_config"):
+            if key in feature and not _is_subset(feature[key], current.get(key)):
+                raise ValueError(
+                    f"feature_definitions: {key} of feature {feature['feature_name']} cannot be changed; "
+                    "delete and recreate the feature group instead."
+                )
+    return feature_additions
+
+
+def _online_store_config_update(existing: Optional[Dict[str, Any]], desired: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the online store fields to update; raise ValueError on a change the API cannot apply in place."""
+    existing = existing or {}
+    remove_ttl_duration = desired.get("remove_ttl_duration")
+    desired = {key: value for key, value in desired.items() if key != "remove_ttl_duration"}
+    for key in ("enable_online_store", "security_config"):
+        if key in desired and not _is_subset(desired[key], existing.get(key)):
+            raise ValueError(
+                f"online_store_config.{key} cannot be changed on an existing feature group; "
+                "delete and recreate the feature group instead."
+            )
+    if desired and not existing:
+        raise ValueError(
+            "online_store_config cannot be added to a feature group created without an online store; "
+            "delete and recreate the feature group instead."
+        )
+    online_store_config = {}
+    if "storage_type" in desired and desired["storage_type"] != existing.get("storage_type"):
+        if (existing.get("storage_type"), desired["storage_type"]) != ("Standard", "Standard_V2"):
+            raise ValueError(
+                f"online_store_config.storage_type can only be changed from Standard to Standard_V2, "
+                f"not from {existing.get('storage_type')} to {desired['storage_type']}."
+            )
+        online_store_config["storage_type"] = desired["storage_type"]
+    if "ttl_duration" in desired and desired["ttl_duration"] != existing.get("ttl_duration"):
+        online_store_config["ttl_duration"] = desired["ttl_duration"]
+    if remove_ttl_duration and existing.get("ttl_duration"):
+        # Clearing the TTL means null Unit and Value (UpdateFeatureGroup docs, as cited in the PR review). botocore
+        # cannot send None, and an empty TtlDuration does the same (live probe); one null alone is rejected.
+        online_store_config["ttl_duration"] = {}
+    return online_store_config
+
+
+def _throughput_config_update(existing: Optional[Dict[str, Any]], desired: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the throughput fields to update; switching to Provisioned sends the mode and both units together."""
+    existing = existing or {}
+    throughput_config = {key: value for key, value in desired.items() if existing.get(key) != value}
+    if throughput_config and desired.get("throughput_mode") == "Provisioned":
+        if existing.get("throughput_mode") != "Provisioned":
+            return dict(desired)
+    return throughput_config
+
+
+def feature_group_properties_to_update(existing: Dict[str, Any], desired: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Diff a SageMaker feature group against the desired configuration.
+
+    Both arguments are snake_case: existing is the converted describe_feature_group() output, desired holds the
+    module options with None values scrubbed. Options absent from desired are never compared.
+
+    Args:
+        existing: The current feature group.
+        desired: The requested configuration.
+
+    Returns:
+        A dict with any of the keys feature_additions, online_store_config and throughput_config, each holding
+        what must be sent to UpdateFeatureGroup. Empty when nothing differs.
+
+    Raises:
+        ValueError: If a requested change cannot be applied in place; the message names the option.
+    """
+    for key in (
+        "record_identifier_feature_name",
+        "event_time_feature_name",
+        "description",
+        "role_arn",
+        "offline_store_config",
+    ):
+        if key in desired and not _is_subset(desired[key], existing.get(key)):
+            raise ValueError(
+                f"{key} cannot be changed on an existing feature group; delete and recreate the feature group instead."
+            )
+
+    properties_to_update = {}
+    if "feature_definitions" in desired:
+        feature_additions = _feature_additions(existing.get("feature_definitions", []), desired["feature_definitions"])
+        if feature_additions:
+            properties_to_update["feature_additions"] = feature_additions
+    if "online_store_config" in desired:
+        online_store_config = _online_store_config_update(
+            existing.get("online_store_config"), desired["online_store_config"]
+        )
+        if online_store_config:
+            properties_to_update["online_store_config"] = online_store_config
+    if "throughput_config" in desired:
+        if (existing.get("online_store_config") or {}).get("storage_type") == "InMemory" and (
+            desired["throughput_config"].get("throughput_mode") == "Provisioned"
+        ):
+            raise ValueError(
+                "throughput_config.throughput_mode=Provisioned is not supported with InMemory storage "
+                "(it is available only with Standard or Standard_V2 online storage, or without an online store); use OnDemand."
+            )
+        throughput_config = _throughput_config_update(existing.get("throughput_config"), desired["throughput_config"])
+        if throughput_config:
+            properties_to_update["throughput_config"] = throughput_config
+    return properties_to_update

@@ -4299,3 +4299,118 @@ def test_list_user_profiles_omits_unset_filters():
 
     assert list_user_profiles(client) == []
     paginator.paginate.assert_called_once_with()
+
+
+# -------------------------------------------
+# Feature group wait timeout
+# -------------------------------------------
+@pytest.mark.parametrize(
+    "existing, online_store_config, expected",
+    [
+        (None, None, None),
+        (None, {"storage_type": "InMemory"}, "InMemory"),
+        ({"OnlineStoreConfig": {"StorageType": "Standard"}}, {"storage_type": "InMemory"}, "Standard"),
+        ({"OnlineStoreConfig": {"StorageType": "InMemory"}}, None, "InMemory"),
+        ({"FeatureGroupName": "fg"}, {"storage_type": "InMemory"}, "InMemory"),
+    ],
+)
+def test_feature_group_storage_type(existing, online_store_config, expected):
+    from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import feature_group_storage_type
+
+    module = MagicMock()
+    module.params = {"online_store_config": online_store_config}
+    assert feature_group_storage_type(module, existing) == expected
+
+
+@pytest.mark.parametrize(
+    "wait_timeout, storage_type, max_attempts",
+    [(None, None, 120), (None, "InMemory", 240), (100, "InMemory", 20)],
+)
+def test_wait_for_feature_group_status_timeout(wait_timeout, storage_type, max_attempts):
+    from ansible_collections.amazon.ai.plugins.module_utils import waiters
+
+    module = MagicMock()
+    module.params = {"wait": True, "wait_timeout": wait_timeout}
+    with patch.object(waiters, "get_waiter") as get_waiter:
+        waiters.wait_for_feature_group_status(
+            MagicMock(), module, "fg", "feature_group_created", storage_type=storage_type
+        )
+    config = get_waiter.return_value.wait.call_args.kwargs["WaiterConfig"]
+    assert config == {"Delay": 5, "MaxAttempts": max_attempts}
+
+
+def test_create_feature_group_does_not_send_remove_ttl_duration():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {
+        "feature_group_name": "fg",
+        "record_identifier_feature_name": "id",
+        "event_time_feature_name": "ts",
+        "feature_definitions": [{"feature_name": "id", "feature_type": "String"}],
+        "online_store_config": {"enable_online_store": True, "ttl_duration": None, "remove_ttl_duration": True},
+        "tags": None,
+    }
+    client = MagicMock()
+    with patch.object(sagemaker, "wait_for_feature_group_status"):
+        sagemaker.create_feature_group(client, module)
+    params = client.create_feature_group.call_args.kwargs
+    assert params["OnlineStoreConfig"] == {"EnableOnlineStore": True}
+
+
+def test_update_feature_group_sends_an_empty_ttl_duration_to_remove_the_ttl():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    changed, msg = sagemaker.update_feature_group(client, module, {"online_store_config": {"ttl_duration": {}}})
+    assert changed is True
+    assert msg == "Feature group fg updated successfully."
+    client.update_feature_group.assert_called_once_with(FeatureGroupName="fg", OnlineStoreConfig={"TtlDuration": {}})
+
+
+def test_delete_feature_group_check_mode_does_not_call_the_api():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = True
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
+    assert deleted is True
+    client.delete_feature_group.assert_not_called()
+    wait.assert_not_called()
+
+
+def test_delete_feature_group_deletes_and_waits_for_it_to_be_gone():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
+    assert deleted is True
+    client.delete_feature_group.assert_called_once_with(FeatureGroupName="fg")
+    assert wait.call_args.args[:4] == (client, module, "fg", "feature_group_deleted")
+
+
+def test_delete_feature_group_that_vanished_between_describe_and_delete_returns_false():
+    from ansible_collections.amazon.ai.plugins.module_utils import sagemaker
+
+    module = MagicMock()
+    module.check_mode = False
+    module.params = {"feature_group_name": "fg"}
+    client = MagicMock()
+    client.delete_feature_group.side_effect = ClientError(
+        {"Error": {"Code": "ResourceNotFound", "Message": "gone"}}, "DeleteFeatureGroup"
+    )
+    with patch.object(sagemaker, "wait_for_feature_group_status") as wait:
+        deleted = sagemaker.delete_feature_group(client, module, {"FeatureGroupName": "fg"})
+    assert deleted is False
+    wait.assert_not_called()
