@@ -1,0 +1,2 @@
+minor_changes:
+  - sagemaker_endpoint_config - Make O(production_variants[].model_name) optional so that endpoint configurations for inference components can be created.

@@ -12,6 +12,7 @@ from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import SpaceSt
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import wait_for_space_status
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import get_waiter
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_inference_component_status
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 from botocore.exceptions import WaiterError
 from botocore.stub import Stubber
@@ -170,3 +171,71 @@ def test_wait_for_space_status_uses_timeout(mock_get_waiter):
         SpaceName="example-space",
         WaiterConfig={"Delay": 15, "MaxAttempts": 2},
     )
+
+
+def _ic_module(wait_timeout=600):
+    module = MagicMock()
+    module.params = {"inference_component_name": "ic", "wait_timeout": wait_timeout}
+    module.fail_json.side_effect = SystemExit
+    return module
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.time.sleep")
+def test_wait_for_inference_component_status_waits_for_updated_specification(mock_sleep):
+    stale = {"InferenceComponentStatus": "InService", "Specification": {"memory": 1024}}
+    applied = {"InferenceComponentStatus": "InService", "Specification": {"memory": 2048}}
+    describe = MagicMock(side_effect=[stale, applied])
+    needs_update = MagicMock(side_effect=lambda existing, module: existing is stale)
+
+    result = wait_for_inference_component_status(MagicMock(), _ic_module(), describe, needs_update, previous=stale)
+
+    assert result is applied
+    assert describe.call_count == 2
+    mock_sleep.assert_called_once()
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.time.sleep")
+def test_wait_for_inference_component_status_fails_on_rolled_back_update(mock_sleep):
+    previous = {"InferenceComponentStatus": "InService", "Specification": {"memory": 1024}}
+    describe = MagicMock(return_value={**previous, "FailureReason": "Unable to deploy 0 out of 1 copies"})
+    module = _ic_module()
+    client = MagicMock()
+
+    with pytest.raises(SystemExit):
+        wait_for_inference_component_status(client, module, describe, MagicMock(return_value=True), previous=previous)
+    assert "Unable to deploy 0 out of 1 copies" in module.fail_json.call_args.kwargs["msg"]
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.time.monotonic")
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.time.sleep")
+def test_wait_for_inference_component_status_backs_off_exponentially_until_timeout(mock_sleep, mock_monotonic):
+    clock = [0.0]
+    mock_monotonic.side_effect = lambda: clock[0]
+    mock_sleep.side_effect = lambda seconds: clock.__setitem__(0, clock[0] + seconds)
+    describe = MagicMock(return_value={"InferenceComponentStatus": "Creating"})
+    module = _ic_module(wait_timeout=100)
+    client = MagicMock()
+
+    with pytest.raises(SystemExit):
+        wait_for_inference_component_status(client, module, describe, MagicMock(), sleep_time=5, max_sleep_time=30)
+    assert [call.args[0] for call in mock_sleep.call_args_list] == [5, 10, 20, 30, 30, 5]
+    assert "Last known status: 'Creating'" in module.fail_json.call_args.kwargs["msg"]
+
+
+@patch("ansible_collections.amazon.ai.plugins.module_utils.waiters.time.sleep")
+def test_wait_for_inference_component_status_settle_returns_failed_component(mock_sleep):
+    failed = {"InferenceComponentStatus": "Failed", "FailureReason": "no capacity"}
+    describe = MagicMock(side_effect=[{"InferenceComponentStatus": "Creating"}, failed])
+    module = _ic_module()
+
+    assert wait_for_inference_component_status(MagicMock(), module, describe, MagicMock(), settle=True) is failed
+    module.fail_json.assert_not_called()
+    mock_sleep.assert_called_once()
+
+
+def test_wait_for_inference_component_status_settle_returns_none_when_gone():
+    module = _ic_module()
+    describe = MagicMock(return_value=None)
+
+    assert wait_for_inference_component_status(MagicMock(), module, describe, MagicMock(), settle=True) is None
+    module.fail_json.assert_not_called()

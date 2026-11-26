@@ -34,9 +34,10 @@ options:
                 type: str
                 required: true
             model_name:
-                description: The name of the SageMaker model.
+                description:
+                    - The name of the SageMaker model.
+                    - Omit it for a variant that hosts inference components, see M(amazon.ai.sagemaker_inference_component).
                 type: str
-                required: true
             initial_instance_count:
                 description: The initial number of instances.
                 type: int
@@ -259,7 +260,7 @@ def main() -> None:
             elements="dict",
             options=dict(
                 variant_name=dict(type="str", required=True),
-                model_name=dict(type="str", required=True),
+                model_name=dict(type="str"),
                 initial_instance_count=dict(type="int"),
                 instance_type=dict(type="str"),
                 initial_variant_weight=dict(type="float"),

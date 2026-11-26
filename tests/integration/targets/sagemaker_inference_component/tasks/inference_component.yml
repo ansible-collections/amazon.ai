@@ -1,0 +1,278 @@
+---
+# --- Failure paths ---
+- name: Create inference component without endpoint_name
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+  register: missing_endpoint
+  ignore_errors: true
+
+- name: Assert required_if failure
+  ansible.builtin.assert:
+    that:
+      - missing_endpoint is failed
+      - "'endpoint_name' in missing_endpoint.msg"
+
+# --- Create ---
+- name: Create inference component in check mode
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    variant_name: "{{ variant_name }}"
+    specification:
+      model_name: "{{ model_name }}"
+      compute_resource_requirements:
+        min_memory_required_in_mb: 1024
+        number_of_cpu_cores_required: 1
+    runtime_config:
+      copy_count: 1
+  check_mode: true
+  register: create_check
+
+- name: Assert create check mode
+  ansible.builtin.assert:
+    that:
+      - create_check is changed
+      - "create_check.msg.startswith('Check mode: would have ')"
+
+- name: Create inference component
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    variant_name: "{{ variant_name }}"
+    specification:
+      model_name: "{{ model_name }}"
+      compute_resource_requirements:
+        min_memory_required_in_mb: 1024
+        number_of_cpu_cores_required: 1
+    runtime_config:
+      copy_count: 1
+    tags:
+      Environment: integration
+  register: create_real
+
+- name: Assert inference component was created and is in service
+  ansible.builtin.assert:
+    that:
+      - create_real is changed
+      - create_real.inference_component.inference_component_arn is defined
+      - create_real.inference_component.inference_component_status == 'InService'
+      - create_real.inference_component.runtime_config.desired_copy_count == 1
+      - create_real.inference_component.tags.Environment == 'integration'
+
+- name: Create inference component again
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    variant_name: "{{ variant_name }}"
+    specification:
+      model_name: "{{ model_name }}"
+      compute_resource_requirements:
+        min_memory_required_in_mb: 1024
+        number_of_cpu_cores_required: 1
+    runtime_config:
+      copy_count: 1
+    tags:
+      Environment: integration
+  register: create_again
+
+- name: Assert idempotency
+  ansible.builtin.assert:
+    that:
+      - create_again is not changed
+      - create_again.inference_component.inference_component_status == 'InService'
+
+# --- Update runtime config ---
+- name: Scale inference component in check mode
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    runtime_config:
+      copy_count: 2
+  check_mode: true
+  register: scale_check
+
+- name: Assert scale check mode
+  ansible.builtin.assert:
+    that:
+      - scale_check is changed
+      - "scale_check.msg.startswith('Check mode: would have ')"
+
+- name: Scale inference component
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    runtime_config:
+      copy_count: 2
+  register: scale_real
+
+- name: Assert inference component was scaled
+  ansible.builtin.assert:
+    that:
+      - scale_real is changed
+      - scale_real.inference_component.runtime_config.desired_copy_count == 2
+
+- name: Scale inference component again
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    runtime_config:
+      copy_count: 2
+  register: scale_again
+
+- name: Assert scale idempotency
+  ansible.builtin.assert:
+    that:
+      - scale_again is not changed
+
+- name: Scale inference component back down to free capacity before raising memory
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    runtime_config:
+      copy_count: 1
+  register: scale_down
+
+- name: Assert inference component was scaled down
+  ansible.builtin.assert:
+    that:
+      - scale_down is changed
+      - scale_down.inference_component.runtime_config.desired_copy_count == 1
+
+# --- Update specification ---
+- name: Update specification in check mode
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    specification:
+      compute_resource_requirements:
+        min_memory_required_in_mb: 2048
+  check_mode: true
+  register: spec_check
+
+- name: Assert specification check mode
+  ansible.builtin.assert:
+    that:
+      - spec_check is changed
+      - "spec_check.msg.startswith('Check mode: would have ')"
+
+- name: Update specification
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    specification:
+      compute_resource_requirements:
+        min_memory_required_in_mb: 2048
+  register: spec_real
+
+- name: Assert specification was updated
+  ansible.builtin.assert:
+    that:
+      - spec_real is changed
+      - spec_real.inference_component.specification.compute_resource_requirements.min_memory_required_in_mb == 2048
+
+- name: Update specification again
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    specification:
+      compute_resource_requirements:
+        min_memory_required_in_mb: 2048
+  register: spec_again
+
+- name: Assert specification idempotency
+  ansible.builtin.assert:
+    that:
+      - spec_again is not changed
+
+# --- Tags ---
+- name: Update tags in check mode
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    tags:
+      Owner: ansible
+  check_mode: true
+  register: tags_check
+
+- name: Assert tags check mode
+  ansible.builtin.assert:
+    that:
+      - tags_check is changed
+      - "tags_check.msg.startswith('Check mode: would have ')"
+
+- name: Replace tags
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    tags:
+      Owner: ansible
+  register: tags_real
+
+- name: Assert tags were replaced
+  ansible.builtin.assert:
+    that:
+      - tags_real is changed
+      - "tags_real.inference_component.tags == {'Owner': 'ansible'}"
+
+- name: Replace tags again
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "{{ endpoint_name }}"
+    tags:
+      Owner: ansible
+  register: tags_again
+
+- name: Assert tags idempotency
+  ansible.builtin.assert:
+    that:
+      - tags_again is not changed
+
+# --- Create-only property ---
+- name: Change the endpoint of an existing inference component
+  amazon.ai.sagemaker_inference_component:
+    inference_component_name: "{{ inference_component_name }}"
+    endpoint_name: "other-endpoint-{{ test_id }}"
+  register: create_only
+  ignore_errors: true
+
+- name: Assert create-only failure
+  ansible.builtin.assert:
+    that:
+      - create_only is failed
+      - "'cannot be changed' in create_only.msg"
+
+# --- Delete ---
+- name: Delete inference component in check mode
+  amazon.ai.sagemaker_inference_component:
+    state: absent
+    inference_component_name: "{{ inference_component_name }}"
+  check_mode: true
+  register: delete_check
+
+- name: Assert delete check mode
+  ansible.builtin.assert:
+    that:
+      - delete_check is changed
+      - "delete_check.msg.startswith('Check mode: would have ')"
+
+- name: Delete inference component
+  amazon.ai.sagemaker_inference_component:
+    state: absent
+    inference_component_name: "{{ inference_component_name }}"
+  register: delete_real
+
+- name: Assert inference component was deleted
+  ansible.builtin.assert:
+    that:
+      - delete_real is changed
+
+- name: Delete inference component again
+  amazon.ai.sagemaker_inference_component:
+    state: absent
+    inference_component_name: "{{ inference_component_name }}"
+  register: delete_again
+
+- name: Assert delete idempotency
+  ansible.builtin.assert:
+    that:
+      - delete_again is not changed

@@ -83,6 +83,7 @@ Name | Description
 [amazon.ai.sagemaker_image_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_info_module.rst)|Gather information about SageMaker Images
 [amazon.ai.sagemaker_image_version](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_version_module.rst)|Manage Amazon SageMaker Image Versions
 [amazon.ai.sagemaker_image_version_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_image_version_info_module.rst)|Gather information about SageMaker Image Versions
+[amazon.ai.sagemaker_inference_component](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_inference_component_module.rst)|Manage Amazon SageMaker inference components
 [amazon.ai.sagemaker_model](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_module.rst)|Manage Amazon SageMaker Models
 [amazon.ai.sagemaker_model_info](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_info_module.rst)|Gather information about Amazon SageMaker Models
 [amazon.ai.sagemaker_model_package](https://github.com/ansible-collections/amazon.ai/blob/main/docs/amazon.ai.sagemaker_model_package_module.rst)|Manage Amazon SageMaker model packages

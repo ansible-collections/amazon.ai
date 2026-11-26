@@ -43,6 +43,7 @@ action_groups:
     - sagemaker_space_info
     - sagemaker_training_job
     - sagemaker_training_job_info
+    - sagemaker_inference_component
 plugin_routing:
   modules:
     bedrock_agent:

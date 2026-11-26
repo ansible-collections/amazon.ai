@@ -26,6 +26,9 @@ from ansible_collections.amazon.ai.plugins.module_utils.utils import snake_dict_
 from ansible_collections.amazon.ai.plugins.module_utils.utils import stringify_values
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import get_waiter
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_image_version_deletion
+from ansible_collections.amazon.ai.plugins.module_utils.waiters import (
+    wait_for_inference_component_status as _wait_for_inference_component_status,
+)
 from ansible_collections.amazon.ai.plugins.module_utils.waiters import wait_for_model_package_group_deletion
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -3758,3 +3761,284 @@ def manage_training_job(
                 msg = f"Training job {module.params['training_job_name']} tags updated successfully."
         return job, changed, msg
     return _manage_training_job_absent(client, module, existing)
+
+
+@AWSRetry.jittered_backoff(retries=10)
+def describe_inference_component(client, inference_component_name: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve details for a specific SageMaker inference component.
+
+    Args:
+        client: The boto3 SageMaker client.
+        inference_component_name: The name of the inference component.
+
+    Returns:
+        A dictionary with the inference component details if found, otherwise None.
+    """
+    try:
+        return client.describe_inference_component(InferenceComponentName=inference_component_name)
+    except is_boto3_error_code("ValidationException") as e:
+        # The API Reference documents no not-found error; verified live that a missing component
+        # raises a ValidationException with the message 'Could not find inference component "<arn>"'.
+        if "Could not find" in e.response["Error"].get("Message", ""):
+            return None
+        raise
+
+
+def wait_for_inference_component_status(
+    client,
+    module,
+    deleted: bool = False,
+    previous: Optional[Dict[str, Any]] = None,
+    settle: bool = False,
+    sleep_time: int = 5,
+    max_sleep_time: int = 60,
+) -> Optional[Dict[str, Any]]:
+    """Poll a SageMaker inference component until it is InService, gone (deleted) or settled; see the waiter."""
+    return _wait_for_inference_component_status(
+        client,
+        module,
+        describe_inference_component,
+        inference_component_needs_update,
+        deleted=deleted,
+        previous=previous,
+        settle=settle,
+        sleep_time=sleep_time,
+        max_sleep_time=max_sleep_time,
+    )
+
+
+def _inference_component_specification(specification: Dict[str, Any]) -> Dict[str, Any]:
+    params = snake_dict_to_camel_dict(scrub_none_parameters(specification), capitalize_first=True)
+    # Environment variable names are user data and must not be camel-cased.
+    environment = (specification.get("container") or {}).get("environment")
+    if environment is not None:
+        params["Container"]["Environment"] = environment
+    return params
+
+
+def inference_component_params(module) -> Dict[str, Any]:
+    """
+    Build the Specification and RuntimeConfig request parameters from module params.
+
+    Args:
+        module: The Ansible module instance.
+
+    Returns:
+        A dictionary with PascalCase keys; only options the user set are present.
+    """
+    params = {}
+    if module.params.get("specification"):
+        params["Specification"] = _inference_component_specification(module.params["specification"])
+    if module.params.get("runtime_config"):
+        params["RuntimeConfig"] = snake_dict_to_camel_dict(
+            scrub_none_parameters(module.params["runtime_config"]), capitalize_first=True
+        )
+    return params
+
+
+def _normalize_existing_specification(specification: Dict[str, Any]) -> Dict[str, Any]:
+    # DescribeInferenceComponent reports the container image as DeployedImage rather than Image.
+    normalized = dict(specification)
+    container = dict(normalized.get("Container") or {})
+    deployed_image = container.pop("DeployedImage", None)
+    if deployed_image and "SpecifiedImage" in deployed_image:
+        container["Image"] = deployed_image["SpecifiedImage"]
+    if container:
+        normalized["Container"] = container
+    return normalized
+
+
+def _inference_component_update_specification(desired: Dict[str, Any], existing: Dict[str, Any]) -> Dict[str, Any]:
+    # UpdateInferenceComponent replaces the whole Specification, which must name a ModelName or a Container,
+    # so the user's partial specification is layered over the existing one.
+    existing = _normalize_existing_specification(existing)
+    updatable = (
+        "ModelName",
+        "Container",
+        "StartupParameters",
+        "ComputeResourceRequirements",
+        "BaseInferenceComponentName",
+        "InstanceType",
+        "DataCacheConfig",
+        "SchedulingConfig",
+    )
+    specification = {key: value for key, value in existing.items() if key in updatable}
+    if "ModelName" in desired:
+        specification.pop("Container", None)
+    if "Container" in desired:
+        specification.pop("ModelName", None)
+    for key, value in desired.items():
+        if isinstance(value, dict) and isinstance(specification.get(key), dict):
+            specification[key] = {**specification[key], **value}
+        else:
+            specification[key] = value
+    if specification.get("Container"):
+        specification["Container"] = {
+            key: value
+            for key, value in specification["Container"].items()
+            if key in ("Image", "ArtifactUrl", "Environment", "ContainerMetricsConfig")
+        }
+    return specification
+
+
+def _subset_differs(desired: Any, existing: Any, key: str = "") -> bool:
+    if isinstance(desired, dict) and key != "Environment":
+        if not isinstance(existing, dict):
+            return True
+        return any(_subset_differs(value, existing.get(name), name) for name, value in desired.items())
+    return desired != existing
+
+
+def inference_component_needs_update(existing: Dict[str, Any], module) -> Dict[str, Any]:
+    """
+    Compare the requested Specification and RuntimeConfig with the existing inference component.
+
+    Only options the user set are compared.
+
+    Args:
+        existing: The raw (PascalCase) response from describe_inference_component().
+        module: The Ansible module instance.
+
+    Returns:
+        A dictionary of the update_inference_component parameters that differ; empty when nothing differs.
+    """
+    desired = inference_component_params(module)
+    properties_to_update = {}
+    if "Specification" in desired and _subset_differs(
+        desired["Specification"], _normalize_existing_specification(existing.get("Specification") or {})
+    ):
+        properties_to_update["Specification"] = _inference_component_update_specification(
+            desired["Specification"], existing.get("Specification") or {}
+        )
+    if "RuntimeConfig" in desired:
+        existing_config = existing.get("RuntimeConfig") or {}
+        if desired["RuntimeConfig"].get("CopyCount") != existing_config.get("DesiredCopyCount"):
+            properties_to_update["RuntimeConfig"] = desired["RuntimeConfig"]
+    return properties_to_update
+
+
+def ensure_inference_component_create_only_unchanged(existing: Dict[str, Any], module) -> None:
+    """
+    Fail when a create-only property differs from the existing inference component.
+
+    Args:
+        existing: The raw (PascalCase) response from describe_inference_component().
+        module: The Ansible module instance.
+    """
+    name = module.params["inference_component_name"]
+    for option, field in (("endpoint_name", "EndpointName"), ("variant_name", "VariantName")):
+        desired = module.params.get(option)
+        if desired is not None and desired != existing.get(field):
+            module.fail_json(
+                msg=(
+                    f"Inference component {name} already exists with {option} {existing.get(field)}; "
+                    f"{option} cannot be changed in place. Delete the inference component and recreate it."
+                )
+            )
+
+
+def ensure_inference_component_single_specification(existing: Dict[str, Any], module) -> None:
+    """
+    Fail when a specification is requested for an inference component created with several specifications.
+
+    Args:
+        existing: The raw (PascalCase) response from describe_inference_component().
+        module: The Ansible module instance.
+    """
+    if module.params.get("specification") and existing.get("Specifications") and not existing.get("Specification"):
+        module.fail_json(
+            msg=(
+                f"Inference component {module.params['inference_component_name']} was created with several "
+                "specifications, which this module cannot update. Delete the inference component and recreate it."
+            )
+        )
+
+
+def create_inference_component(client, module) -> Tuple[bool, str]:
+    """
+    Create a SageMaker inference component.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple of (changed, message).
+    """
+    name = module.params["inference_component_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have created inference component {name}."
+    params = inference_component_params(module)
+    params["InferenceComponentName"] = name
+    params["EndpointName"] = module.params["endpoint_name"]
+    if module.params.get("variant_name"):
+        params["VariantName"] = module.params["variant_name"]
+    if module.params.get("tags") is not None:
+        params["Tags"] = ansible_dict_to_boto3_tag_list(module.params["tags"])
+    client.create_inference_component(**params)
+    return True, f"Inference component {name} created successfully."
+
+
+def update_inference_component(client, module, properties_to_update: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Update a SageMaker inference component in place.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        properties_to_update: The update_inference_component parameters that differ.
+
+    Returns:
+        A tuple of (changed, message).
+    """
+    name = module.params["inference_component_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have updated inference component {name}."
+    client.update_inference_component(InferenceComponentName=name, **properties_to_update)
+    return True, f"Inference component {name} updated successfully."
+
+
+def delete_inference_component(client, module) -> Tuple[bool, str]:
+    """
+    Delete a SageMaker inference component.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+
+    Returns:
+        A tuple of (changed, message).
+    """
+    name = module.params["inference_component_name"]
+    if module.check_mode:
+        return True, f"Check mode: would have deleted inference component {name}."
+    client.delete_inference_component(InferenceComponentName=name)
+    return True, f"Inference component {name} deleted successfully."
+
+
+def reconcile_inference_component_tags(client, module, existing: Dict[str, Any]) -> bool:
+    """
+    Reconcile SageMaker inference component tags in place, honouring purge_tags.
+
+    Args:
+        client: The boto3 SageMaker client.
+        module: The Ansible module instance.
+        existing: The raw (PascalCase) response from describe_inference_component().
+
+    Returns:
+        True if tags were (or would be, in check mode) changed.
+    """
+    if module.params.get("tags") is None:
+        return False
+    arn = existing["InferenceComponentArn"]
+    tags_to_add, tags_to_remove = compare_aws_tags(
+        list_tags(client, arn), module.params["tags"], module.params["purge_tags"]
+    )
+    if module.check_mode:
+        return bool(tags_to_add or tags_to_remove)
+    if tags_to_add:
+        client.add_tags(ResourceArn=arn, Tags=ansible_dict_to_boto3_tag_list(tags_to_add))
+    if tags_to_remove:
+        client.delete_tags(ResourceArn=arn, TagKeys=tags_to_remove)
+    return bool(tags_to_add or tags_to_remove)
