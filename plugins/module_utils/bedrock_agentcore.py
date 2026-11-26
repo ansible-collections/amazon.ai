@@ -38,6 +38,9 @@ class AgentRuntimeEndpointStatus(str, Enum):
     DELETED = "DELETED"
 
 
+AGENTCORE_MINIMUM_BOTOCORE_VERSION = "1.39.7"
+
+
 @AWSRetry.jittered_backoff(retries=10)
 def list_agent_runtimes(client) -> List[Dict[str, Any]]:
     """

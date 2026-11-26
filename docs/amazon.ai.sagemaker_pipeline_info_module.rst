@@ -192,6 +192,7 @@ Parameters
                 <td>
                         <div>The historical pipeline version to describe.</div>
                         <div>Requires O(pipeline_name).</div>
+                        <div>Requires botocore &gt;= 1.39.5.</div>
                 </td>
             </tr>
             <tr>

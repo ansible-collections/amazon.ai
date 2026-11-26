@@ -70,6 +70,7 @@ options:
         description:
             - Whether to create a home Amazon EFS file system for the Domain.
             - AWS does not support changing V(Enabled) to V(Disabled).
+            - Requires botocore >= 1.43.13.
         type: str
         choices: [Enabled, Disabled]
     kms_key_id:
@@ -380,6 +381,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import DomainStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_domain
@@ -526,6 +528,9 @@ def main() -> None:
         ],
         required_together=[("vpc_id", "subnet_ids")],
     )
+    if module.params["state"] == "present":
+        validate_botocore_option(module, "home_efs_file_system_creation", "1.43.13")
+
     if (
         module.params["state"] == "present"
         and module.params["app_network_access_type"] == "VpcOnly"

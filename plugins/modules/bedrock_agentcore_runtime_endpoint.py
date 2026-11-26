@@ -13,6 +13,10 @@ author:
 description:
     - Creates, updates, and deletes Amazon Bedrock AgentCore runtime endpoints.
     - A runtime endpoint is a named, addressable alias pointing at a specific runtime version.
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     state:
         description:
@@ -48,6 +52,7 @@ options:
         description:
             - Tags to attach to the endpoint.
             - Tags are applied only when an endpoint is created.
+            - Requires botocore >= 1.40.35 when supplied.
         type: dict
         aliases: ["resource_tags"]
     wait:
@@ -70,7 +75,6 @@ notes:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3
 """
 
 EXAMPLES = r"""
@@ -162,6 +166,7 @@ from typing import Dict
 from typing import Optional
 from typing import Tuple
 
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AGENTCORE_MINIMUM_BOTOCORE_VERSION
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AgentRuntimeEndpointStatus
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import create_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import delete_agent_runtime_endpoint
@@ -169,6 +174,8 @@ from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_quick_summary_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import update_agent_runtime_endpoint
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import wait_for_agent_runtime_endpoint_status
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_version
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -301,6 +308,14 @@ def main() -> None:
         argument_spec=argument_spec,
         supports_check_mode=True,
     )
+    validate_botocore_version(
+        module,
+        AGENTCORE_MINIMUM_BOTOCORE_VERSION,
+        f"Bedrock AgentCore requires botocore >= {AGENTCORE_MINIMUM_BOTOCORE_VERSION} "
+        "to support the service model features used by this module.",
+    )
+    if module.params["state"] == "present":
+        validate_botocore_option(module, "tags", "1.40.35")
 
     try:
         client = module.client("bedrock-agentcore-control", retry_decorator=AWSRetry.jittered_backoff())

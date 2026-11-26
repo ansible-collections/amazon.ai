@@ -22,14 +22,14 @@ jobs:
       targets: ${{ steps.run-splitter.outputs.targets }}
     steps:
       - name: Checkout collection
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           path: ${{ env.source_dir }}
           fetch-depth: "0"
 
       - name: list changes for pull request
         id: run-splitter
-        uses: ansible/cloud-content-ci-automation/.github/actions/ansible_test_splitter@0b891487c4170ef856f02313c66cb1c776814c42
+        uses: ansible/cloud-content-ci-automation/.github/actions/ansible_test_splitter@6659b608aab58bf1d20641b805eb9cb4fd2b771f
         with:
           collections_to_test: "${{ env.source_dir }}"
           total_jobs: 4
@@ -59,7 +59,7 @@ jobs:
     steps:
       - name: Read job targets
         id: read-targets
-        uses: ansible/cloud-content-ci-automation/.github/actions/ansible_read_targets@0b891487c4170ef856f02313c66cb1c776814c42
+        uses: ansible/cloud-content-ci-automation/.github/actions/ansible_read_targets@6659b608aab58bf1d20641b805eb9cb4fd2b771f
         with:
           job_id: "${{ matrix.workflow-id }}"
           all_targets: "${{ env.ansible_test_splitter_targets }}"
@@ -70,7 +70,7 @@ jobs:
         shell: bash
 
       - name: Create AWS session credentials
-        uses: ansible/ansible-test-auth@v1
+        uses: ansible/ansible-test-auth@008750a5bf07124c3ab86d30d73d7319d7518f36 # v1
 
       - name: Run integration tests
         uses: ansible-community/ansible-test-gh-action@d3a8ec7a59694e25e210fcd44738910149537f0e
@@ -83,4 +83,4 @@ jobs:
             git+https://github.com/ansible-collections/amazon.aws.git,main
             git+https://github.com/ansible-collections/community.aws.git,main
             community.general
-          pre-test-cmd: python -m pip install -r tests/integration/requirements.txt
+          pre-test-cmd: python -m pip install -r tests/integration/requirements.txt -c tests/integration/constraints.txt

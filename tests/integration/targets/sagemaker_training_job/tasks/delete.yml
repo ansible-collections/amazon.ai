@@ -1,9 +1,18 @@
 ---
+- name: Set up Botocore for deletion when it has not been set up yet
+  ansible.builtin.include_role:
+    name: setup_botocore_pip
+  vars:
+    botocore_version: "1.40.61"
+  when: botocore_virtualenv_interpreter is not defined
+
 - name: Check-mode delete the completed training job
   amazon.ai.sagemaker_training_job:
     state: absent
     training_job_name: "{{ training_job_name }}"
   check_mode: true
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: delete_check
 
 - name: Assert delete check mode
@@ -17,6 +26,8 @@
     state: absent
     training_job_name: "{{ training_job_name }}"
     wait_timeout: 600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: delete_real
 
 - name: Assert the job was deleted
@@ -38,6 +49,8 @@
   amazon.ai.sagemaker_training_job:
     state: absent
     training_job_name: "{{ training_job_name }}"
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: delete_rerun
 
 - name: Assert delete idempotency
@@ -50,6 +63,8 @@
     state: absent
     training_job_name: "{{ stoppable_training_job_name }}"
   check_mode: true
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: stopped_delete_check
 
 - name: Assert stopped-job delete check mode
@@ -63,6 +78,8 @@
     state: absent
     training_job_name: "{{ stoppable_training_job_name }}"
     wait_timeout: 600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: stopped_delete
 
 - name: Assert stopped job was deleted

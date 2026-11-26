@@ -1,4 +1,11 @@
 ---
+- name: Set up Botocore for forced replacement when it has not been set up yet
+  ansible.builtin.include_role:
+    name: setup_botocore_pip
+  vars:
+    botocore_version: "1.40.61"
+  when: botocore_virtualenv_interpreter is not defined
+
 - name: Request an immutable runtime change without force
   amazon.ai.sagemaker_training_job:
     training_job_name: "{{ training_job_name }}"
@@ -63,6 +70,8 @@
       Environment: integration
     force: true
   check_mode: true
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: replacement_check
 
 - name: Assert forced replacement check mode
@@ -99,6 +108,8 @@
       Environment: integration
     force: true
     wait_timeout: 3600
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   register: replacement_real
 
 - name: Assert replacement created a new terminal execution

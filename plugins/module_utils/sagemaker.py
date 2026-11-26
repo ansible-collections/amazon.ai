@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_version
 from ansible_collections.amazon.ai.plugins.module_utils.utils import camel_dict_to_snake_dict_keeping
 from ansible_collections.amazon.ai.plugins.module_utils.utils import config_block_differs
 from ansible_collections.amazon.ai.plugins.module_utils.utils import deep_merge
@@ -3416,13 +3417,11 @@ def _set_training_job_warm_pool_retention(client, training_job_name: str, retent
 @AWSRetry.jittered_backoff(retries=10)
 def delete_training_job(client, module, training_job_name: str) -> None:
     """Delete a terminal SageMaker training job."""
-    if not module.botocore_at_least("1.40.61"):
-        module.fail_json(
-            msg=(
-                f"Cannot delete training job {training_job_name}: deleting SageMaker training jobs "
-                "requires botocore >= 1.40.61."
-            )
-        )
+    validate_botocore_version(
+        module,
+        "1.40.61",
+        f"Cannot delete training job {training_job_name}: deleting SageMaker training jobs requires botocore >= 1.40.61.",
+    )
     try:
         client.delete_training_job(TrainingJobName=training_job_name)
     except is_boto3_error_code("ResourceInUse") as e:

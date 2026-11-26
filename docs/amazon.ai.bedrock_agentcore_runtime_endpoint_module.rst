@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.38.0
-- botocore >= 1.38.0
+- boto3 >= 1.39.7
+- botocore >= 1.39.7
 
 
 Parameters
@@ -309,6 +309,7 @@ Parameters
                 <td>
                         <div>Tags to attach to the endpoint.</div>
                         <div>Tags are applied only when an endpoint is created.</div>
+                        <div>Requires botocore &gt;= 1.40.35 when supplied.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: resource_tags</div>
                 </td>
             </tr>

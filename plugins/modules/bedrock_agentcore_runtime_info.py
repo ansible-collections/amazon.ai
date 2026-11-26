@@ -12,6 +12,10 @@ author:
     - Domen Dobnikar (@domendobnikar)
 description:
     - Gets details for a single Bedrock AgentCore runtime or lists all runtimes.
+requirements:
+    - python >= 3.9
+    - boto3 >= 1.39.7
+    - botocore >= 1.39.7
 options:
     agent_runtime_name:
         description:
@@ -21,7 +25,6 @@ options:
 extends_documentation_fragment:
     - amazon.ai.common.modules
     - amazon.ai.region.modules
-    - amazon.ai.boto3
 """
 
 
@@ -237,9 +240,11 @@ from typing import Dict
 from typing import List
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import AGENTCORE_MINIMUM_BOTOCORE_VERSION
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_id
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import get_agent_runtime_by_name
 from ansible_collections.amazon.ai.plugins.module_utils.bedrock_agentcore import list_agent_runtimes
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_version
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 
 from ansible.module_utils.common.dict_transformations import camel_dict_to_snake_dict
@@ -256,6 +261,12 @@ def main():
     module = AnsibleAWSModule(
         argument_spec=argument_spec,
         supports_check_mode=True,
+    )
+    validate_botocore_version(
+        module,
+        AGENTCORE_MINIMUM_BOTOCORE_VERSION,
+        f"Bedrock AgentCore requires botocore >= {AGENTCORE_MINIMUM_BOTOCORE_VERSION} "
+        "to support the service model features used by this module.",
     )
 
     try:

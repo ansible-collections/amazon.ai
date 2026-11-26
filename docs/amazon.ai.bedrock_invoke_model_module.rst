@@ -194,7 +194,6 @@ Parameters
                 </td>
                 <td>
                         <div>The unique identifier of the guardrail to use.</div>
-                        <div>This option requires boto3 &gt;= 1.35.8.</div>
                 </td>
             </tr>
             <tr>
@@ -211,7 +210,6 @@ Parameters
                 <td>
                         <div>The version number for the guardrail. Can also be &#x27;DRAFT&#x27;.</div>
                         <div>O(guardrail_version) is required when O(guardrail_identifier) is specified.</div>
-                        <div>This option requires boto3 &gt;= 1.35.8.</div>
                 </td>
             </tr>
             <tr>
@@ -247,7 +245,6 @@ Parameters
                 </td>
                 <td>
                         <div>Model performance settings for the request, optimizing for latency.</div>
-                        <div>This option requires boto3 &gt;= 1.35.8.</div>
                 </td>
             </tr>
             <tr>

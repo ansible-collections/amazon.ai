@@ -27,8 +27,8 @@ Requirements
 The below requirements are needed on the host that executes this module.
 
 - python >= 3.9
-- boto3 >= 1.38.0
-- botocore >= 1.38.0
+- boto3 >= 1.39.7
+- botocore >= 1.39.7
 
 
 Parameters
@@ -142,6 +142,7 @@ Parameters
                 </td>
                 <td>
                         <div>Scope values accepted by the custom JWT authorizer.</div>
+                        <div>Requires botocore &gt;= 1.42.73 when O(authorizer_discovery_url) is supplied.</div>
                 </td>
             </tr>
             <tr>
@@ -206,6 +207,7 @@ Parameters
                         <div>The ARN of the capacity provider for the runtime.</div>
                         <div>Run the AgentCore Runtime on the Instances compute type.</div>
                         <div>Provisions Amazon Web Services managed compute in your account.</div>
+                        <div>Requires botocore &gt;= 1.43.90 when supplied.</div>
                 </td>
             </tr>
             <tr>
@@ -222,6 +224,7 @@ Parameters
                 <td>
                         <div>Configuration for a capacity provider volume to mount into the AgentCore Runtime.</div>
                         <div>Cannot be set if O(session_storage), O(s3_files_access_point), or O(efs_access_point) is specified.</div>
+                        <div>Requires botocore &gt;= 1.43.90.</div>
                 </td>
             </tr>
                                 <tr>
@@ -453,6 +456,7 @@ Parameters
                 <td>
                         <div>Configuration for an Amazon EFS access point to mount into the AgentCore Runtime.</div>
                         <div>Cannot be set if O(session_storage), O(s3_files_access_point) or O(capacity_provider_volume) is specified.</div>
+                        <div>Requires botocore &gt;= 1.43.90.</div>
                 </td>
             </tr>
                                 <tr>
@@ -696,6 +700,7 @@ Parameters
                 <td>
                         <div>Configuration for an Amazon S3 Files access point to mount into the AgentCore Runtime.</div>
                         <div>Cannot be set if O(session_storage), O(efs_access_point) or O(capacity_provider_volume) is specified.</div>
+                        <div>Requires botocore &gt;= 1.43.90.</div>
                 </td>
             </tr>
                                 <tr>
@@ -769,6 +774,7 @@ Parameters
                         <div>Configuration for session storage.</div>
                         <div>Persistent storage that is preserved across AgentCore Runtime session.</div>
                         <div>Cannot be set if O(s3_files_access_point), O(efs_access_point) or O(capacity_provider_volume) is specified.</div>
+                        <div>Requires botocore &gt;= 1.42.75.</div>
                 </td>
             </tr>
                                 <tr>
@@ -842,6 +848,7 @@ Parameters
                 <td>
                         <div>Tags attached to the runtime when it is created.</div>
                         <div>Tags cannot be modified after creation by this module.</div>
+                        <div>Requires botocore &gt;= 1.40.35 when supplied.</div>
                         <div style="font-size: small; color: darkgreen"><br/>aliases: resource_tags</div>
                 </td>
             </tr>

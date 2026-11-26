@@ -11,6 +11,8 @@
       secret_key: "{{ aws_secret_key }}"
       session_token: "{{ security_token | default(omit) }}"
       region: "{{ aws_region }}"
+  vars:
+    ansible_python_interpreter: "{{ botocore_virtualenv_interpreter }}"
   block:
     - name: Create IAM role for Bedrock AgentCore runtime
       amazon.aws.iam_role:

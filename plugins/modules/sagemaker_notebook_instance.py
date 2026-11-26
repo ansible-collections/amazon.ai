@@ -97,6 +97,7 @@ options:
             - Specify dualstack for both IPv4 and IPv6 connectivity.
             - When you specify dualstack, the subnet must support IPv6 CIDR blocks.
             - Required when O(state=present).
+            - Requires botocore >= 1.40.25.
         type: str
         choices: [ipv4, dualstack]
     tags:
@@ -286,6 +287,7 @@ from typing import Any
 from typing import Dict
 from typing import Optional
 
+from ansible_collections.amazon.ai.plugins.module_utils.botocore import validate_botocore_option
 from ansible_collections.amazon.ai.plugins.module_utils.modules import AnsibleAWSAIModule as AnsibleAWSModule
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import NotebookInstanceStatus
 from ansible_collections.amazon.ai.plugins.module_utils.sagemaker import create_notebook_instance
@@ -454,6 +456,9 @@ def main() -> None:
         ],
     )
     name = module.params["notebook_instance_name"]
+
+    if module.params["state"] == "present":
+        validate_botocore_option(module, "ip_address_type", "1.40.25")
 
     try:
         try:
