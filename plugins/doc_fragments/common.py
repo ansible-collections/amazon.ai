@@ -107,3 +107,80 @@ notes:
     See U(https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html)
     for more information.
 """
+
+    # Formatted for non-module plugins
+    # - modules don't support 'env'
+    PLUGINS = r"""
+options:
+  access_key:
+    description:
+      - AWS access key ID.
+      - See the AWS documentation for more information about access tokens
+        U(https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys).
+      - The I(aws_access_key) and I(profile) options are mutually exclusive.
+      - The I(aws_access_key_id) alias was added in release 5.1.0 for
+        consistency with the AWS botocore SDK.
+    type: str
+    aliases: ['aws_access_key_id', 'aws_access_key']
+    env:
+      - name: AWS_ACCESS_KEY_ID
+      - name: AWS_ACCESS_KEY
+  secret_key:
+    description:
+      - AWS secret access key.
+      - See the AWS documentation for more information about access tokens
+        U(https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys).
+      - The I(secret_key) and I(profile) options are mutually exclusive.
+      - The I(aws_secret_access_key) alias was added in release 5.1.0 for
+        consistency with the AWS botocore SDK.
+    type: str
+    aliases: ['aws_secret_access_key', 'aws_secret_key']
+    env:
+      - name: AWS_SECRET_ACCESS_KEY
+      - name: AWS_SECRET_KEY
+  session_token:
+    description:
+      - AWS STS session token for use with temporary credentials.
+      - See the AWS documentation for more information about access tokens
+        U(https://docs.aws.amazon.com/general/latest/gr/aws-sec-cred-types.html#access-keys-and-secret-access-keys).
+      - The I(session_token) and I(profile) options are mutually exclusive.
+    type: str
+    aliases: ['aws_session_token']
+    env:
+      - name: AWS_SESSION_TOKEN
+
+  profile:
+    description:
+      - A named AWS profile to use for authentication.
+      - See the AWS documentation for more information about named profiles
+        U(https://docs.aws.amazon.com/cli/latest/userguide/cli-configure-profiles.html).
+      - The I(profile) option is mutually exclusive with the I(aws_access_key),
+        I(aws_secret_key) and I(session_token) options.
+    type: str
+    aliases: ['aws_profile']
+    env:
+      - name: AWS_PROFILE
+      - name: AWS_DEFAULT_PROFILE
+  endpoint_url:
+    description:
+      - URL to connect to instead of the default AWS endpoints.  While this
+        can be used to connection to other AWS-compatible services the
+        amazon.aws and community.aws collections are only tested against
+        AWS.
+    type: str
+    aliases: ['aws_endpoint_url']
+    env:
+      - name: AWS_URL
+
+notes:
+  - B(Caution:) For modules, environment variables and configuration files are
+    read from the Ansible 'host' context and not the 'controller' context.
+    As such, files may need to be explicitly copied to the 'host'.  For lookup
+    and connection plugins, environment variables and configuration files are
+    read from the Ansible 'controller' context and not the 'host' context.
+  - The AWS SDK (boto3) that Ansible uses may also read defaults for credentials
+    and other settings, such as the region, from its configuration files in the
+    Ansible 'host' context (typically C(~/.aws/credentials)).
+    See U(https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html)
+    for more information.
+"""

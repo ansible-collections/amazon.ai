@@ -21,3 +21,18 @@ options:
     type: str
     aliases: [ aws_region ]
 """
+
+    # Formatted for non-module plugins
+    # - modules don't support 'env'
+    PLUGINS = r"""
+options:
+  region:
+    description:
+      - The AWS region to use.
+      - See the Amazon AWS documentation for more information
+        U(http://docs.aws.amazon.com/general/latest/gr/rande.html#ec2_region).
+    type: str
+    aliases: [ aws_region ]
+    env:
+      - name: AWS_REGION
+"""

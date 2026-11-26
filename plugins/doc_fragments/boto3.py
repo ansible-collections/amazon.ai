@@ -16,3 +16,4 @@ requirements:
 
         self.DOCUMENTATION = requirements
         self.MODULES = requirements
+        self.PLUGINS = requirements

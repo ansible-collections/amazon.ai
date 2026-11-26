@@ -1,0 +1,281 @@
+---
+# --- Found endpoints ---
+- name: Look up a single endpoint with lookup()
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **connection_args) }}"
+
+- name: Assert lookup() returns the invocation URL as a string
+  ansible.builtin.assert:
+    that:
+      - lookup_result is string
+      - lookup_result == endpoint_a_url
+
+- name: Look up a single endpoint with query()
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **connection_args) }}"
+
+- name: Assert query() returns a one-element list
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url]
+
+- name: Look up a single endpoint with lookup() and wantlist
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_b_name, wantlist=True, **connection_args) }}"
+
+- name: Assert wantlist returns a one-element list
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_b_url]
+
+- name: Look up several endpoints
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, endpoint_b_name, **connection_args) }}"
+
+- name: Assert one URL per endpoint, in the order given
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url, endpoint_b_url]
+
+- name: Look up several endpoints in reverse order
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_b_name, endpoint_a_name, **connection_args) }}"
+
+- name: Assert the order follows the terms
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_b_url, endpoint_a_url]
+
+# --- on_missing ---
+- name: Look up a missing endpoint (default on_missing)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', missing_endpoint_name, **connection_args) }}"
+  register: missing_default
+  ignore_errors: true
+
+- name: Assert a missing endpoint fails by default
+  ansible.builtin.assert:
+    that:
+      - missing_default is failed
+      - "'Failed to find SageMaker endpoint ' ~ missing_endpoint_name in missing_default.msg"
+
+- name: Look up a found and a missing endpoint (on_missing=error)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, missing_endpoint_name, on_missing='error', **connection_args) }}"
+  register: missing_error
+  ignore_errors: true
+
+- name: Assert on_missing=error fails the whole lookup
+  ansible.builtin.assert:
+    that:
+      - missing_error is failed
+      - "'Failed to find SageMaker endpoint ' ~ missing_endpoint_name in missing_error.msg"
+
+- name: Look up a missing endpoint (on_missing=skip)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', missing_endpoint_name, on_missing='skip', **connection_args) }}"
+
+- name: Assert on_missing=skip returns nothing
+  ansible.builtin.assert:
+    that:
+      - lookup_result == []
+
+- name: Look up found and missing endpoints (on_missing=skip)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, missing_endpoint_name, endpoint_b_name, on_missing='skip', **connection_args) }}"
+
+- name: Assert on_missing=skip drops only the missing endpoint
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url, endpoint_b_url]
+
+- name: Look up a missing endpoint (on_missing=warn)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', missing_endpoint_name, on_missing='warn', **connection_args) }}"
+
+- name: Assert on_missing=warn returns nothing
+  ansible.builtin.assert:
+    that:
+      - lookup_result == []
+
+- name: Look up found and missing endpoints (on_missing=warn)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', missing_endpoint_name, endpoint_b_name, on_missing='warn', **connection_args) }}"
+
+- name: Assert on_missing=warn drops only the missing endpoint
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_b_url]
+
+- name: Look up with an invalid on_missing value
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, on_missing='ignore', **connection_args) }}"
+  register: missing_invalid
+  ignore_errors: true
+
+- name: Assert an invalid on_missing value is rejected
+  ansible.builtin.assert:
+    that:
+      - missing_invalid is failed
+      - "'on_missing' in missing_invalid.msg"
+
+# --- on_denied ---
+- name: Look up an endpoint without permission (default on_denied)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **denied_connection_args) }}"
+  register: denied_default
+  ignore_errors: true
+
+- name: Assert a denied endpoint fails by default
+  ansible.builtin.assert:
+    that:
+      - denied_default is failed
+      - "'Failed to access SageMaker endpoint ' ~ endpoint_a_name ~ ' (AccessDenied)' in denied_default.msg"
+
+- name: Look up an endpoint without permission (on_denied=error)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, on_denied='error', **denied_connection_args) }}"
+  register: denied_error
+  ignore_errors: true
+
+- name: Assert on_denied=error fails
+  ansible.builtin.assert:
+    that:
+      - denied_error is failed
+      - "'Failed to access SageMaker endpoint ' ~ endpoint_a_name ~ ' (AccessDenied)' in denied_error.msg"
+
+- name: Look up endpoints without permission (on_denied=skip)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, endpoint_b_name, on_denied='skip', **denied_connection_args) }}"
+
+- name: Assert on_denied=skip returns nothing
+  ansible.builtin.assert:
+    that:
+      - lookup_result == []
+
+- name: Look up endpoints without permission (on_denied=warn)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, endpoint_b_name, on_denied='warn', **denied_connection_args) }}"
+
+- name: Assert on_denied=warn returns nothing
+  ansible.builtin.assert:
+    that:
+      - lookup_result == []
+
+- name: Look up a permitted endpoint with on_denied=skip
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, on_denied='skip', **connection_args) }}"
+
+- name: Assert on_denied does not affect permitted lookups
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url]
+
+- name: Look up with an invalid on_denied value
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, on_denied='ignore', **connection_args) }}"
+  register: denied_invalid
+  ignore_errors: true
+
+- name: Assert an invalid on_denied value is rejected
+  ansible.builtin.assert:
+    that:
+      - denied_invalid is failed
+      - "'on_denied' in denied_invalid.msg"
+
+# --- Connection options ---
+- name: Set connection arguments using the option aliases
+  ansible.builtin.set_fact:
+    alias_connection_args:
+      aws_region: "{{ aws_region }}"
+      aws_access_key_id: "{{ aws_access_key }}"
+      aws_secret_access_key: "{{ aws_secret_key }}"
+      aws_session_token: "{{ security_token | default(omit) }}"
+  no_log: true
+
+- name: Look up an endpoint using the option aliases
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **alias_connection_args) }}"
+
+- name: Assert the aliases are honoured
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url]
+
+- name: Look up an endpoint with an invalid secret key
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **(connection_args | combine({'secret_key': 'invalid-' ~ test_id}))) }}"
+  register: invalid_credentials
+  ignore_errors: true
+
+- name: Assert the credentials are used
+  ansible.builtin.assert:
+    that:
+      - invalid_credentials is failed
+      - "'Failed to retrieve SageMaker endpoint' in invalid_credentials.msg"
+
+- name: Look up an endpoint in a region it does not exist in
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, on_missing='skip', **(connection_args | combine({'region': other_region}))) }}"
+
+- name: Assert the region is used for the describe call
+  ansible.builtin.assert:
+    that:
+      - lookup_result == []
+
+- name: Look up an endpoint in another region (on_missing=error)
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, **(connection_args | combine({'region': other_region}))) }}"
+  register: other_region_error
+  ignore_errors: true
+
+- name: Assert the endpoint is reported missing in the other region
+  ansible.builtin.assert:
+    that:
+      - other_region_error is failed
+      - "'Failed to find SageMaker endpoint ' ~ endpoint_a_name in other_region_error.msg"
+
+- name: Look up an endpoint through an explicit SageMaker API endpoint_url
+  ansible.builtin.set_fact:
+    lookup_result: "{{ query('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, endpoint_url='https://api.sagemaker.' ~ aws_region ~ '.amazonaws.com', **connection_args) }}"
+
+- name: Assert endpoint_url does not change the returned runtime URL
+  ansible.builtin.assert:
+    that:
+      - lookup_result == [endpoint_a_url]
+
+- name: Look up an endpoint through an unreachable endpoint_url
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, endpoint_url='https://127.0.0.1:9', **connection_args) }}"
+  register: unreachable_endpoint_url
+  ignore_errors: true
+
+- name: Assert endpoint_url is used for the describe call
+  ansible.builtin.assert:
+    that:
+      - unreachable_endpoint_url is failed
+      - "'Failed to retrieve SageMaker endpoint' in unreachable_endpoint_url.msg"
+
+- name: Look up an endpoint with an unknown profile
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, profile='ansible-test-missing-' ~ test_id, region=aws_region) }}"
+  register: unknown_profile
+  ignore_errors: true
+
+- name: Assert the profile is used
+  ansible.builtin.assert:
+    that:
+      - unknown_profile is failed
+      - "'ansible-test-missing-' ~ test_id in unknown_profile.msg"
+
+- name: Look up an endpoint with both a profile and access keys
+  ansible.builtin.set_fact:
+    lookup_result: "{{ lookup('amazon.ai.sagemaker_endpoint_url', endpoint_a_name, profile='ansible-test-missing-' ~ test_id, **connection_args) }}"
+  register: profile_and_keys
+  ignore_errors: true
+
+- name: Assert a profile and access keys are mutually exclusive
+  ansible.builtin.assert:
+    that:
+      - profile_and_keys is failed
+      - "'Passing both a profile and access tokens is not supported' in profile_and_keys.msg"
